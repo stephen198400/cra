@@ -295,10 +295,8 @@ raw `NSVisualEffectView.Material` value, `alpha` scales the gradient opacity.
 
 ## Brand assets
 
-Logo sources are in `brand/` (see `brand/README.md`). `resources/brand/*.png` are WebKit
-renders of them (so the multiply blends survive) used by `BrandMark`, and
-`resources/AppIcon.icns` is built from `brand/cra-segments-icon.svg` (render at 1024 px,
-`iconutil`). The marketing site lives in a separate private repository.
+This fork has one logo, the From icon: `resources/AppIcon.icns`, with PNG copies in
+`resources/brand`, `resources/app-icons/segments.png` and `brand/from-icon.png`. The marketing site lives in a separate private repository.
 
 ## Releasing
 

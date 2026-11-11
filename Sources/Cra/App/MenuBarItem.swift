@@ -27,21 +27,10 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         build(menu)
     }
 
-    /// resources/brand/cra-mark-mono: one arc of radius 18 and width 19 on a 64-point square,
-    /// open to the right between ±52°, with round ends. 16 pt, like the system's own items.
+    /// This fork's mark is a globe, like its app icon. 16 pt, like the system's own items.
     static let icon: NSImage = {
-        let side: CGFloat = 16
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            let scale = rect.height / 55  // the ink is 55 tall and 48 wide, its middle 3.5 left of the arc's centre
-            let path = NSBezierPath()
-            path.appendArc(withCenter: NSPoint(x: rect.midX + 3.5 * scale, y: rect.midY), radius: 18 * scale,
-                           startAngle: 52, endAngle: 308)
-            path.lineWidth = 19 * scale
-            path.lineCapStyle = .round
-            NSColor.black.setStroke()
-            path.stroke()
-            return true
-        }
+        let image = NSImage(systemSymbolName: "globe", accessibilityDescription: "From")?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .medium)) ?? NSImage()
         image.isTemplate = true
         return image
     }()

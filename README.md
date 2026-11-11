@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/cra-segments-icon.svg" alt="Cra logo" width="128" height="128">
+  <img src="brand/from-icon.png" alt="From logo" width="128" height="128">
 </p>
 
 <h1 align="center">Cra</h1>

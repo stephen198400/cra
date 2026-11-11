@@ -20,12 +20,8 @@ final class AppIconManager {
 
     static let defaultID = "segments"
     static let customID = "custom"
-    static let presets = [
-        Option(id: defaultID, name: "Segments"),
-        Option(id: "midnight", name: "Midnight"),
-        Option(id: "mono", name: "Mono"),
-        Option(id: "violet", name: "Violet"),
-    ]
+    /// This fork has one icon, its own (AppIcon.icns); Cra's alternates and the picker are gone.
+    static let presets = [Option(id: defaultID, name: "From")]
 
     // Shared with Sources/CraDockTile.
     private enum Keys {
@@ -45,8 +41,10 @@ final class AppIconManager {
     private init() {
         let stored = UserDefaults.standard.string(forKey: Keys.selected) ?? Self.defaultID
         let custom = NSImage(contentsOf: Self.customURL)
-        let known = Self.presets.contains { $0.id == stored } || (stored == Self.customID && custom != nil)
-        selectedID = known ? stored : Self.defaultID
+        // Whatever was picked before (an alternate, a custom image) no longer counts: the Dock
+        // plug-in reads the same default, so it is put back too.
+        if stored != Self.defaultID { UserDefaults.standard.set(Self.defaultID, forKey: Keys.selected) }
+        selectedID = Self.defaultID
         customImage = custom
     }
 
