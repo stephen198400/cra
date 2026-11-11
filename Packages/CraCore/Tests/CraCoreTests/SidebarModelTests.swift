@@ -219,7 +219,8 @@ struct SidebarModelTests {
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/185"))
     func developerBarShowsWithTheToolbarHidden() {
         var settings = AppSettings()
-        #expect(!settings.showToolbar)
+        #expect(settings.showToolbar, "this fork: the address bar is always in the toolbar")
+        settings.showToolbar = false
         #expect(!settings.showsBar(above: "https://example.com/a"))
         #expect(!settings.showsBar(above: nil), "no tab, no bar")
         settings.toggleDeveloperMode(url: "https://example.com/")

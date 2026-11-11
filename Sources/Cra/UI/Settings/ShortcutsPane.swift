@@ -16,7 +16,7 @@ struct ShortcutsPane: View {
     private static let listWidth: CGFloat = 272
     private static let rowHeight: CGFloat = 36
     private static let sections: [(MenuSection, String)] = [
-        (.app, "Cra"), (.file, "File"), (.edit, "Edit"), (.view, "View"), (.spaces, "Spaces"),
+        (.app, "From"), (.file, "File"), (.edit, "Edit"), (.view, "View"), (.spaces, "Spaces"),
         (.tabs, "Tabs"), (.archive, "Archive"), (.window, "Window"),
     ]
 
@@ -145,7 +145,7 @@ struct ShortcutsPane: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         } else {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Perform common actions in Cra faster and from anywhere.")
+                Text("Perform common actions in From faster and from anywhere.")
                 Text("Select an action to customize its keyboard shortcut.")
             }
             .font(.system(size: 15)).foregroundStyle(.secondary)
@@ -265,7 +265,8 @@ enum ShortcutDescriptions {
         "findNext": "Jump to the next match.",
         "findPrevious": "Jump to the previous match.",
         "toggleSidebar": "Show or hide the sidebar.",
-        "toggleToolbar": "Show or hide the toolbar above the page.",
+        "toggleBookmarksBar": "Show or hide the bookmarks bar above the page.",
+        "toggleBookmark": "Add the page to the bookmarks bar, or remove its bookmark.",
         "stop": "Stop loading the page.",
         "reload": "Reload the page.",
         "hardReload": "Reload the page, ignoring cached content.",
@@ -311,11 +312,11 @@ enum ShortcutDescriptions {
         "promoteLittleWindow": "Move the Little Window’s page into a space.",
         "closeLittleWindows": "Close all Little Windows.",
         "settings": "Open Settings.",
-        "setDefaultBrowser": "Make Cra the default browser.",
+        "setDefaultBrowser": "Make From the default browser.",
         "importData": "Bring tabs, spaces and extensions over from Arc or Dia.",
         "rebuildArcProfiles": "Put spaces imported from Arc back on their Arc profiles, with their sign-ins and extensions.",
         "clearBrowsingData": "Delete history, cookies and cached files with Chrome’s dialog.",
         "languageSettings": "Choose the languages websites show their pages in, for this space’s profile.",
-        "checkForUpdates": "Look for a newer version of Cra.",
+        "checkForUpdates": "Look for a newer version of From.",
     ]
 }

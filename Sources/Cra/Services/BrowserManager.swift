@@ -1299,6 +1299,8 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
         guard let id = tabID(of: browser), runtimes[id]?.discarded != true else { return }
         log(id, "loaded \(site(url, id, browser)) (HTTP \(statusCode))")
         if statusCode != 0 { runtimes[id]?.extensionPageRetries = 0 }
+        // Redfin's home page come in with words to find (SiteSearch.finder).
+        if let page = URL(string: url), let finder = SiteSearch.finder(for: page) { browser.executeJavaScript(finder) }
         guard !browser.isIncognito else { return }
         // The profile's extensions are up: imported Web Store copies become store installs (#203).
         ExtensionStore.shared.installFromWebStore(using: browser, profile: store.profileDirectoryName(item: id))
@@ -1396,8 +1398,8 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
     /// A link that asks for a new tab, from `source`'s page or from a Peek over it (#202): a
     /// Today tab in `source`'s space, else the window's.
     func openLinkTab(_ url: String, from source: UUID?, inBackground background: Bool) {
-        // cra:// is Cra's scripting scheme (DevTools Protocol, key presses); a page must not drive it.
-        if url.lowercased().hasPrefix("cra:") { return }
+        // from:// is Cra's scripting scheme (DevTools Protocol, key presses); a page must not drive it.
+        if url.lowercased().hasPrefix("from:") { return }
         let sourceSpace = source.flatMap { store.spaceID(ofItem: $0) }
         let parentIndex = source.flatMap { id -> Int? in
             guard let it = store.item(id), let p = it.parentID, store.rootContainer(of: id) != nil,
@@ -1416,7 +1418,7 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
     }
 
     func browser(_ browser: CraBrowser, popupHostForURL url: String, inBackground background: Bool) -> CraBrowser? {
-        if url.lowercased().hasPrefix("cra:") { return nil }
+        if url.lowercased().hasPrefix("from:") { return nil }
         let source = tabID(of: browser)
         let sourceSpace = source.flatMap { store.spaceID(ofItem: $0) }
         let tab = store.createTab(url: url, in: sourceSpace, select: !background, window: windowID, referrer: source)

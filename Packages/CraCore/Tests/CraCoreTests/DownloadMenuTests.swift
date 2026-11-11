@@ -48,7 +48,7 @@ struct DownloadMenuTests {
         #expect(DownloadMenu.title(.cancel, kind: nil, fileName: "x") == "Cancel Download")
         #expect(DownloadMenu.title(.pause, kind: nil, fileName: "x") == "Pause Download")
         #expect(DownloadMenu.title(.resume, kind: nil, fileName: "x") == "Resume Download")
-        #expect(DownloadMenu.title(.hide, kind: nil, fileName: "x") == "Hide from Cra")
+        #expect(DownloadMenu.title(.hide, kind: nil, fileName: "x") == "Hide from From")
         #expect(DownloadMenu.title(.moveToTrash, kind: nil, fileName: "x") == "Move to Trash")
         #expect(DownloadMenu.title(.showInFinder, kind: nil, fileName: "x") == "Show in Finder")
     }

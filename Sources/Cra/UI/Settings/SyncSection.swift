@@ -21,7 +21,7 @@ struct SyncSection: View {
             }
             .alert("Import these settings?", isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } })) {
                 Button("Import") {
-                    if let (url, _) = importing { notice = sync.importBundle(from: url) ? "Settings imported." : "The folder holds no Cra settings." }
+                    if let (url, _) = importing { notice = sync.importBundle(from: url) ? "Settings imported." : "The folder holds no From settings." }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
@@ -89,7 +89,7 @@ struct SyncSection: View {
     private var iCloudUnavailableReason: String {
         FileManager.default.ubiquityIdentityToken == nil
             ? "Sign in to iCloud in System Settings to sync this way."
-            : "This build of Cra cannot use iCloud. The signed release can."
+            : "This build of From cannot use iCloud. The signed release can."
     }
 
     private var status: String {
@@ -128,7 +128,7 @@ struct SyncSection: View {
     }
 
     private func chooseFolder() {
-        let panel = folderPanel(prompt: "Sync Here", message: "Choose a folder your Macs share, in Dropbox, OneDrive or a similar service. Cra keeps its files in a “Cra” folder inside it.")
+        let panel = folderPanel(prompt: "Sync Here", message: "Choose a folder your Macs share, in Dropbox, OneDrive or a similar service. From keeps its files in a “Cra” folder inside it.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         notice = nil
         if case .failed(let reason) = sync.enable(folder: url) { notice = reason }
@@ -143,6 +143,6 @@ struct SyncSection: View {
     private func importBundle() {
         let panel = folderPanel(prompt: "Import", message: "Choose the folder that holds the exported “Cra” folder, or that folder itself.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        if let summary = sync.summary(ofBundleIn: url) { importing = (url, summary) } else { notice = "The folder holds no Cra settings." }
+        if let summary = sync.summary(ofBundleIn: url) { importing = (url, summary) } else { notice = "The folder holds no From settings." }
     }
 }

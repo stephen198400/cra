@@ -364,7 +364,7 @@ every context-menu row for a KeyBindings command shows its keys, overrides inclu
 each pane has one and the keys act on the focused pane.
 
 Extensions: CEF 154 has no extension API for Alloy-style browsers. A spike
-(`cra://debug?chromeSpike=<url>`) proved the alternative: a Chrome-style Views window
+(`from://debug?chromeSpike=<url>`) proved the alternative: a Chrome-style Views window
 (`CefWindow` + `CefBrowserView`, `GetChromeToolbarType = CEF_CTT_NONE`, frameless, runtime
 style CHROME) attached as a child window over the content area loads unpacked extensions
 from `~/Library/Application Support/Cra/Extensions/*` via `--load-extension` (an MV3
@@ -1116,7 +1116,7 @@ Two hosting bugs found on the way, both affecting every page, not just DevTools:
   only; the content layer's mask then gives the card's 6 pt bottom corners.
 
 Debug aids: `defaults write dk.kildahl.cra devToolsLog -bool YES` logs the DevTools life cycle to
-`$TMPDIR/cra-devtools.log`; `cra://debug?devtoolsjs=<script>` runs a script in the current tab's
+`$TMPDIR/cra-devtools.log`; `from://debug?devtoolsjs=<script>` runs a script in the current tab's
 DevTools frontend (used to toggle device mode, dock sides and drag the splitter in tests).
 
 ### Sidebar icons and the Ahrefs subtitle (25 Oct)
@@ -1174,7 +1174,7 @@ of the sidebar strip, pixel runs at x=500 px (2x), y = 160/700/1200/1700/2100.
   · 160/137/100; white 193/188/159 · 204/193/162 · 209/193/159 · 211/191/156 · 214/190/155.
   Blend-mode lifts (CIAdditionCompositing above or below the gradient) blow out: in-process
   compositing never sees the window-server blur, so only alpha blending composes correctly.
-- Same page in both (example.com via `cra://navigate` in the test instance, AppleScript
+- Same page in both (example.com via `from://navigate` in the test instance, AppleScript
   `make new tab` in Arc): Cra's bar 34/34/34 over rows 20–100 px, Arc's 34/34/34 over 20–83
   with its 1 px 45/45/45 hairline. Library glyph redrawn as a lid-less 13×10 box with a slot
   under the confetti puff.
@@ -2396,7 +2396,7 @@ Request from a Cra user (DM, 31 Oct): "the split tabs being pinned, I also need 
 - Cra: `UI/Sidebar/FolderPreview.swift` (a child panel, since pages are CEF child windows; hudWindow dark +
   rgb 17 @ 77 % over it), hooked from `SpaceListView.hoverAt`, Settings ▸ Tabs "Preview a folder’s tabs when
   hovering over it" (`AppSettings.folderPreviews`), a floating sidebar stays out while it is up, and
-  `cra://debug?folderPreview=<folder id>` opens it for screenshots. Text widths, baselines, hairline and
+  `from://debug?folderPreview=<folder id>` opens it for screenshots. Text widths, baselines, hairline and
   magnifier match Arc's to the pixel at 2x. Left as Cra's choice: typing or arrowing keeps it open after the
   pointer leaves (not observed in Arc); picking a tab in a closed folder leaves the folder closed without
   showing the tab under it (Arc keeps a closed folder's open tab visible; Cra's 29 Oct work on that isn't on main).
@@ -2696,7 +2696,7 @@ canvas, an unstyled page (no background, no color-scheme) showed black text on b
 ### The toolbar on a tab switch (Arc 1.171, 2 Nov 2026, issue #84, app-only recordings at 100 fps)
 
 New tabs (⌘T + a file:// URL) in a fresh main window, macOS Dark, test pages with a 1 s busy-wait in `<head>`;
-Cra's runs switch tabs with `cra://debug?selectTab=` in a CRA_TEST_BACKGROUND copy.
+Cra's runs switch tabs with `from://debug?selectTab=` in a CRA_TEST_BACKGROUND copy.
 
 - [O] A page Arc has never shown: bar #FDFDFD over a #000000 page until the page paints, and still white about
   16 frames after it. Then it cross-fades white → the page's colour in 14–16 frames, ease in and out. A page
@@ -3354,11 +3354,11 @@ event with `shiftClickModalEntryPointEnabled` set for the run, AX frames and 60 
     tab open closes the Peek on screen (4 Nov). Cra: archiving drops the Peek; a pinned ⌘W drops it too.
   - Cra: the click catcher (PeekDimPanel, PeekLayout.dismissArea with `contentMinX`) covered the sidebar,
     so a row click closed the Peek; it now covers the page area only and the row's tab opens (syncPeeks
-    parks the Peek). cra://debug?peekCatcher reads it.
+    parks the Peek). from://debug?peekCatcher reads it.
   - [?, 9 Nov, GitHub #295] With the sidebar hidden, the sidebar that slides out at the edge came out behind a
     Peek and its click catcher in Cra (raiseOverlayPanels put the Peek last). Not measured in Arc, whose Peek is
     a card inside the window under its floating sidebar. Cra now stacks the floating sidebar above the Peek's
-    windows; cra://debug?peekCatcher reads `floating=above|below|none` from the window server's order.
+    windows; from://debug?peekCatcher reads `floating=above|below|none` from the window server's order.
 
 ### Peek grows out of the link (Arc 1.171, 6 Nov 2026, GitHub #204, offline Arc)
 The reporter recorded Arc 1.172.1 growing the card out of the clicked link. 1.172.0/1.172.1 only moved Chromium
@@ -3788,7 +3788,7 @@ Read from the arm64 slice's Swift field metadata (`__swift5_fieldmd`, case and f
   (SidebarStore.moveToBlankWindow); a ⌃⌘N Blank Window stays on Default.
 - Cra: BlankWindow (Space.standaloneWindowID, saved in sidebar.json outside spaceOrder), SidebarStore.addBlankWindow /
   isStandalone, TabTearOff (decision + frame), SpaceListView.dragEnded, AppDelegate.tearOffTab and moveBlankWindow
-  ("Move to…", `cra://debug?blankMoveTo=<n>`), BlankWindow.theme (Auto).
+  ("Move to…", `from://debug?blankMoveTo=<n>`), BlankWindow.theme (Auto).
 
 ## Confirmation dialogs (Arc 1.172.1, 7 Nov 2026, PR #224, offline Arc on a fake home, 2x window captures)
 - [O static] Arc has two paths: `AlertClient.runModal` (NSAlert) and its own `Dialogs` module (`DialogView`,
@@ -3844,7 +3844,7 @@ Read from the arm64 slice's Swift field metadata (`__swift5_fieldmd`, case and f
   included), put back with `Cra.restoreHistory` (NavigationController::Restore) into a page made without an
   address; WebKit pages save WKWebView's interactionState. Saved a second after a load, when the tab is hidden
   and at quit. `MainWindowController.goBack` takes ⌘[, the toolbars and the menu; the mouse button is
-  Chromium's. Readouts `cra://debug?back=<label>`, `cra://debug?scroll=<label>`.
+  Chromium's. Readouts `from://debug?back=<label>`, `from://debug?scroll=<label>`.
 
 ## Sidebar width and the narrow header (Arc 1.17x, 9 Nov 2026, GitHub #287)
 - [O disasm] `WindowLayoutController.handleSidebarResizePanGestureRecognizer:` (arm64, 0x100221030): the new
@@ -3885,7 +3885,7 @@ Read from the arm64 slice's Swift field metadata (`__swift5_fieldmd`, case and f
 
 Offline Arc on a fake home made from Victor's own Storable*.json (two spaces: Victor, light vibrant yellow;
 JYSK, dark), network denied, `topBarURLEnabled` NO for the run (URL field in the sidebar). The Cra test copy
-imported the same files (`cra://import?source=arc`). Stills with `screencapture -l` at 1x (external) and 2x
+imported the same files (`from://import?source=arc`). Stills with `screencapture -l` at 1x (external) and 2x
 (built-in); hover with HID pointer moves while Victor was away; the hidden sidebar recorded with a 120 fps
 ScreenCaptureKit region recorder that also drives the pointer and logs each move on the same clock.
 
@@ -3976,7 +3976,7 @@ Visual references: paired YouTube Music footage in dark spaces and light-theme s
 - Validation: `scripts/test.sh` passed, including a browser-manager regression test that failed on
   the pause delay before the fix. The release build and `music-notes` scenario passed with no faults.
   The scenario plays a quiet tone from the local fixture server mapped to nts.live and reads
-  `cra://debug?musicNotes=`. It covers a non-music host, an idle music favorite, playing, muting,
+  `from://debug?musicNotes=`. It covers a non-music host, an idle music favorite, playing, muting,
   unmuting, pausing, quick resuming and the emitter's offset. Paused readouts poll for one second,
   before the speaker's hold expires, to allow Chromium's asynchronous sound event to arrive.
 - Pending: full-window coverage at both 1x and 2x and the remaining states in
@@ -4001,7 +4001,7 @@ screen on a click.
 - Cra: CraCore `CardFill.fillsWindow` (edge to edge, or full screen with the sidebar hidden) sets the card's
   inset, rounding and shadow, the page windows' corners, Peek's backdrop and the 5 pt reveal strip;
   `FloatingSidebarGeometry.mayReveal` lets the edge reveal over a full-screen page; the floating panel draws
-  its stand-in lights only outside full screen. `cra://debug?windowState` reports the card's insets
+  its stand-in lights only outside full screen. `from://debug?windowState` reports the card's insets
   (`card=l,b,r,t rRadius fills=0|1`); `fullscreen-hidden-sidebar.scenario` checks all three states. Cra's
   panel still sits 8 pt in (Arc 5), as before.
 

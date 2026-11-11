@@ -6,20 +6,20 @@ budget rss=700 stalls50=10
 home
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false}
 
-cra://debug?windowSize=1200x800
+from://debug?windowSize=1200x800
 wait 2
-cra://debug?suggest=cra%20browser
+from://debug?suggest=cra%20browser
 expect-log Cra suggest cra browser .*search=\S*google\.com/search\?q=cra%20browser
-cra://debug?spaceSearchEngine=duckduckgo.com
+from://debug?spaceSearchEngine=duckduckgo.com
 wait 0.5
-cra://debug?suggest=cra%20browser
+from://debug?suggest=cra%20browser
 expect-log Cra suggest cra browser .*search=https://duckduckgo\.com/\?q=cra%20browser
-cra://debug?spaceSearchEngine=bing.com
+from://debug?spaceSearchEngine=bing.com
 wait 0.5
-cra://debug?suggest=cra%20browser
+from://debug?suggest=cra%20browser
 expect-log Cra suggest cra browser .*search=https://www\.bing\.com/search\?q=cra%20browser
 # Back to Default: the global engine again.
-cra://debug?spaceSearchEngine=
+from://debug?spaceSearchEngine=
 wait 0.5
-cra://debug?suggest=cra%20again
+from://debug?suggest=cra%20again
 expect-log Cra suggest cra again .*search=\S*google\.com/search\?q=cra%20again

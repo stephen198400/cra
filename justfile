@@ -16,12 +16,12 @@ fetch:
     scripts/fetch-cef.sh
     scripts/fetch-sparkle.sh
 
-# Builds build/Cra.app; `debug` for a debug build
+# Builds build/From.app; `debug` for a debug build
 [group('build')]
 build *args:
     scripts/build.sh "$@"
 
-# Opens build/Cra.app, building it if missing: [--rebuild [debug] [app arguments…]]
+# Opens build/From.app, building it if missing: [--rebuild [debug] [app arguments…]]
 [group('build')]
 run *args:
     scripts/run.sh "$@"
@@ -41,12 +41,12 @@ test *args:
 lint *args:
     scripts/lint.py "$@"
 
-# Launches build/Cra.app (or the app given) three times with crash checks, about 30 s
+# Launches build/From.app (or the app given) three times with crash checks, about 30 s
 [group('test')]
 smoke *args:
     Tests/smoke-launch.sh "$@"
 
-# A user journey from Tests/Scenarios in build/Cra.app, or `all` (about 6 minutes)
+# A user journey from Tests/Scenarios in build/From.app, or `all` (about 6 minutes)
 [group('test')]
 scenario name:
     scripts/scenario.sh "$@"
@@ -71,12 +71,12 @@ mutate *args:
 test-update *args:
     scripts/test-update.sh "$@"
 
-# Packages build/Cra.app (or the app given) into build/dist: DMG, zip, checksums
+# Packages build/From.app (or the app given) into build/dist: DMG, zip, checksums
 [group('release')]
 package *args:
     scripts/package.sh "$@"
 
-# Writes build/dist/appcast.xml: [Cra.zip] [Cra.app] [release-notes.html]
+# Writes build/dist/appcast.xml: [From.zip] [From.app] [release-notes.html]
 [group('release')]
 appcast *args:
     scripts/appcast.sh "$@"

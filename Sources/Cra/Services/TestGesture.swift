@@ -1,6 +1,6 @@
 import AppKit
 
-/// Scripted sidebar scrolls for background test instances (cra://debug?scroll=…): the scroll view
+/// Scripted sidebar scrolls for background test instances (from://debug?scroll=…): the scroll view
 /// under a point of the window moves a step every frame, as under a trackpad's momentum, while
 /// the pointer and the front app stay put.
 @MainActor

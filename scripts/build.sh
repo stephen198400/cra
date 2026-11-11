@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Cra.app into build/Cra.app.
+# Builds From.app into build/From.app.
 #   scripts/build.sh            release build, ad-hoc signed
 #   scripts/build.sh debug      debug build
 #   CRA_SIGN_IDENTITY="Developer ID Application: …" scripts/build.sh
@@ -7,13 +7,13 @@
 #   CRA_PROVISIONING_PROFILE=<path> (with CRA_SIGN_IDENTITY)
 #                               adds the passkey entitlements the profile grants
 #   CRA_INSTALL_DIR=<dir> scripts/build.sh
-#                               also copies the app to <dir>/Cra.app
+#                               also copies the app to <dir>/From.app
 #   CRA_ARCH=x86_64 scripts/build.sh
 #                               builds for the other CPU (arm64 or x86_64) into
-#                               build/<arch>/Cra.app, with that CPU's CEF in
+#                               build/<arch>/From.app, with that CPU's CEF in
 #                               vendor/cef-<arch> and SwiftPM's files in build/swiftpm-<arch>
 # Dev builds are version 0.0.0-dev and stay unregistered with LaunchServices, so
-# opening Cra (or a cra:// link) always picks the installed release.
+# opening From (or a from:// link) always picks the installed release.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
@@ -22,7 +22,7 @@ VERSION="${CRA_VERSION:-0.0.0-dev}"
 BUILD_NUMBER="${CRA_BUILD:-$(date +%Y%m%d%H%M)}"
 
 # The host CPU keeps the usual paths; the other one gets its own CEF, SwiftPM folder and
-# app, so building it never replaces vendor/cef (worktrees share it) or build/Cra.app.
+# app, so building it never replaces vendor/cef (worktrees share it) or build/From.app.
 # scripts/release.sh finds the app with the same rule.
 ARCH="${CRA_ARCH:-$(uname -m)}"
 case "$ARCH" in
@@ -32,11 +32,11 @@ case "$ARCH" in
 esac
 if [ "$ARCH" = "$(uname -m)" ]; then
   CEF_DIR=vendor/cef
-  FINAL_APP="$ROOT/build/Cra.app"
+  FINAL_APP="$ROOT/build/From.app"
   SWIFT_ARGS=(-c "$CONFIG")
 else
   CEF_DIR="vendor/cef-$ARCH"
-  FINAL_APP="$ROOT/build/$ARCH/Cra.app"
+  FINAL_APP="$ROOT/build/$ARCH/From.app"
   SWIFT_ARGS=(-c "$CONFIG" --arch "$ARCH" --scratch-path "$ROOT/build/swiftpm-$ARCH")
   export CRA_CEF_DIR="$ROOT/$CEF_DIR"  # read by Package.swift
 fi
@@ -47,13 +47,14 @@ scripts/fetch-sparkle.sh
 swift build "${SWIFT_ARGS[@]}"
 BIN="$(swift build "${SWIFT_ARGS[@]}" --show-bin-path)"
 
-# Stage the bundle, then sync it into place so the existing Cra.app directory
+# Stage the bundle, then sync it into place so the existing From.app directory
 # keeps its identity (LaunchServices otherwise launches duplicate instances).
 STAGE="$(mktemp -d /tmp/cra-stage.XXXXXX)"
-APP="$STAGE/Cra.app"
+APP="$STAGE/From.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
-cp "$BIN/Cra" "$APP/Contents/MacOS/Cra"
+# The SwiftPM product stays Cra; the bundle (and so CEF's helper names) is From.
+cp "$BIN/Cra" "$APP/Contents/MacOS/From"
 cp "$BIN/CraPluginHost" "$APP/Contents/MacOS/CraPluginHost"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" resources/Info.plist > "$APP/Contents/Info.plist"
 # CRA_BUNDLE_ID builds under another identifier: a test build signed with one's own team and
@@ -91,19 +92,19 @@ rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP
 for entry in "|" " (Alerts)|.alerts" " (GPU)|.gpu" " (Plugin)|.plugin" " (Renderer)|.renderer"; do
   NAME_SUFFIX="${entry%%|*}"
   PLIST_SUFFIX="${entry#*|}"
-  HELPER="$APP/Contents/Frameworks/Cra Helper${NAME_SUFFIX}.app"
+  HELPER="$APP/Contents/Frameworks/From Helper${NAME_SUFFIX}.app"
   mkdir -p "$HELPER/Contents/MacOS"
-  cp "$BIN/CraHelper" "$HELPER/Contents/MacOS/Cra Helper${NAME_SUFFIX}"
+  cp "$BIN/CraHelper" "$HELPER/Contents/MacOS/From Helper${NAME_SUFFIX}"
   sed -e "s/__NAME_SUFFIX__/${NAME_SUFFIX}/g" -e "s/__PLIST_SUFFIX__/${PLIST_SUFFIX}/g" \
       -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" \
       resources/Helper-Info.plist > "$HELPER/Contents/Info.plist"
   echo -n "APPL????" > "$HELPER/Contents/PkgInfo"
   # Chromium posts page notifications from the Alerts helper too, so macOS asks for it and lists
-  # it under System Settings ▸ Notifications: Cra's name and icon there, like Arc's helper.
+  # it under System Settings ▸ Notifications: From's name and icon there, like Arc's helper.
   if [ "$NAME_SUFFIX" = " (Alerts)" ]; then
     mkdir -p "$HELPER/Contents/Resources"
     cp resources/AppIcon.icns "$HELPER/Contents/Resources/AppIcon.icns"
-    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Cra" -c "Add :CFBundleIconFile string AppIcon" \
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName From" -c "Add :CFBundleIconFile string AppIcon" \
       -c "Add :NSUserNotificationAlertStyle string alert" "$HELPER/Contents/Info.plist"
   fi
 done
@@ -115,7 +116,7 @@ cp "$BIN/libCraDockTile.dylib" "$DOCK_TILE/Contents/MacOS/CraDockTile"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" resources/DockTile-Info.plist > "$DOCK_TILE/Contents/Info.plist"
 
 # Every executable must run on the CPU this build is for (Sparkle ships universal).
-for exe in "$APP/Contents/MacOS/Cra" "$APP/Contents/MacOS/CraPluginHost" "$APP"/Contents/Frameworks/*.app/Contents/MacOS/* \
+for exe in "$APP/Contents/MacOS/From" "$APP/Contents/MacOS/CraPluginHost" "$APP"/Contents/Frameworks/*.app/Contents/MacOS/* \
            "$DOCK_TILE/Contents/MacOS/CraDockTile" \
            "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework" \
            "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"; do
@@ -175,7 +176,7 @@ if [ -n "${CRA_PROVISIONING_PROFILE:-}" ] && [ "$IDENTITY" != "-" ]; then
   fi
   # iCloud sync (Settings ▸ General ▸ Sync) needs the container entitlements the profile grants
   # once iCloud Documents is on for the App ID. The first container is also named in Info.plist,
-  # so the folder shows in iCloud Drive as "Cra".
+  # so the folder shows in iCloud Drive as "From".
   if CONTAINER="$($PB -c "Print :Entitlements:com.apple.developer.ubiquity-container-identifiers:0" "$PROFILE" 2>/dev/null)"; then
     for key in com.apple.developer.ubiquity-container-identifiers com.apple.developer.icloud-container-identifiers; do
       $PB -c "Add :$key array" "$APP_ENTITLEMENTS"
@@ -193,7 +194,7 @@ if [ -n "${CRA_PROVISIONING_PROFILE:-}" ] && [ "$IDENTITY" != "-" ]; then
     fi
     $PB -c "Add :NSUbiquitousContainers dict" -c "Add :NSUbiquitousContainers:$CONTAINER dict" \
         -c "Add :NSUbiquitousContainers:$CONTAINER:NSUbiquitousContainerIsDocumentScopePublic bool true" \
-        -c "Add :NSUbiquitousContainers:$CONTAINER:NSUbiquitousContainerName string Cra" \
+        -c "Add :NSUbiquitousContainers:$CONTAINER:NSUbiquitousContainerName string From" \
         -c "Add :NSUbiquitousContainers:$CONTAINER:NSUbiquitousContainerSupportedFolderLevels string Any" "$APP/Contents/Info.plist"
   else
     echo "Note: the provisioning profile grants no iCloud container; iCloud sync stays off" >&2
@@ -215,7 +216,7 @@ echo "Built $FINAL_APP"
 # Optional copy outside ~/Documents (an app that runs from Documents makes macOS ask
 # for folder access and blocks the main thread until answered).
 if [ -n "${CRA_INSTALL_DIR:-}" ]; then
-  INSTALL_APP="$CRA_INSTALL_DIR/Cra.app"
+  INSTALL_APP="$CRA_INSTALL_DIR/From.app"
   mkdir -p "$CRA_INSTALL_DIR"
   rsync -a --delete "$FINAL_APP/" "$INSTALL_APP/"
   "$LSREGISTER" -u "$INSTALL_APP" >/dev/null 2>&1 || true

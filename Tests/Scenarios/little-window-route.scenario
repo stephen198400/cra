@@ -10,25 +10,25 @@ seed sidebar.json {"version":1,"spaceOrder":["A0000000-0000-0000-0000-0000000000
 pace 0.5
 
 # No route: the default, a Little Window in the space in use.
-cra://debug?externalURL=${PAGE}?n=plain
+from://debug?externalURL=${PAGE}?n=plain
 wait 2
-cra://debug?littleShown=plain
+from://debug?littleShown=plain
 expect-log little shown plain: windows=1 space=Personal profile=Default
 
 # The route names Random: "Open in Random", Hobbies' sign-ins.
-cra://debug?externalURL=${PAGE}?n=random
+from://debug?externalURL=${PAGE}?n=random
 wait 2
-cra://debug?littleShown=random
+from://debug?littleShown=random
 expect-log little shown random: windows=2 space=Random profile=Hobbies
-cra://debug?externalURL=chrome://version
+from://debug?externalURL=chrome://version
 wait 3
-cra://debug?littleShown=version
+from://debug?littleShown=version
 expect-log little shown version: windows=3 space=Random profile=Hobbies
-cra://debug?cdp=Runtime.evaluate&target=little&params={"expression":"'path:'+document.getElementById('profile_path').innerText.split('/').pop()"}
+from://debug?cdp=Runtime.evaluate&target=little&params={"expression":"'path:'+document.getElementById('profile_path').innerText.split('/').pop()"}
 expect-log Cra cdp Runtime.evaluate .*"value":"path:Profile B0000000-0000-0000-0000-000000000001"
 
 # A route to a space that is gone: the space in use, as before.
-cra://debug?externalURL=${PAGE}?n=gone
+from://debug?externalURL=${PAGE}?n=gone
 wait 2
-cra://debug?littleShown=gone
+from://debug?littleShown=gone
 expect-log little shown gone: windows=4 space=Personal profile=Default

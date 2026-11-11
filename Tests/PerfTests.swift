@@ -79,7 +79,7 @@ enum PerfTests {
         spin(0.3)
         var stallEnded = Date.distantPast
         DispatchQueue.main.async {
-            Perf.mark("cra://debug?stall=500")
+            Perf.mark("from://debug?stall=500")
             usleep(500_000)
             stallEnded = Date()
         }
@@ -92,7 +92,7 @@ enum PerfTests {
         expect(r.mainThread.recent.allSatisfy { $0.mode != "launch" }, "a quick start is no stall")
         let first = r.mainThread.recent.first
         expect(first.map { $0.ms >= 500 && $0.ms < 900 } == true, "the injected 500 ms stall measured as such (\(first?.ms ?? 0))")
-        expect(first?.marks == ["cra://debug"], "with its breadcrumb, cut before the query (\(first?.marks ?? []))")
+        expect(first?.marks == ["from://debug"], "with its breadcrumb, cut before the query (\(first?.marks ?? []))")
         expect(first?.mode == "default" && first?.freeze == true, "in the default mode: a freeze")
         // Read back from the file, which keeps dates to the second.
         let file = (try? PerfReport.encoder().encode(r)).flatMap { try? PerfReport.decoder.decode(PerfReport.self, from: $0) }

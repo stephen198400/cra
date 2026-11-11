@@ -8,7 +8,7 @@ import Foundation
 /// only: the next Little Window follows the window used last again, so a link from another app
 /// doesn't open in a space, and with that space's sign-ins, picked earlier. Air Traffic Control
 /// sets a Little Window's space for good. A Little Window that names its space when it opens
-/// (cra://open, an Air Traffic Control route, #168 #258) keeps that one.
+/// (from://open, an Air Traffic Control route, #168 #258) keeps that one.
 public struct LittleWindowTarget: Equatable, Sendable {
     /// This window's own space: the one it opened on or the one picked in it; nil follows.
     public private(set) var picked: UUID?

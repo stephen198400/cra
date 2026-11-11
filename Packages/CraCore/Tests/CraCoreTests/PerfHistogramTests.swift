@@ -121,7 +121,7 @@ struct PerfStallTests {
     }
 
     @Test func aMarkNeverKeepsAnAddress() {
-        #expect(PerfMark(at: 0, label: "cra://open?url=https%3A%2F%2Fexample.com%2Fsecret").label == "cra://open")
+        #expect(PerfMark(at: 0, label: "from://open?url=https%3A%2F%2Fexample.com%2Fsecret").label == "from://open")
         #expect(PerfMark(at: 0, label: "first\nsecond").label == "first")
         #expect(PerfMark(at: 0, label: String(repeating: "x", count: 500)).label.count == 120)
     }

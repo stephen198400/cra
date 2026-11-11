@@ -174,7 +174,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
     /// Another tab is on screen: the Peek is out of sight, its page alive, until its tab is back.
     private(set) var isParked = false
     private var dim: PeekDimPanel?
-    /// The click catcher's frame (screen coordinates), for cra://debug?peekCatcher.
+    /// The click catcher's frame (screen coordinates), for from://debug?peekCatcher.
     var dimFrame: NSRect? { dim?.frame }
     private var controls: PeekControlsPanel?
     /// The Peek is on its way out (closePeekAnimated).
@@ -198,7 +198,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
     private var slowResponse = SlowResponseNotice()
     private var slowResponseShown = false
     private var slowResponseCheck: ScheduledWork?
-    /// The space "Open in" names (CraCore LittleWindowTarget): the one a cra://open or a route
+    /// The space "Open in" names (CraCore LittleWindowTarget): the one a from://open or a route
     /// named, matching the page's profile, or the one picked in this window's command bar (#316),
     /// else the window used last's.
     private var target: LittleWindowTarget
@@ -218,7 +218,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
     /// `url` nil makes a popup host: the browser adopts the next window.open
     /// CEF hands it (see `CraBrowserDelegate.browser:popupHostForURL:`).
     /// `opener` is the page a link or popup came from; `fromTab` the tab a Peek came from.
-    /// `space` is the space a cra://open asked for (#168).
+    /// `space` is the space a from://open asked for (#168).
     init(app: AppDelegate, url: String?, peekOver parent: MainWindowController? = nil, opener: CraBrowser? = nil, fromTab: UUID? = nil,
          space: UUID? = nil) {
         self.app = app
@@ -227,7 +227,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
         peekParent = parent
         peekSourceTab = parent == nil ? nil : fromTab
         // Little Windows are normal browsing: they target the last normal window's space
-        // (a Peek: the space of the window it covers; a cra://open: the space it names).
+        // (a Peek: the space of the window it covers; a from://open: the space it names).
         target = LittleWindowTarget(requested: parent == nil ? space : nil)
         state = LittleWindowState(targetSpaceID: parent?.focusedSpaceID
             ?? target.space(lastUsed: app.store.focusedSpaceID(window: app.store.lastNormalWindowID)))
@@ -503,7 +503,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
         }
     }
 
-    /// For cra://debug?littleShown: whether the window is the card, its size, and how far its
+    /// For from://debug?littleShown: whether the window is the card, its size, and how far its
     /// top-right corner is from its screen's visible area's (#337).
     var debugCard: String {
         guard let window else { return "card=-" }
@@ -513,7 +513,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
                       window.standardWindowButton(.closeButton)?.isHidden == false ? 1 : 0)
     }
 
-    /// cra://debug?littleCard=<step>: `go:<typed>` is Return on what was typed in the card's bar,
+    /// from://debug?littleCard=<step>: `go:<typed>` is Return on what was typed in the card's bar,
     /// `close` is Esc (#337).
     func debugCardStep(_ step: String) {
         if step == "close" { commandBar.close(); return }
@@ -969,9 +969,9 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
         }
     }
 
-    /// `cra://debug?littleCommit=<typed>`: the bar's "Switch to" row for `typed`, committed as ↩
+    /// `from://debug?littleCommit=<typed>`: the bar's "Switch to" row for `typed`, committed as ↩
     /// on it does; logs the rows found (#316).
-    /// For `cra://debug?littleShown`: the address pill's padlock and text (#330).
+    /// For `from://debug?littleShown`: the address pill's padlock and text (#330).
     var debugReadout: String { (shell.toolbarHost as? LittleToolbarView)?.debugReadout ?? "" }
 
     func debugCommit(_ typed: String) {
@@ -982,7 +982,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
         if let row { handleCommit(row, typed: typed, mode: .newTab) }
     }
 
-    /// cra://debug?littleMenu=<step>: drives the "Open in" menu (#331) and logs what it shows.
+    /// from://debug?littleMenu=<step>: drives the "Open in" menu (#331) and logs what it shows.
     /// open (as the ⌄ or ⇧⌘O), down<n> (↓ n times), type:<text> (the filter), close.
     func debugMenu(_ step: String) {
         switch step {
@@ -1239,6 +1239,11 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
         case "cast": if browser?.runChromeCommand("IDC_ROUTE_MEDIA") != true { showToast("Nothing to Cast") }
         case "taskManager": if browser?.runChromeCommand("IDC_TASK_MANAGER") != true { showToast("Open a Page First") }
         case "toggleDeveloperMode": if hasPage { store.settings.toggleDeveloperMode(url: currentURL) }
+        case "toggleBookmark":
+            if hasPage {
+                let on = BookmarkStore.shared.toggle(url: currentURL, title: state.title.isEmpty ? currentURL : state.title)
+                showToast(on ? "Bookmark Added" : "Bookmark Removed")
+            }
         case "stayOnTop": toggleStayOnTop()
         case "promoteLittleWindow": promote(to: nil)
         // Arc's Show Little Arc "Open In" Menu (⇧⌘O): the ⌄ button's list of spaces.
@@ -1496,7 +1501,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
     /// Shift-click is a plain click (1.171, 3 Nov 2026).
     /// In a Peek, a target=_blank link leaves it for a tab (PeekTrigger.leavesPeek, #202).
     func browser(_ browser: CraBrowser, opensPeekForURL url: String, shiftClick: Bool, newTab: Bool) -> Bool {
-        if url.lowercased().hasPrefix("cra:") { return false }
+        if url.lowercased().hasPrefix("from:") { return false }
         if isPeek, PeekTrigger.leavesPeek(url, shiftClick: shiftClick, newTab: newTab) {
             openTabFromPeek(url, inBackground: false)
             return true
@@ -1509,8 +1514,8 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
     /// Links that want a new tab open another little window (Arc does the same); a Peek's open
     /// as tabs in its window's space.
     func browser(_ browser: CraBrowser, requestsNewTabWithURL url: String, inBackground background: Bool) {
-        // cra:// is Cra's scripting scheme; a page must not drive it.
-        if url.lowercased().hasPrefix("cra:") { return }
+        // from:// is Cra's scripting scheme; a page must not drive it.
+        if url.lowercased().hasPrefix("from:") { return }
         if isPeek { openTabFromPeek(url, inBackground: background); return }
         app.openLittleWindow(url: url, activate: !background, opener: browser)
         if background { window?.makeKeyAndOrderFront(nil) }
@@ -1532,7 +1537,7 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
     /// A popup that needs its opener (a sign-in window) stays a Little Window, over a Peek too:
     /// closing the Peek for a tab would close the page waiting on it.
     func browser(_ browser: CraBrowser, popupHostForURL url: String, inBackground background: Bool) -> CraBrowser? {
-        if url.lowercased().hasPrefix("cra:") { return nil }
+        if url.lowercased().hasPrefix("from:") { return nil }
         if isPeek, background {
             openTabFromPeek(url, inBackground: true)
             return nil
@@ -1912,7 +1917,7 @@ final class LittleToolbarView: NSView {
     /// The magnifier, or the open padlock for a page that isn't served over https (#330).
     private let search = NSImageView()
     private var isInsecure = false
-    /// For `cra://debug?littleShown`: the padlock and the pill's text.
+    /// For `from://debug?littleShown`: the padlock and the pill's text.
     var debugReadout: String { "padlock=\(isInsecure ? 1 : 0) address=\(urlLabel.stringValue)" }
     private let urlLabel = NSTextField.sidebarLabel(size: 13)
     private let puzzle = LittleIconView(symbol: "puzzlepiece.extension", size: 15)
@@ -2346,7 +2351,7 @@ final class LittleSpacesPopup: NSView, NSTextFieldDelegate {
         if revealOnLayout { revealOnLayout = false; revealSelected() }
     }
 
-    // MARK: Debug (cra://debug?littleMenu=…)
+    // MARK: Debug (from://debug?littleMenu=…)
 
     /// rows, the first row, the highlighted one, how far the list is scrolled and whether the
     /// highlighted row is whole in view.

@@ -36,7 +36,7 @@
   "searchSuggestions" : true,
   "showSpaceHeaderOnSingleSpace" : true,
   "showStatusBar" : true,
-  "showToolbar" : false,
+  "showToolbar" : true,
   "tabSleepAfter" : "fourHours",
   "tabSleepOnMemoryPressure" : false,
   "tabSleepTimerEnabled" : true,

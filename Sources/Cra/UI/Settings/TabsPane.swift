@@ -2,33 +2,21 @@ import SwiftUI
 
 /// Settings ▸ Tabs. Dia draws this pane as a two-column form of checkboxes, whose titles didn't
 /// say what each one did. Cra gives every setting a line saying what it changes, and the ones
-/// that change how Cra looks a picture of it, the way Arc's Max pane draws a feature. The address
-/// bar picks between onboarding's two layout pictures. Links have a pane of their own, as in Arc.
+/// that change how Cra looks a picture of it, the way Arc's Max pane draws a feature.
+/// Links have a pane of their own, as in Arc.
 struct TabsPane: View {
     @Environment(SidebarStore.self) private var store
 
     var body: some View {
         @Bindable var store = store
         SettingsCardPane {
-            // #305: onboarding's "Choose where the address bar goes". Arc keeps it in View ▸ Show Toolbar.
-            SettingsHeader("Address bar")
+            // The address bar is always in the toolbar here (Dia): #305's sidebar/toolbar choice is gone.
+            SettingsHeader("Bookmarks")
             SettingsFeatureCard {
-                HStack(spacing: 12) {
-                    ForEach(AddressBarPlacement.allCases, id: \.self) { placement in
-                        AddressBarTile(placement: placement, selection: $store.settings.addressBarPlacement)
-                    }
-                }
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-                .frame(maxWidth: .infinity)
-            }
-            SettingsFootnote("\(KeyBindingRegistry.shared.action("toggleToolbar")?.primary?.display ?? "⇧⌘D") in any window, or the View menu’s Show Toolbar, switches it too.")
-            SettingsFeatureCard {
-                // GitHub #344, not in Arc: Arc's sidebar address opens the command bar on a click.
-                SettingsToggleRow("Edit the address in the sidebar",
-                                  detail: "Clicking the address at the top of the sidebar lets you edit it right there instead of opening the command bar. \(KeyBindingRegistry.shared.action("editURL")?.primary?.display ?? "⌘L") still opens the command bar.",
-                                  isOn: $store.settings.editAddressInPlace,
-                                  enabled: store.settings.addressBarPlacement == .sidebar)
+                // Chrome's bookmarks bar, not in Arc (bookmarks.json; Arc's bookmarks are pinned tabs).
+                SettingsToggleRow("Show bookmarks bar",
+                                  detail: "A row of your bookmarks under the toolbar. \(KeyBindingRegistry.shared.action("toggleBookmarksBar")?.primary?.display ?? "⇧⌘B") switches it, \(KeyBindingRegistry.shared.action("toggleBookmark")?.primary?.display ?? "⌘D") or the star in the address bookmarks the page.",
+                                  isOn: $store.settings.showBookmarksBar)
             }
             .padding(.top, 12)
 
@@ -119,34 +107,5 @@ struct TabsPane: View {
         let note = "Tabs playing sound, recording or holding text you typed stay in memory."
         guard s.tabSleepTimerEnabled, TabSleepPolicy.timer(s.tabSleepAfter).keepsRecentTabs else { return note }
         return note + (s.tabSleepOnMemoryPressure ? " So do the 10 tabs you used last, unless the Mac is short of memory." : " So do the 10 tabs you used last.")
-    }
-}
-
-/// One of the two address bar layouts: onboarding's picture (Dia's TabLayout artwork) with a
-/// ring when picked, its name and where that puts the address bar underneath.
-private struct AddressBarTile: View {
-    let placement: AddressBarPlacement
-    @Binding var selection: AddressBarPlacement
-    @Environment(\.colorScheme) private var scheme
-
-    private static let width: CGFloat = 150
-
-    var body: some View {
-        let selected = selection == placement
-        let k = Self.width / 230
-        VStack(spacing: 4) {
-            LayoutArt(toolbar: placement == .toolbar, selected: selected, dark: scheme == .dark)
-                .frame(width: 230, height: 180)
-                .scaleEffect(k, anchor: .topLeading)
-                .frame(width: 230 * k, height: 180 * k, alignment: .topLeading)
-            Text(placement.title).font(.system(size: 13, weight: selected ? .semibold : .regular))
-            Text(placement.detail).font(.system(size: 11)).foregroundStyle(.secondary)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { withAnimation(.easeOut(duration: 0.15)) { selection = placement } }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(placement.title): the address bar \(placement.detail.lowercased())")
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { selection = placement }
     }
 }

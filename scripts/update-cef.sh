@@ -6,7 +6,7 @@
 # fetch-cef.sh is only switched once the build is published, so other builds keep
 # working meanwhile. The Intel build follows the arm64 one from the same checkout (about
 # as long again), so the pin only moves once both are published. Afterwards: test
-# build/Cra.app, commit, tag a release.
+# build/From.app, commit, tag a release.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,4 +25,4 @@ unset CEF_VERSION CEF_RELEASE
 sed -i '' -E "s/^CEF_VERSION=.*/CEF_VERSION=\"\${CEF_VERSION:-$NEW}\"/; s/-codecs[0-9]+\}/-codecs1}/" scripts/fetch-cef.sh
 scripts/fetch-cef.sh
 scripts/build.sh
-echo "Cra now builds with CEF $NEW. Test build/Cra.app, then commit scripts/fetch-cef.sh and tag a release."
+echo "Cra now builds with CEF $NEW. Test build/From.app, then commit scripts/fetch-cef.sh and tag a release."

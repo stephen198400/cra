@@ -78,7 +78,7 @@ enum EmbeddedPages {
         }
     }
 
-    /// Chromium's insets for a page's input view, for `cra://debug` and the log.
+    /// Chromium's insets for a page's input view, for `from://debug` and the log.
     static func chromiumInsets(of view: NSView) -> PageViewInsets? { watcher(of: view)?.insets }
 
     nonisolated(unsafe) private static var watcherKey: UInt8 = 0

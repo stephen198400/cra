@@ -29,7 +29,7 @@ film, put `// no clip: <reason>` in the entry instead.
 
 ## Steps
 
-1. Build the release first (the clip copy is made from `/Applications/Cra.app`, so install the
+1. Build the release first (the clip copy is made from `/Applications/From.app`, so install the
    new release there, or delete `build/clips/CraClip.app` to rebuild it from a newer copy).
 2. Drive and record:
 
@@ -41,7 +41,7 @@ film, put `// no clip: <reason>` in the entry instead.
    clip_quit
    ```
 
-   - `cmd "cra://action/<id>"` runs any action (ids in Sources/Cra/App/KeyBindings.swift).
+   - `cmd "from://action/<id>"` runs any action (ids in Sources/Cra/App/KeyBindings.swift).
    - Plain keys: `key 36` (Return), `key 125`/`126` (arrows), `key 53` (Esc), typing with
      `cliclick -w 200 t:w t:e t:b`. ⌘ shortcuts: `cliclick kd:cmd t:t ku:cmd`.
    - Sidebar landmarks at the seeded size: space dock y = WY+676 (cells at WX+78/113/146/180),

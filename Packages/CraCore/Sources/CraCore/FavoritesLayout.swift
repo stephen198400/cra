@@ -7,8 +7,12 @@ import CoreGraphics
 /// that need no more rows: one favorite fills the row, five go 3 + 2, nine 3 × 3, four at
 /// 200 pt 2 × 2 (#29). A short last row keeps the tile width, from the left.
 public struct FavoritesLayout: Equatable {
-    public static let tileHeight: CGFloat = 47
-    public static let gap: CGFloat = 8
+    /// This fork: Dia's tighter grid (43 pt tiles, 6 pt apart). How many columns fit is still
+    /// decided with Arc's measures below, so the column counts stay Arc's.
+    public static let tileHeight: CGFloat = 43
+    public static let gap: CGFloat = 6
+    static let arcTileHeight: CGFloat = 47
+    static let arcGap: CGFloat = 8
 
     public let count: Int
     public let width: CGFloat
@@ -19,7 +23,7 @@ public struct FavoritesLayout: Equatable {
     }
 
     public var columns: Int {
-        let widest = (1...4).last { (width - CGFloat($0 - 1) * Self.gap) / CGFloat($0) >= Self.tileHeight } ?? 1
+        let widest = (1...4).last { (width - CGFloat($0 - 1) * Self.arcGap) / CGFloat($0) >= Self.arcTileHeight } ?? 1
         guard count > 0 else { return widest }
         let rows = (count + widest - 1) / widest
         return (count + rows - 1) / rows

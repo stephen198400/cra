@@ -101,7 +101,7 @@ def launch(enabled):
 
 def quit_browser():
     if process is not None and process.poll() is None:
-        command("cra://debug?quit=1")
+        command("from://debug?quit=1")
         try:
             process.wait(timeout=20)
         except subprocess.TimeoutExpired:
@@ -162,7 +162,7 @@ try:
     client = Client()
     check("32 tools advertised (history off)", len(client.call("tools/list")["result"]["tools"]) == 32)
     check("socket mode 0600", socket_path.stat().st_mode & 0o777 == 0o600)
-    command("cra://open?url=" + quote(url + "/regression", safe=""))
+    command("from://open?url=" + quote(url + "/regression", safe=""))
     tab = eventually(lambda: next((t["id"] for t in tabs(client) if t["url"] == url + "/regression"), None))
     eventually(lambda: "/regression" in seen_paths)
     def read_page():
@@ -457,7 +457,7 @@ try:
         if existing:
             value(client.tool("page_navigate", {"tabId": existing["id"], "url": url + "/"}))
         else:
-            command("cra://open?url=" + quote(url + "/", safe=""))
+            command("from://open?url=" + quote(url + "/", safe=""))
         eventually(lambda: any(t["url"] == url + "/" for t in tabs(client)))
         client.close()
         config = folder / "mcp.json"

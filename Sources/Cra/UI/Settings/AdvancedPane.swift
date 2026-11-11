@@ -14,10 +14,10 @@ struct AdvancedPane: View {
         @Bindable var updater = SoftwareUpdater.shared
         let newLittleWindow = KeyBindingRegistry.shared.action("newLittleWindow")?.primary?.display ?? "⌥⌘N"
         SettingsCardPane {
-            SettingsHeader("Cra")
+            SettingsHeader("From")
             SettingsFeatureCard {
                 SettingsToggleRow("Automatic updates",
-                                  detail: "Cra downloads new versions in the background and installs them the next time it opens.",
+                                  detail: "From downloads new versions in the background and installs them the next time it opens.",
                                   isOn: $updater.automaticallyUpdates, enabled: updater.isAvailable) {
                     HStack(spacing: 8) {
                         Button("Check for Updates…") { updater.checkForUpdates(nil) }
@@ -27,7 +27,7 @@ struct AdvancedPane: View {
                 }
                 SettingsCardDivider()
                 SettingsToggleRow("Chrome engine for pages",
-                                  detail: "Pages run on Chromium, with Chrome extensions and Chrome DevTools. Takes effect when Cra restarts.",
+                                  detail: "Pages run on Chromium, with Chrome extensions and Chrome DevTools. Takes effect when From restarts.",
                                   isOn: $store.settings.chromeEngine)
             }
 
@@ -79,21 +79,21 @@ struct AdvancedPane: View {
             SettingsFeatureCard {
                 // Arc: Settings ▸ Advanced "When opening Arc, restore windows from previous session".
                 SettingsToggleRow("Restore windows",
-                                  detail: "When Cra opens, the windows you had open last time come back.",
+                                  detail: "When From opens, the windows you had open last time come back.",
                                   isOn: $store.settings.restoreWindows)
                 SettingsCardDivider()
                 // Not in Arc (X DM 7 Nov 2026): Arc opens on the tab in use last.
                 SettingsToggleRow("Start on a new tab",
-                                  detail: "When Cra opens, it starts on a new tab instead of the tab you used last.",
+                                  detail: "When From opens, it starts on a new tab instead of the tab you used last.",
                                   isOn: $store.settings.startOnNewTab)
                 SettingsCardDivider()
                 SettingsToggleRow("Warn before quitting",
-                                  detail: "⌘Q asks “Quit Cra?” first, so pressing it by mistake doesn’t close everything.",
+                                  detail: "⌘Q asks “Quit From?” first, so pressing it by mistake doesn’t close everything.",
                                   isOn: $store.settings.warnBeforeQuitting, enabled: !store.settings.keepInMenuBar)
                 SettingsCardDivider()
                 // GitHub #231, not in Arc: ⌘Q puts Cra in the menu bar instead of quitting.
-                SettingsToggleRow("Keep Cra in the menu bar",
-                                  detail: "⌘Q closes Cra’s windows and pages but leaves it running in the menu bar, so \(newLittleWindow) opens a Little Window at once. Quit it from the menu bar.",
+                SettingsToggleRow("Keep From in the menu bar",
+                                  detail: "⌘Q closes From’s windows and pages but leaves it running in the menu bar, so \(newLittleWindow) opens a Little Window at once. Quit it from the menu bar.",
                                   isOn: $store.settings.keepInMenuBar)
             }
 
@@ -110,7 +110,7 @@ struct AdvancedPane: View {
 
             SettingsHeader("Agents").padding(.top, 20)
             SettingsFeatureCard {
-                SettingsToggleRow("Allow local agents to control Cra",
+                SettingsToggleRow("Allow local agents to control From",
                                   detail: "AI agents on this Mac can read pages and act using your signed-in sessions, through MCP.",
                                   isOn: Binding(get: { MCPServer.shared.enabled }, set: { MCPServer.shared.setEnabled($0) })) {
                     Text(MCPServer.shared.status)
@@ -126,7 +126,7 @@ struct AdvancedPane: View {
                     SettingsCardRow {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Let agents run JavaScript in pages").font(.system(size: 13))
-                            Text("A script can read anything a page holds, including passwords Cra fills in.")
+                            Text("A script can read anything a page holds, including passwords From fills in.")
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                     } trailing: {
@@ -161,7 +161,7 @@ struct AdvancedPane: View {
                 HStack(spacing: 14) {
                     BrandMark(size: 48)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Cra \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
+                        Text("From \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
                             .font(.system(size: 14, weight: .semibold))
                         Text("Chromium \(CraCEFRuntime.chromiumVersion()) · CEF \(CraCEFRuntime.cefVersion())")
                             .font(.system(size: 12)).foregroundStyle(.secondary)

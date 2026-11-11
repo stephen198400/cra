@@ -3,12 +3,12 @@
 # Library gives way, down to 320 pt, and follows the window while it resizes.
 # promise: #302
 budget rss=700 stalls50=10
-cra://debug?windowSize=640x800
-cra://open?url=${PAGE}?n=one
+from://debug?windowSize=640x800
+from://open?url=${PAGE}?n=one
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
-cra://action/viewDownloads
+from://action/viewDownloads
 expect-log library opens 320 pt wide beside a \d+ pt tab sidebar
-cra://debug?windowSize=900x800
+from://debug?windowSize=900x800
 expect-log library is 391 pt wide in a 900 pt window
-cra://debug?windowSize=1280x800
+from://debug?windowSize=1280x800
 expect-log library is 417 pt wide in a 1280 pt window

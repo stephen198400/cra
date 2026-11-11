@@ -112,15 +112,15 @@ one. Every launch checks the sidebar and logs a fault for each broken link.
     scripts/scenario.sh fifty-tabs      # one
     scripts/scenario.sh all             # every one, about 6 minutes
 
-A scenario (`Tests/Scenarios/*.scenario`) is a list of `cra://` commands plus a few
+A scenario (`Tests/Scenarios/*.scenario`) is a list of `from://` commands plus a few
 directives (`wait`, `repeat`, `budget`, `helpers`, `relaunch`, `expect-log`, `snapshot`, `seed`, `env`,
 `arg`, `extension`, `home`; the header of `scripts/scenario.sh` lists them). It runs `build/Cra.app` on a throwaway data
 folder, behind your windows (`CRA_TEST_BACKGROUND`), with the fixture pages served from
 127.0.0.1. Logs, hitch log and snapshots land in `build/scenarios/<name>/`. Adding a journey
 is a text file; the invariants come for free.
 
-`auto-theme` flips the app between light and dark (`cra://debug?systemAppearance=`) and reads
-which half each window draws (`cra://debug?themeShown=<label>`): an Auto space must switch its
+`auto-theme` flips the app between light and dark (`from://debug?systemAppearance=`) and reads
+which half each window draws (`from://debug?themeShown=<label>`): an Auto space must switch its
 window content and sidebar both ways, and a Light one must not (#155).
 
 `fullscreen` takes over a Space and runs only with `CRA_SCENARIO_SCREEN=1` (CI does).

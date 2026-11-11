@@ -8,7 +8,7 @@ extension ${FIXTURES}/WebStoreCopy/${WEB_STORE_COPY_ID}
 # The store's download goes to an address that never answers, so the install is still running
 # when the scenario quits.
 arg --apps-gallery-download-url=${STALL}/%s.crx
-cra://open?url=${PAGE}?n=store
+from://open?url=${PAGE}?n=store
 expect-log extension ${WEB_STORE_COPY_ID}: installing from the Web Store in Default
 wait 2
 reject-log Web Store install in Default failed

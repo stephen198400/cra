@@ -71,7 +71,7 @@ struct MCPProtocolTests {
         for url in ["https://example.com/a", "http://localhost:8080", "HTTPS://example.com"] {
             #expect(MCPProtocol.navigable(url))
         }
-        for url in ["javascript:alert(1)", "file:///etc/passwd", "cra://action/quit", "/relative", "https:missing-host"] {
+        for url in ["javascript:alert(1)", "file:///etc/passwd", "from://action/quit", "/relative", "https:missing-host"] {
             #expect(!MCPProtocol.navigable(url))
         }
     }

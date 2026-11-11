@@ -1,0 +1,54 @@
+{
+  "bar" : {
+    "children" : [
+      {
+        "dateAdded" : "2026-11-01T09:00:00Z",
+        "id" : "C0000000-0000-0000-0000-000000000001",
+        "title" : "Example",
+        "url" : "https://example.com/"
+      },
+      {
+        "children" : [
+          {
+            "dateAdded" : "2026-11-02T09:00:00Z",
+            "id" : "C0000000-0000-0000-0000-000000000003",
+            "title" : "Swift",
+            "url" : "https://swift.org/"
+          },
+          {
+            "children" : [
+              {
+                "dateAdded" : "2026-11-02T10:00:00Z",
+                "id" : "C0000000-0000-0000-0000-000000000005",
+                "title" : "",
+                "url" : "https://developer.apple.com/documentation/appkit"
+              }
+            ],
+            "dateAdded" : "2026-11-02T09:30:00Z",
+            "id" : "C0000000-0000-0000-0000-000000000004",
+            "title" : "Apple"
+          }
+        ],
+        "dateAdded" : "2026-11-02T08:00:00Z",
+        "id" : "C0000000-0000-0000-0000-000000000002",
+        "title" : "Docs"
+      }
+    ],
+    "dateAdded" : "1970-01-01T00:00:00Z",
+    "id" : "B0000000-0000-0000-0000-0000000000B1",
+    "title" : "Bookmarks Bar"
+  },
+  "other" : {
+    "children" : [
+      {
+        "dateAdded" : "2026-11-03T09:00:00Z",
+        "id" : "C0000000-0000-0000-0000-000000000006",
+        "title" : "News",
+        "url" : "https://news.ycombinator.com/"
+      }
+    ],
+    "dateAdded" : "1970-01-01T00:00:00Z",
+    "id" : "B0000000-0000-0000-0000-0000000000B2",
+    "title" : "Other Bookmarks"
+  }
+}

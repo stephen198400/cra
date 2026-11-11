@@ -40,10 +40,10 @@
       "detail" : "The longest lasted 1.2 s.",
       "id" : "freezes",
       "severity" : "warning",
-      "title" : "Cra froze 1 time for a second or more"
+      "title" : "From froze 1 time for a second or more"
     },
     {
-      "detail" : "Not counted as freezes: Cra was in a loop of its own on purpose. The longest lasted 4.0 s (tracking).",
+      "detail" : "Not counted as freezes: From was in a loop of its own on purpose. The longest lasted 4.0 s (tracking).",
       "id" : "outside-freezes",
       "severity" : "info",
       "title" : "1 long pass in menus, drags, alerts or start-up"

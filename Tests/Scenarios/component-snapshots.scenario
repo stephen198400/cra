@@ -3,10 +3,10 @@
 # only after checking that view against Arc 1:1 (docs/testing.md).
 budget rss=600 stalls50=10   # turning developer mode on or off stalls 130–650 ms (a reload)
 port 47123
-cra://debug?windowSize=1280x800
-cra://import?source=arc&archive=0&settings=0
+from://debug?windowSize=1280x800
+from://import?source=arc&archive=0&settings=0
 wait 2
-cra://action/space2
+from://action/space2
 wait 2
 snapshot SpaceHeaderView space-header
 snapshot FavoritesGridView favorites-grid
@@ -15,42 +15,42 @@ snapshot TabRowView today-tab-row
 snapshot NewTabRowView new-tab-row
 snapshot SpaceDockView space-dock
 # Collapsed, Cra keeps the space icon at rest (Arc shows the chevron; X DM, 4 Nov).
-cra://debug?collapsePinned=1
+from://debug?collapsePinned=1
 wait 1
 snapshot SpaceHeaderView space-header-collapsed
-cra://debug?collapsePinned=0
+from://debug?collapsePinned=0
 wait 1
 # The command bar lists Check for Updates (X DM, 4 Nov).
-cra://debug?suggest=check%20for%20up
+from://debug?suggest=check%20for%20up
 expect-log Cra suggest check for up .*command\("checkForUpdates"\) Check for Updates
-cra://open?url=${PAGE}?n=snap
+from://open?url=${PAGE}?n=snap
 wait 3
 snapshot SidebarURLPill url-pill
 # Developer Mode brings its bar with the toolbar hidden too, as Arc does (#185).
-cra://action/toggleDeveloperMode
+from://action/toggleDeveloperMode
 wait 2
 snapshot PaneToolbarView toolbar-developer
-cra://action/toggleDeveloperMode
+from://action/toggleDeveloperMode
 wait 1
-cra://action/toggleToolbar
+from://action/toggleToolbar
 wait 1
 snapshot PaneToolbarView toolbar
-cra://action/toggleDeveloperMode
+from://action/toggleDeveloperMode
 wait 2
 snapshot PaneToolbarView toolbar-developer
-cra://action/toggleDeveloperMode
-cra://action/addSplitView
+from://action/toggleDeveloperMode
+from://action/addSplitView
 wait 3
 snapshot PaneToolbarView,0 toolbar-split-pane
 snapshot PaneToolbarView,1 toolbar-split-empty-pane
 snapshot SplitRowView split-row
-cra://action/renameTab   # from a pane, the split's name is edited in its row
+from://action/renameTab   # from a pane, the split's name is edited in its row
 wait 1
 snapshot SplitRowView split-row-renaming
 # A long name at rest keeps a 21 pt tail; on hover it runs to 13 pt before the close button, as in
 # Arc, where it stopped 24 pt before it (#243).
-cra://open?url=${PAGE}?n=with%20a%20name%20long%20enough%20to%20run%20under%20the%20close%20button
+from://open?url=${PAGE}?n=with%20a%20name%20long%20enough%20to%20run%20under%20the%20close%20button
 wait 3
 snapshot TabRowView,0 today-tab-row-long
-cra://debug?hover=TabRowView,0
+from://debug?hover=TabRowView,0
 snapshot TabRowView,0 today-tab-row-long-hover

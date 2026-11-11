@@ -41,14 +41,14 @@ struct AppIconSection: View {
                 Button("Choose Image…") { chooseImage() }
             }
         }
-        SettingsFootnote("Pick any image or drop one on Custom. It’s sized to match the other icons in the Dock, and a photo or a logo on a background fills the rounded tile. The Dock keeps the icon after Cra quits.")
+        SettingsFootnote("Pick any image or drop one on Custom. It’s sized to match the other icons in the Dock, and a photo or a logo on a background fills the rounded tile. The Dock keeps the icon after From quits.")
         if let error { SettingsFootnote(error).foregroundStyle(.red) }
     }
 
     private func chooseImage() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
-        panel.message = "Choose an image for Cra’s icon"
+        panel.message = "Choose an image for From’s icon"
         panel.prompt = "Use as Icon"
         let done: (NSApplication.ModalResponse) -> Void = { response in
             if response == .OK, let url = panel.url { use(url) }
@@ -61,7 +61,7 @@ struct AppIconSection: View {
             try icons.setCustom(from: url)
             error = nil
         } catch {
-            self.error = "“\(url.lastPathComponent)” isn’t an image Cra can read."
+            self.error = "“\(url.lastPathComponent)” isn’t an image From can read."
         }
     }
 }

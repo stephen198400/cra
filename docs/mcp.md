@@ -29,7 +29,7 @@ made-up home folder.
 
 For any other agent, **Copy MCP Configuration** and add the entry by hand. For Claude Code by hand:
 
-    claude mcp add cra -- "/Applications/Cra.app/Contents/MacOS/Cra" --mcp "$HOME/Library/Application Support/Cra/mcp.sock"
+    claude mcp add cra -- "/Applications/From.app/Contents/MacOS/From" --mcp "$HOME/Library/Application Support/Cra/mcp.sock"
 
 Keep Cra running. After moving the app or changing profiles, the tiles say **Update**.
 CraDev has its own profile and socket.

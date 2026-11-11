@@ -37,12 +37,12 @@ public enum PerfInsights {
         var out: [PerfInsight] = []
         if let p = r.session.previous, p.abnormal {
             out.append(PerfInsight(id: "previous-abnormal", severity: .warning, title: "The last session ended without quitting",
-                                   detail: "Cra \(p.craVersion) crashed, was forced to quit or the Mac lost power. Its last minute is in the export."))
+                                   detail: "From \(p.craVersion) crashed, was forced to quit or the Mac lost power. Its last minute is in the export."))
         }
         let m = r.mainThread
         if m.longFreezes > 0 {
             out.append(PerfInsight(id: "freezes", severity: .warning,
-                                   title: "Cra froze \(m.longFreezes) time\(m.longFreezes == 1 ? "" : "s") for a second or more",
+                                   title: "From froze \(m.longFreezes) time\(m.longFreezes == 1 ? "" : "s") for a second or more",
                                    detail: "The longest lasted \(Self.duration(m.longestFreezeMs))\(m.hangs > 0 ? "; \(m.hangs) went past 2 s" : "")."))
         }
         let hours = max(r.session.awakeSeconds / 3600, 1.0 / 12)
@@ -54,7 +54,7 @@ public enum PerfInsights {
             let longest = m.longestPassMs > m.longestFreezeMs ? " The longest lasted \(Self.duration(m.longestPassMs))\(m.longestPassMode.map { " (\($0))" } ?? "")." : ""
             out.append(PerfInsight(id: "outside-freezes", severity: .info,
                                    title: "\(m.outsideFreezes) long pass\(m.outsideFreezes == 1 ? "" : "es") in menus, drags, alerts or start-up",
-                                   detail: "Not counted as freezes: Cra was in a loop of its own on purpose.\(longest)"))
+                                   detail: "Not counted as freezes: From was in a loop of its own on purpose.\(longest)"))
         }
         if r.selfCost.cpuPct > selfCostBudgetPct {
             out.append(PerfInsight(id: "profiler-overhead", severity: .info,
@@ -63,7 +63,7 @@ public enum PerfInsights {
         }
         if r.idle.samples >= idleMinSamples, r.idle.cpuPct >= idleCpuPct {
             out.append(PerfInsight(id: "idle-cpu", severity: .info,
-                                   title: "Cra kept working while the Mac was idle",
+                                   title: "From kept working while the Mac was idle",
                                    detail: "\(Int(r.idle.cpuPct.rounded())) % of a core on average over \(r.idle.samples * 5 / 60) min without keyboard or mouse input. A playing video counts too."))
         }
         let crashes = r.counters[PerfCounter.rendererTerminated.rawValue]?.values.reduce(0, +) ?? 0
@@ -97,7 +97,7 @@ public enum PerfInsights {
         let footprint = r.processes.reduce(Int64(0)) { $0 + $1.footprintBytes }
         if footprint >= largeFootprintBytes {
             let slept = r.tabs.latest?.slept ?? 0
-            out.append(PerfInsight(id: "footprint", severity: .info, title: "Cra uses \(bytes(footprint)) of memory",
+            out.append(PerfInsight(id: "footprint", severity: .info, title: "From uses \(bytes(footprint)) of memory",
                                    detail: slept > 0 ? "Tab sleeping has \(slept) tab\(slept == 1 ? "" : "s") asleep." : "Pages you haven't looked at in a while (4 hours unless you change it) close, and reload when you open them. Settings ▸ Tabs ▸ Tab Cleanup can close them sooner, or when the Mac is short of memory."))
         }
         return out
@@ -119,7 +119,7 @@ public enum PerfSummary {
     public static func text(_ r: PerfReport) -> String {
         let m = r.mainThread
         var lines = [
-            "Cra \(r.session.craVersion), Chromium \(r.session.chromiumVersion), launch \(r.session.launch), up \(Int(r.session.uptimeSeconds / 60)) min",
+            "From \(r.session.craVersion), Chromium \(r.session.chromiumVersion), launch \(r.session.launch), up \(Int(r.session.uptimeSeconds / 60)) min",
             "Main thread: \(m.freezes) freezes ≥250 ms (\(m.longFreezes) ≥1 s, \(m.hangs) ≥2 s), longest freeze \(PerfInsights.duration(m.longestFreezeMs)); "
                 + "longest pass \(PerfInsights.duration(m.longestPassMs))\(m.longestPassMode.map { " (\($0))" } ?? ""), "
                 + "\(m.outsideFreezes) outside freezes (menus, drags, alerts, start-up); p99 pass \(PerfInsights.duration(m.passes.percentile(0.99)))",
@@ -127,7 +127,7 @@ public enum PerfSummary {
         if let s = m.slowPass {
             lines.append("Slow pass sampled: \(PerfInsights.duration(s.endedMs ?? s.stalledMs)) (\(s.mode)), top: \(s.stack.first?.trimmingCharacters(in: .whitespaces) ?? s.stackNote ?? "no stack")")
         }
-        if let p = r.session.previous { lines.append("Previous session: \(p.abnormal ? "ended without quitting" : "quit normally") (Cra \(p.craVersion))") }
+        if let p = r.session.previous { lines.append("Previous session: \(p.abnormal ? "ended without quitting" : "quit normally") (From \(p.craVersion))") }
         for g in r.processes where g.count > 0 {
             lines.append("\(g.kind.rawValue) ×\(g.count): \(String(format: "%.1f", g.cpuPct)) % CPU, \(PerfInsights.bytes(g.footprintBytes))")
         }

@@ -59,7 +59,7 @@ final class PictureInPictureControlsView: NSView {
 
     override var isFlipped: Bool { true }
 
-    /// The centre cluster as laid out, for `cra://debug?pip`.
+    /// The centre cluster as laid out, for `from://debug?pip`.
     var readout: String {
         layoutSubtreeIfNeeded()
         return "play=\(Int(playButton.frame.width)) skips=\(skipBackButton.isHidden ? 0 : 1)"

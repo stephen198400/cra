@@ -146,9 +146,9 @@ final class SharingService {
         asking = true
         let quit = reports.contains { CrashReports.isAppQuit($0.name) }
         let dialog = AppDialog(
-            title: quit ? "Cra quit unexpectedly" : "Part of Cra stopped unexpectedly",
+            title: quit ? "From quit unexpectedly" : "Part of From stopped unexpectedly",
             message: (reports.count == 1 ? "Send the crash report to help fix it?" : "Send the \(reports.count) crash reports to help fix it?")
-                + " It shows what Cra was doing when it crashed. It never holds the sites you visit, and nothing that identifies you or this Mac.",
+                + " It shows what From was doing when it crashed. It never holds the sites you visit, and nothing that identifies you or this Mac.",
             actions: [DialogAction("Send"), DialogAction("Show Report", role: .secondary), DialogAction("Don’t Send", role: .cancel)],
             suppressionTitle: "Always send crash reports", icon: .application)
         let finish: (NSApplication.ModalResponse) -> Void = { [weak self] response in
@@ -173,8 +173,8 @@ final class SharingService {
     }
 
     /// The exact text that would be sent, opened in TextEdit.
-    func show(_ reports: [Data], name: String = "Cra Crash Report") {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Cra Sharing", isDirectory: true)
+    func show(_ reports: [Data], name: String = "From Crash Report") {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("From Sharing", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = folder.appendingPathComponent(name + ".txt")
         let text = reports.map { String(decoding: $0, as: UTF8.self) }.joined(separator: "\n\n")
@@ -186,7 +186,7 @@ final class SharingService {
     /// Settings ▸ Privacy ▸ "Show What’s Sent": the next usage report, exactly.
     func showStats() {
         guard let stats = currentStats() else { return }
-        show([stats.json()], name: "Cra Usage Stats")
+        show([stats.json()], name: "From Usage Stats")
     }
 
     // MARK: - Network

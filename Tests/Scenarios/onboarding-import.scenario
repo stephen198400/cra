@@ -3,6 +3,6 @@
 fresh
 budget rss=500 stalls50=5
 wait 3
-cra://import?source=arc&archive=1&settings=1
+from://import?source=arc&archive=1&settings=1
 expect-log imported 2 spaces, [0-9]+ tabs, [0-9]+ folders, 2 archived
 wait 120

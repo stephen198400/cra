@@ -107,7 +107,7 @@ public struct PerfMark: Codable, Equatable, Sendable {
         self.label = Self.clean(label)
     }
 
-    /// Never an address: a scripted `cra://open?url=…` keeps `cra://open`, and a label is short.
+    /// Never an address: a scripted `from://open?url=…` keeps `from://open`, and a label is short.
     public static func clean(_ label: String) -> String {
         let cut = label.firstIndex(where: { $0 == "?" || $0 == "\n" }).map { String(label[..<$0]) } ?? label
         return String(cut.prefix(120))

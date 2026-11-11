@@ -22,10 +22,10 @@ public enum AppLinks {
         "http", "https", "about", "blob", "data", "filesystem", "ws", "wss", "file", "javascript",
         "view-source", "chrome", "chrome-extension", "chrome-untrusted", "chrome-search", "devtools",
     ]
-    /// The rest of Chrome's kDeniedSchemes (external_protocol_handler.cc), plus cra:.
+    /// The rest of Chrome's kDeniedSchemes (external_protocol_handler.cc), plus from: and the upstream cra:.
     static let refusedSchemes: Set<String> = [
         "afp", "disk", "disks", "hcp", "ie.http", "login", "mk", "ms-help", "nntp", "res", "shell",
-        "vbscript", "vnd.ms.radio", "cra",
+        "vbscript", "vnd.ms.radio", "from", "cra",
     ]
     /// Chrome's kAllowedSchemes.
     static let openedSchemes: Set<String> = ["mailto", "news", "snews"]

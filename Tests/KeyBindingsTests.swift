@@ -16,6 +16,11 @@ enum KeyBindingsTests {
         recordedShortcuts()
         let registry = KeyBindingRegistry.shared
         let builtIn = registry.actions.count
+        // Chrome's ⌘D bookmarks the page; Pin/Unpin moved to ⇧⌘D, and Arc's Hide Toolbar is gone (the
+        // address bar always lives in the toolbar).
+        expect(registry.action("toggleBookmark")?.shortcuts == [Shortcut("d", [.command])], "⌘D is Bookmark This Page")
+        expect(registry.action("pinTab")?.shortcuts == [Shortcut("d", [.command, .shift])], "⇧⌘D is Pin/Unpin Tab")
+        expect(registry.action("toggleToolbar") == nil, "no Hide Toolbar command")
         let github = KeyAction(id: "newGitHubLiveFolder", name: "New GitHub Live Folder", section: .file, shortcuts: [], triggers: ["github"])
         let jira = KeyAction(id: "liveFolderPlugin:cra.jira", name: "New Jira Live Folder", section: .file, shortcuts: [], triggers: ["jira"])
         registry.setPluginActions([github, jira])

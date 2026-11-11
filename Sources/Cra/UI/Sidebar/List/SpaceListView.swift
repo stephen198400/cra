@@ -695,7 +695,7 @@ final class SpaceListView: NSView, NSDraggingSource {
         for l in all.allObjects where l.ui === ui && l.spaceID == space { l.scrollToSelected() }
     }
 
-    /// Tests without the pointer (cra://debug?folderPreview=<id>): the folder's preview as if hovered.
+    /// Tests without the pointer (from://debug?folderPreview=<id>): the folder's preview as if hovered.
     static func debugFolderPreview(_ folderID: UUID, ui: SidebarUIState) {
         for l in all.allObjects where l.ui === ui {
             guard let row = l.views[.item(folderID)] as? FolderRowView else { continue }
@@ -817,7 +817,7 @@ final class SpaceListView: NSView, NSDraggingSource {
         hoverAt(inside && document.isMouseInside ? p : nil)
     }
 
-    /// Scenarios (cra://debug?hover=): `row` takes the hover as if the pointer were on its middle.
+    /// Scenarios (from://debug?hover=): `row` takes the hover as if the pointer were on its middle.
     /// The pointer's next move, or the list's next sync, puts it back where the pointer is.
     func debugHover(_ row: SidebarRowView) {
         hoverAt(row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil))
@@ -933,7 +933,7 @@ final class SpaceListView: NSView, NSDraggingSource {
         dragEnded(ui.draggingID, at: screenPoint, operation: operation)
     }
 
-    /// A row's drag is over (`cra://debug?dragEnd` ends one the same way).
+    /// A row's drag is over (`from://debug?dragEnd` ends one the same way).
     func dragEnded(_ dragged: UUID?, at screenPoint: NSPoint, operation: NSDragOperation) {
         autoscroller.stop()
         // Let go outside every Cra window where nothing took it: Arc opens the tab in a Blank Window there.

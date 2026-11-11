@@ -21,6 +21,7 @@ enum StoreTests {
         try arcImport()
         try diaImport()
         chromiumProfile()
+        chromiumBookmarksImport()
         chromiumManifestV2Import()
         autoArchive()
         longAutoArchive()
@@ -259,6 +260,28 @@ enum StoreTests {
         expect(ExtensionImporter.disabledIDs(inProfile: profile).contains("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
                && !ExtensionImporter.disabledIDs(inProfile: profile).contains("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
                "an extension with disable_reasons is off, one in state 1 is on")
+    }
+
+    /// Importing from a Chrome-family browser fills Cra's own bookmarks too (BookmarkStore): its bar on
+    /// the Bookmarks Bar, the rest in Other Bookmarks, and the sidebar still gets them as pinned tabs.
+    @MainActor
+    private static func chromiumBookmarksImport() {
+        let userData = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/Chromium")
+        guard let plan = try? ChromiumImporter.plan(browser: "Chrome", userData: userData) else {
+            expect(false, "the Chromium fixture makes a plan")
+            return
+        }
+        expect(plan.bookmarks.bar.map(\.pageTitle) == ["Docs", "Reading"], "the plan carries the bookmarks bar")
+        let composition = AppComposition(clock: ManualScheduler())
+        composition.store.apply(plan, includeArchive: false, includeSettings: false)
+        let bookmarks = BookmarkStore.shared
+        expect(bookmarks.barItems.map(\.title) == ["Docs", "Reading"], "the bar's bookmarks land on the Bookmarks Bar")
+        expect(bookmarks.isBookmarked(url: "https://example.com/read"), "a folder's bookmark is found")
+        expect(bookmarks.otherItems.compactMap(\.url) == ["https://example.com/other"], "the rest go into Other Bookmarks")
+        expect(composition.store.orderedSpaces.contains { $0.title == "Chrome" }, "the sidebar import still makes its space")
+        let before = bookmarks.tree
+        composition.store.apply(plan, includeArchive: false, includeSettings: false)
+        expect(bookmarks.tree == before, "importing again adds no bookmark twice")
     }
 
     // promise: #228

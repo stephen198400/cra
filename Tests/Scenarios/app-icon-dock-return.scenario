@@ -5,13 +5,13 @@
 # icon again on the way back.
 # promise: #319
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "keepInMenuBar": true}
-cra://open?url=${PAGE}?n=icon
+from://open?url=${PAGE}?n=icon
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 reject-log app icon: \S+ set again
-cra://debug?quit=menu
+from://debug?quit=menu
 wait 2
 expect-log menu bar: quit keeps Cra in the menu bar
-cra://action/newWindow
+from://action/newWindow
 wait 3
 expect-log menu bar: browser windows back
 expect-log app icon: \S+ set again, back in the Dock

@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// these reserved). Everything else goes to the page first. Copy URL is reserved like Arc:
     /// Google Docs takes ⇧⌘C for its word count (GitHub #194).
     static let reservedActions: Set<String> = Set([
-        "newTab", "newWindow", "newBlankWindow", "newIncognitoWindow", "closeTab", "closeWindow", "reopenClosedTab", "editURL", "toggleSidebar", "toggleToolbar",
+        "newTab", "newWindow", "newBlankWindow", "newIncognitoWindow", "closeTab", "closeWindow", "reopenClosedTab", "editURL", "toggleSidebar",
         "nextTab", "previousTab", "recentTab", "recentTabBackward", "nextSpace", "previousSpace", "devTools", "jsConsole", "inspectElement",
         "viewArchive", "openLibrary", "settings", "clearToday", "newLittleWindow", "promoteLittleWindow",
         "addSplitView", "closeSplitPane", "copyURL", "copyURLMarkdown",
@@ -170,8 +170,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // options page already open), it goes to Chrome's window and the stray page handler.
         CraCEFRuntime.setExtensionTabHandler { [weak self] url, profile, background, opener in
             MainActor.assumeIsolated {
-                // A cra: address never opens from a page or an extension, as BrowserManager drops page popups to one.
-                guard let self, !url.lowercased().hasPrefix("cra:"), !dropsStartUpPage(url) else { return nil }
+                // A from: address never opens from a page or an extension, as BrowserManager drops page popups to one.
+                guard let self, !url.lowercased().hasPrefix("from:"), !dropsStartUpPage(url) else { return nil }
                 let window = self.useNormalWindow()
                 guard let opened = self.openExtensionPage(url, window: window.windowID, profile: profile, select: !background),
                       let controller = self.mainWindows.first(where: { $0.windowID == opened.window }) else { return nil }
@@ -187,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             Task { @MainActor in
                 guard let self else { return }
                 // Each URL decides what to raise: a Little Window keeps the main
-                // window where it is (Arc), cra://action/… keeps the key window.
+                // window where it is (Arc), from://action/… keeps the key window.
                 if urls.isEmpty { self.main.showWindow(nil); NSApp.activate(ignoringOtherApps: true) }
                 for u in urls { self.openExternalURL(u) }
             }
@@ -203,9 +203,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// This launch shows the onboarding, until it ends: the sidebar's sharing card waits.
     private(set) var isOnboarding = false
 
-    var needsOnboarding: Bool {
-        !store.settings.hasSeenImportPrompt && store.allTabs().count <= 2
-    }
+    /// This fork has no onboarding: the first launch opens the browser window like any other.
+    /// File ▸ Import still runs the import flow.
+    var needsOnboarding: Bool { false }
 
     /// End of the import flow. Onboarding counts as done only here, so quitting halfway
     /// shows it again on the next launch.
@@ -264,7 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if problems.count > 20 { CraLog.fault("sidebar: \(problems.count - 20) more problems") }
     }
 
-    /// AppComposition.tabFreezeAfter; `cra://debug?freezeTabs=` shortens it for a test.
+    /// AppComposition.tabFreezeAfter; `from://debug?freezeTabs=` shortens it for a test.
     private var freezeAfter = AppComposition.tabFreezeAfter
 
     /// The last memory-pressure sweep (TabSleepPolicy.sweepsForPressure).
@@ -456,6 +456,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         for w in littleWindows { w.archivePage() }
         for w in mainWindows { w.saveFrameNow() }
         store.saveAll()
+        BookmarkStore.shared.flush()
         // Each page's back and forward list, scroll positions included, as it is now (PageHistory,
         // #273). A page that doesn't answer in time keeps what was saved after its last load.
         let group = DispatchGroup()
@@ -474,7 +475,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return .terminateLater
     }
 
-    func applicationWillShutdown() { MCPServer.shared.stop(); store.saveAll() }
+    func applicationWillShutdown() { MCPServer.shared.stop(); store.saveAll(); BookmarkStore.shared.flush() }
 
     /// Sparkle quits Cra to install an update and starts it again: no quit confirmation.
     func prepareForUpdateRelaunch() {
@@ -501,13 +502,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         CraLog.note("quit asks: downloads in progress")
         let alert = AppDialog(title: "Downloads in progress",
                               message: "There are downloads in progress. Closing the application will cancel them.",
-                              actions: [DialogAction("Close Cra"), DialogAction("Keep browsing", role: .cancel)],
+                              actions: [DialogAction("Close From"), DialogAction("Keep browsing", role: .cancel)],
                               icon: .application)
         return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func confirmQuit() -> Bool {
-        let alert = AppDialog(title: "Quit Cra?",
+        let alert = AppDialog(title: "Quit From?",
                               actions: [DialogAction("Quit"), .cancel, DialogAction("Quit, and don’t ask again", role: .secondary)],
                               icon: .application, buttonSpacing: 45.5)
         switch alert.runModal() {
@@ -523,7 +524,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // A link from another app soon after starting on a new tab: its tab is what the window
         // shows, so the bar that was waiting for a new tab goes.
         if store.settings.startOnNewTab, let m = main, m.commandBar.isOpen, m.selectedTab == nil { m.commandBar.close() }
-        if let u = URL(string: url), u.scheme?.lowercased() == "cra" {
+        if let u = URL(string: url), u.scheme?.lowercased() == "from" {
             if Self.isUserFacing(u) || UserDefaults.standard.bool(forKey: "scriptingURLs") {
                 handleInternalURL(u)
             } else {
@@ -573,10 +574,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menu.addItem(.separator())
         menu.addItem(item("settings"))
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Cra", action: #selector(quitFromMenuBar), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Quit From", action: #selector(quitFromMenuBar), keyEquivalent: "").target = self
     }
 
-    /// The menu bar item's Quit, and `cra://debug?quit=1`: Cra quits for real.
+    /// The menu bar item's Quit, and `from://debug?quit=1`: Cra quits for real.
     @objc func quitFromMenuBar() {
         quittingFromMenuBar = true
         NSApp.terminate(nil)
@@ -803,8 +804,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// and Incognito Window. From an incognito page a new window is incognito too, as in Chrome,
     /// and nothing opens in a Little Window, whose pages load in the normal profile.
     func openLink(_ url: String, in kind: CraLinkWindow, space: UUID?, fromIncognito: Bool) {
-        // cra:// is Cra's scripting scheme; a page must not drive it.
-        if url.lowercased().hasPrefix("cra:") { return }
+        // from:// is Cra's scripting scheme; a page must not drive it.
+        if url.lowercased().hasPrefix("from:") { return }
         switch kind {
         case .little where !fromIncognito: openLittleWindow(url: url, space: space)
         case .incognito: openNewWindow(incognito: true, url: url)
@@ -856,13 +857,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if let key = NSApp.keyWindow {
             return littleWindows.first { !$0.isParked && ($0.window === key || $0.window === key.parent) }
         }
-        // No key window while the app is inactive (e.g. during a cra:// handoff from a
+        // No key window while the app is inactive (e.g. during a from:// handoff from a
         // second launch): the frontmost window stands in for it.
         guard let front = NSApp.orderedWindows.first(where: { $0.isVisible && !($0 is NSPanel) }) else { return nil }
         return littleWindows.first { !$0.isParked && ($0.window === front || $0.window === front.parent) }
     }
 
-    /// A space a link from outside may name (cra://open, an Air Traffic Control Little Window):
+    /// A space a link from outside may name (from://open, an Air Traffic Control Little Window):
     /// one that exists and isn't incognito, else nil, the space in use.
     private func openableSpace(_ id: UUID?) -> UUID? {
         id.flatMap { store.space($0) != nil && !store.isIncognito(space: $0) ? $0 : nil }
@@ -921,7 +922,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         for w in littleWindows { w.closeWindow() }
     }
 
-    /// cra:// URLs any app may send: they do what the user could do from the Dock.
+    /// from:// URLs any app may send: they do what the user could do from the Dock.
     /// The rest (action, navigate, key, import, debug, open with a file: or javascript:
     /// URL) run scripts, DevTools Protocol and key presses, so a link in a mail or another
     /// browser must not reach them. CRA_COMMAND_FILE and the scriptingURLs default do.
@@ -938,8 +939,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    /// cra://commandbar?query=…&mode=edit, cra://action/<id>,
-    /// cra://open?url=…[&space=<space id>][&background=1|&little=1], cra://dismiss.
+    /// from://commandbar?query=…&mode=edit, from://action/<id>,
+    /// from://open?url=…[&space=<space id>][&background=1|&little=1], from://dismiss.
     func handleInternalURL(_ u: URL) {
         let comps = URLComponents(url: u, resolvingAgainstBaseURL: false)
         func q(_ name: String) -> String? { comps?.queryItems?.first { $0.name == name }?.value }
@@ -1002,7 +1003,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 }
             }
         case "import":
-            // Headless import (scripting): cra://import?source=arc&archive=1&settings=1
+            // Headless import (scripting): from://import?source=arc&archive=1&settings=1
             let plan = try? (q("source") == "dia" ? DiaImporter.plan() : ArcImporter.plan())
             if let plan {
                 let r = store.apply(plan, includeArchive: q("archive") != "0", includeSettings: q("settings") != "0")
@@ -1013,6 +1014,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             var dict: [String: String] = [:]
             for item in comps?.queryItems ?? [] { if let v = item.value { dict[item.name] = v } }
             if let js = dict["devtoolsjs"] { main.debugRunInDevTools(js) }
+            // The bookmarks bar's drops and dropdowns (BookmarkDropping.debug).
+            if let step = dict["bookmarks"] { BookmarkDropping.debug(step, window: main.window); return }
             if dict["embedDump"] != nil { NSLog("%@", main.embeddedPagesDump()); return }
             if dict["pageInsets"] != nil { CraLog.note(main.pageInsetsReadout()); return }
             if let g = dict["screenshotPick"]?.split(separator: ",").compactMap({ Double($0) }), g.count == 2 {
@@ -1468,6 +1471,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 return
             }
             if dict["themeEditor"] != nil { main.showSpaceStyleEditor(space: store.focusedSpace); return }
+            if let op = dict["downloadsPanel"] { main.debugDownloadsCard(op); return }
             if dict["jumpPill"] != nil { SpaceListView.jumpToSelected(for: main.sidebarUI, space: store.focusedSpaceID); return }
             if let f = dict["folderPreview"] {
                 if let id = UUID(uuidString: f) { SpaceListView.debugFolderPreview(id, ui: main.sidebarUI) } else { FolderPreviewController.shared.close() }
@@ -1490,6 +1494,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 return
             }
             if dict["siteControls"] != nil { main.debugSiteControls(); return }
+            // The page toolbar (Dia layout): its state, a press on the star, the bookmark popover's
+            // steps (popover:name=…|folder=n|remove|done) and the attached command bar ("bar").
+            if let step = dict["toolbar"] { main.debugToolbar(step); return }
             // The sidebar's URL field (toolbar hidden): hovered, and a press on one of its buttons (#226).
             if let v = dict["urlFieldHover"] { main.debugURLFieldHover(v == "1"); return }
             if let name = dict["urlFieldPress"] { main.debugURLFieldPress(name); return }
@@ -1696,12 +1703,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard let main = self.main else { return nil }
         switch id {
         case "toggleSidebar": return main.sidebarVisible ? "Hide Sidebar" : "Show Sidebar"
-        case "toggleToolbar": return store.settings.showToolbar ? "Hide Toolbar" : "Show Toolbar"
+        case "toggleBookmarksBar": return store.settings.showBookmarksBar ? "Hide Bookmarks Bar" : "Show Bookmarks Bar"
+        case "toggleBookmark":
+            let url = store.selectedTab?.tab?.url ?? ""
+            return !url.isEmpty && BookmarkStore.shared.isBookmarked(url: url) ? "Remove Bookmark" : "Bookmark This Page"
         case "collapsePinned": return store.isPinnedCollapsed(main.focusedSpaceID) ? "Expand Pinned Tabs" : "Collapse Pinned Tabs"
         default: return nil
         }
     }
-    private static let flippingRows = ["toggleSidebar", "toggleToolbar", "collapsePinned"]
+    private static let flippingRows = ["toggleSidebar", "toggleBookmarksBar", "toggleBookmark", "collapsePinned"]
 
     /// System Settings ▸ Keyboard ▸ App Shortcuts names a menu row by its title, and AppKit looks a
     /// key up among the titles the menu bar has at that moment, before it validates the row. So a
@@ -1748,6 +1758,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             let url = keyLittleWindow.map { $0.hasPage ? $0.currentURL : nil } ?? store.selectedTab?.tab?.url
             let on = url.map { store.settings.isDeveloperMode(url: $0) } ?? false
             item.title = on ? "Turn off Developer Mode for this Site" : "Turn on Developer Mode for this Site"
+        case "toggleBookmark":
+            if let little = keyLittleWindow { return little.hasPage }
+            return !(store.selectedTab?.tab?.url ?? "").isEmpty && store.selectedTab?.isEmptyTab != true
         case "pinTab":
             item.title = store.selectedTabID.map { store.isPinned($0) ? "Unpin Tab" : "Pin Tab" } ?? "Pin/Unpin Tab"
             return !main.isBlank  // a Blank Window has no pinned section (Arc)
@@ -1778,8 +1791,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     /// Testing aid: with CRA_COMMAND_FILE set, every line appended to that file
-    /// is handled like a cra:// URL (a second instance run with CRA_DATA_DIR
-    /// cannot receive cra:// URLs, which LaunchServices routes to the installed app).
+    /// is handled like a from:// URL (a second instance run with CRA_DATA_DIR
+    /// cannot receive from:// URLs, which LaunchServices routes to the installed app).
     private var commandFileOffset: UInt64 = 0
     private var commandFilePoll: ScheduledWork?
     private func installCommandFileWatcher() {
@@ -2038,7 +2051,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case "useSelectionForFind": main.useSelectionForFind()
         case "jumpToSelection": main.jumpToSelection()
         case "toggleSidebar": main.toggleSidebar()
-        case "toggleToolbar": store.settings.showToolbar.toggle()
+        case "toggleBookmarksBar": store.settings.showBookmarksBar.toggle()
+        case "toggleBookmark": main.toggleBookmark()
         case "toggleDeveloperMode": if let url = store.selectedTab?.tab?.url { store.settings.toggleDeveloperMode(url: url) }
         case "reload": main.currentBrowser?.reload()
         case "hardReload": main.currentBrowser?.reloadIgnoringCache()
@@ -2127,7 +2141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let info = Bundle.main.infoDictionary
         let os = ProcessInfo.processInfo.operatingSystemVersion
         return """
-        Cra \(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? ""))
+        From \(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? ""))
         Chromium \(CraCEFRuntime.chromiumVersion()) · CEF \(CraCEFRuntime.cefVersion())
         macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)
         """
@@ -2233,8 +2247,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func buildMenus() {
         let menubar = NSMenu()
 
-        let appMenu = NSMenu(title: "Cra")
-        appMenu.addItem(withTitle: "About Cra", action: #selector(showAbout), keyEquivalent: "").target = self
+        let appMenu = NSMenu(title: "From")
+        appMenu.addItem(withTitle: "About From", action: #selector(showAbout), keyEquivalent: "").target = self
         appMenu.addItem(.separator())
         appMenu.addItem(item("settings"))
         let setDefault = item("setDefaultBrowser")
@@ -2245,12 +2259,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         appMenu.addItem(item("importData"))
         appMenu.addItem(item("checkForUpdates"))
         appMenu.addItem(.separator())
-        appMenu.addItem(std("Hide Cra", #selector(NSApplication.hide(_:)), "h"))
+        appMenu.addItem(std("Hide From", #selector(NSApplication.hide(_:)), "h"))
         appMenu.addItem(std("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]))
         appMenu.addItem(std("Show All", #selector(NSApplication.unhideAllApplications(_:))))
         appMenu.addItem(.separator())
-        appMenu.addItem(std("Quit Cra", #selector(NSApplication.terminate(_:)), "q"))
-        menubar.addItem(submenu: appMenu, title: "Cra")
+        appMenu.addItem(std("Quit From", #selector(NSApplication.terminate(_:)), "q"))
+        menubar.addItem(submenu: appMenu, title: "From")
 
         // Arc's File menu, its sections and rows (FileMenu, #279).
         let file = NSMenu(title: "File")
@@ -2288,7 +2302,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         view.addItem(submenu: appearance, title: "Appearance")
         view.addItem(.separator())
-        view.addItem(item("toggleSidebar")); view.addItem(item("toggleToolbar")); view.addItem(item("collapsePinned"))
+        view.addItem(item("toggleSidebar")); view.addItem(item("toggleBookmarksBar"))
+        view.addItem(item("collapsePinned"))
         view.addItem(.separator())
         view.addItem(item("stop")); view.addItem(item("reload")); view.addItem(item("hardReload"))
         // Arc's View menu order: cookies, then cache.
@@ -2323,7 +2338,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menubar.addItem(submenu: spaces, title: "Spaces")
 
         let tabs = NSMenu(title: "Tabs")
-        for id in ["newTab", "pinTab"] { tabs.addItem(item(id)) }
+        for id in ["newTab", "pinTab", "toggleBookmark"] { tabs.addItem(item(id)) }
         // Arc: Tabs ▸ New Folder… after Pin/Unpin Tab (#279).
         let newFolder = item("newFolder")
         newFolder.title = "New Folder…"
@@ -2361,8 +2376,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         help.addItem(withTitle: "Chromium \(CraCEFRuntime.chromiumVersion()) · CEF \(CraCEFRuntime.cefVersion())", action: nil, keyEquivalent: "")
         help.addItem(.separator())
         help.addItem(item("essentialShortcuts"))
-        for (title, url) in [("Cra Help", "https://crabrowser.app/help"), ("Release Notes", "https://crabrowser.app/release-notes"),
-                             ("Report an Issue…", "https://github.com/VictorKildahl/cra/issues"), ("Support Cra…", "https://crabrowser.app/support")] {
+        for (title, url) in [("From Help", "https://crabrowser.app/help"), ("Release Notes", "https://crabrowser.app/release-notes"),
+                             ("Report an Issue…", "https://github.com/VictorKildahl/cra/issues"), ("Support From…", "https://crabrowser.app/support")] {
             let link = NSMenuItem(title: title, action: #selector(openHelpLink(_:)), keyEquivalent: "")
             link.target = self
             link.representedObject = SiteLinks.tagged(url, from: .helpMenu)
@@ -2400,7 +2415,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let version = info?["CFBundleShortVersionString"] as? String ?? ""
         let build = info?["CFBundleVersion"] as? String ?? ""
         NSApp.orderFrontStandardAboutPanel(options: [
-            .applicationName: "Cra",
+            .applicationName: "From",
             .applicationVersion: version,
             .version: "\(build) · Chromium \(CraCEFRuntime.chromiumVersion())",
         ])

@@ -8,34 +8,34 @@
 requires screen
 budget rss=600 stalls50=10
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true}
-cra://open?url=${PAGE}?n=main
+from://open?url=${PAGE}?n=main
 wait 3
-cra://debug?windowState=windowed
+from://debug?windowState=windowed
 expect-log window state windowed: main0 fullscreen=0 .* lightsHidden=0 lights=1.0,1.0,1.0 movable=1 backgroundMovable=1
 
-cra://debug?fullscreen=1
+from://debug?fullscreen=1
 wait 3
-cra://debug?windowState=full
+from://debug?windowState=full
 expect-log window state full: main0 fullscreen=1 visible=1 onSpace=1 layout=1 .* lights=1.0,1.0,1.0 movable=0 backgroundMovable=0
 
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 2
-cra://debug?windowState=full-no-sidebar
+from://debug?windowState=full-no-sidebar
 expect-log window state full-no-sidebar: main0 fullscreen=1 .* lightsHidden=1 lights=1.0,1.0,1.0 movable=0
 
-cra://debug?fullscreen=0
+from://debug?fullscreen=0
 wait 3
-cra://debug?windowState=windowed-no-sidebar
+from://debug?windowState=windowed-no-sidebar
 expect-log window state windowed-no-sidebar: main0 fullscreen=0 .* lightsHidden=1 lights=hidden,hidden,hidden movable=1 backgroundMovable=1
 
-cra://debug?fullscreen=1
+from://debug?fullscreen=1
 wait 3
-cra://debug?windowState=full-from-hidden
+from://debug?windowState=full-from-hidden
 expect-log window state full-from-hidden: main0 fullscreen=1 .* lightsHidden=1 lights=1.0,1.0,1.0 movable=0 backgroundMovable=0
 
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 2
-cra://debug?fullscreen=0
+from://debug?fullscreen=0
 wait 3
-cra://debug?windowState=back
+from://debug?windowState=back
 expect-log window state back: main0 fullscreen=0 .* lightsHidden=0 lights=1.0,1.0,1.0 movable=1 backgroundMovable=1

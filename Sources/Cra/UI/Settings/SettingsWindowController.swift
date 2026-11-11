@@ -55,13 +55,11 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     }
 }
 
-/// Selected pane plus the back/forward history behind the toolbar pill.
+/// The selected pane.
 @MainActor
 @Observable
 final class SettingsNavigation {
     private(set) var pane: SettingsPane = .general
-    private(set) var back: [SettingsPane] = []
-    private(set) var forward: [SettingsPane] = []
     /// The window is on screen: panes that refresh (Performance) stop while it is closed or covered.
     var isOpen = false
     /// Counts each time Settings is brought up: panes showing what changed elsewhere (a profile's
@@ -71,30 +69,15 @@ final class SettingsNavigation {
 
     func show(_ p: SettingsPane) {
         guard p != pane else { return }
-        back.append(pane)
-        forward = []
-        pane = p
-    }
-    func goBack() {
-        guard let p = back.popLast() else { return }
-        forward.append(pane)
-        pane = p
-    }
-    func goForward() {
-        guard let p = forward.popLast() else { return }
-        back.append(pane)
         pane = p
     }
 }
 
-/// Dia's Settings window: 778×509, close button only, a 204 pt full-height source-list
-/// sidebar in an NSSplitViewController and a unified 52 pt toolbar with the back/forward
-/// pill and the pane title after the sidebar (measured on Dia 1.54.2, see
-/// docs/arc-reverse-engineering.md "Dia Settings window"). The pill and title are drawn by
-/// the content view under the (empty) toolbar: macOS 26 would wrap toolbar items in a
-/// shared glass capsule that Dia does not have.
+/// Settings in a window of its own, the panes as tabs across its top (as the user's From
+/// browser has them): the pane's name on the row of the window's buttons, the tabs under it,
+/// the pane below. Colours stay Cra's: the selected tab is accent-filled while the window is key.
 @MainActor
-final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
+final class SettingsWindowController: NSWindowController {
     private let nav = SettingsNavigation()
 
     func show(_ pane: SettingsPane) { nav.show(pane) }
@@ -107,34 +90,14 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         super.init(window: window)
         window.title = "Settings"
         window.titleVisibility = .hidden
-        window.toolbarStyle = .unified
-        // The content view draws the pill and title under the toolbar; the titlebar must not
-        // blur them, and Dia has no separator line under its toolbar.
+        // The content view draws the title and tabs under the transparent titlebar.
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = true
 
-        let split = NSSplitViewController()
-        let sidebar = NSSplitViewItem(sidebarWithViewController: NSHostingController(rootView: SettingsSidebar(nav: nav)))
-        // macOS 26 insets the sidebar panel 8 pt; Dia's split sits at 204 with its list 8 in.
-        sidebar.minimumThickness = SettingsMetrics.sidebarWidth - 8
-        sidebar.maximumThickness = SettingsMetrics.sidebarWidth - 8
-        sidebar.canCollapse = false
-        let content = NSHostingController(rootView: SettingsContent(nav: nav, actions: actions)
+        window.contentViewController = NSHostingController(rootView: SettingsContent(nav: nav, actions: actions)
             .environment(store).environment(bindings).environment(sync))
-        let contentItem = NSSplitViewItem(viewController: content)
-        split.addSplitViewItem(sidebar)
-        split.addSplitViewItem(contentItem)
-        split.splitView.dividerStyle = .thin
-        window.contentViewController = split
-
-        let toolbar = NSToolbar(identifier: "cra.settings")
-        toolbar.delegate = self
-        toolbar.displayMode = .iconOnly
-        toolbar.allowsUserCustomization = false
-        toolbar.showsBaselineSeparator = false
-        window.toolbar = toolbar
-        // Size last: the toolbar and full-size content change how the frame is derived.
         window.setFrame(NSRect(origin: .zero, size: SettingsMetrics.windowSize), display: false)
         window.centerOnTestScreen()
         // On screen: shown and not entirely covered (the window needn't be key).
@@ -150,100 +113,66 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.sidebarTrackingSeparator]
-    }
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
-    }
-
-    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
-        nil
-    }
 }
 
-/// Dia's back/forward pill: 69×38 capsule, black 25% in dark mode, two chevrons.
-struct SettingsNavPill: View {
+/// The window's top: the pane's name centred on the row of the window's buttons, the tabs under it.
+struct SettingsTabBar: View {
     let nav: SettingsNavigation
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 0) {
-            arrow("chevron.left", enabled: !nav.back.isEmpty) { nav.goBack() }
-            arrow("chevron.right", enabled: !nav.forward.isEmpty) { nav.goForward() }
+        VStack(spacing: 6) {
+            Text(nav.pane.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(0.8))
+                .lineLimit(1)
+                .padding(.horizontal, 90)
+                .frame(height: SettingsMetrics.titleRowHeight)
+            HStack(spacing: 2) {
+                ForEach(SettingsPane.allCases) { SettingsTab(pane: $0, nav: nav) }
+            }
         }
-        .frame(width: SettingsMetrics.navPillSize.width, height: SettingsMetrics.navPillSize.height)
-        .background(Capsule().fill(Color.black.opacity(scheme == .dark ? 0.25 : 0.06)))
-    }
-
-    private func arrow(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(enabled ? 0.75 : 0.3))
-                .frame(width: SettingsMetrics.navPillSize.width / 2, height: SettingsMetrics.navPillSize.height)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
     }
 }
 
-/// The toolbar row over the content: pill 10 in from the split, title text 10 after it.
-struct SettingsToolbarRow: View {
-    let nav: SettingsNavigation
-    var body: some View {
-        HStack(spacing: 10) {
-            SettingsNavPill(nav: nav)
-            Text(nav.pane.title).font(.system(size: 15, weight: .bold))
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, 10)
-        .frame(height: SettingsMetrics.toolbarHeight)
-    }
-}
-
-/// Dia's source list: 28 pt rows, the selection 10 pt inside the sidebar's edges with a 7 pt
-/// corner, the 20 pt glyph 10 pt into it (20 in) and the label 49 in (Dia 1.55.1, AX + 2x capture,
-/// 9 Nov 2026). The selected row is accent-filled with white text while the window is key,
-/// otherwise a grey fill with accent-coloured text.
-struct SettingsSidebar: View {
+/// One pane's tab: its glyph over its name. Selected: accent fill and white while the window is
+/// key, otherwise a grey fill with accent-coloured content (Cra's source-list colours).
+struct SettingsTab: View {
+    let pane: SettingsPane
     let nav: SettingsNavigation
     @Environment(\.controlActiveState) private var activeState
+    @State private var hovering = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(SettingsPane.allCases) { row($0) }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private func row(_ p: SettingsPane) -> some View {
-        let selected = nav.pane == p
+        let selected = nav.pane == pane
         let key = activeState == .key
-        return Button { nav.show(p) } label: {
-            HStack(spacing: 9) {
-                Image(systemName: p.symbol)
-                    .font(.system(size: 15))
-                    .frame(width: 20, height: 20)
-                    .foregroundStyle(selected && key ? Color.white : Color.primary)
-                Text(p.title)
-                    .font(.system(size: 13))
-                    .foregroundStyle(selected ? (key ? Color.white : Color.accentColor) : Color.primary)
-                Spacer(minLength: 0)
+        let ink: Color = selected ? (key ? .white : .accentColor) : (hovering ? .primary : .primary.opacity(0.62))
+        Button { nav.show(pane) } label: {
+            VStack(spacing: 3) {
+                Image(systemName: pane.symbol)
+                    .font(.system(size: 17))
+                    .frame(height: 22)
+                Text(pane.title)
+                    .font(.system(size: 11, weight: selected ? .medium : .regular))
+                    .lineLimit(1)
             }
-            .padding(.leading, 10)
-            .frame(height: 28)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(selected ? (key ? Color.accentColor : Color.primary.opacity(0.1)) : Color.clear))
-            .contentShape(Rectangle())
+            .foregroundStyle(ink)
+            .frame(minWidth: 52)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(selected ? (key ? Color.accentColor : Color.primary.opacity(0.1))
+                               : (hovering ? Color.primary.opacity(0.06) : Color.clear)))
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .buttonStyle(.plain)
+        // With Keyboard navigation on, the window's first focus landed on a tab and drew a ring
+        // around a pane that isn't the selected one; the selection fill is the indicator.
+        .focusEffectDisabled()
+        .onHover { hovering = $0 }
+        .help(pane.title)
     }
 }
 
@@ -253,7 +182,8 @@ struct SettingsContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SettingsToolbarRow(nav: nav)
+            SettingsTabBar(nav: nav)
+            Divider()
             Group {
                 switch nav.pane {
                 case .general: GeneralPane()

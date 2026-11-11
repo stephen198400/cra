@@ -810,7 +810,7 @@ public:
         NSMutableArray<NSString*>* urls = [NSMutableArray array];
         for (const auto& a : args) {
             NSString* str = NSStringFromCef(a);
-            if ([str hasPrefix:@"http://"] || [str hasPrefix:@"https://"] || [str hasPrefix:@"cra://"] || [str hasPrefix:@"file://"]) {
+            if ([str hasPrefix:@"http://"] || [str hasPrefix:@"https://"] || [str hasPrefix:@"from://"] || [str hasPrefix:@"file://"]) {
                 [urls addObject:str];
             }
         }
@@ -1234,9 +1234,9 @@ public:
 
     void OnProtocolExecution(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request,
                              bool& allow_os_execution) override {
-        // cra:// is Cra's own scripting scheme; a page must not drive it.
+        // from:// is Cra's own scripting scheme; a page must not drive it.
         std::string url = request->GetURL().ToString();
-        allow_os_execution = external_ && url.compare(0, 4, "cra:") != 0;
+        allow_os_execution = external_ && url.compare(0, 5, "from:") != 0;
     }
 
 private:
@@ -1514,6 +1514,15 @@ public:
             "document.addEventListener('enterpictureinpicture',function(e){send('pip:1');watch(e.target);},true);"
             "document.addEventListener('leavepictureinpicture',function(){cur=null;send('pip:0');},true);"
             "if(document.pictureInPictureElement){send('pip:1');watch(document.pictureInPictureElement);}})");
+        // This fork: slim scrollbars (8 pt, a translucent rounded thumb, no track) in place of
+        // Chromium's wide legacy bar, in every frame.
+        RunPageScript(frame, "",
+            "(function(send){try{if(document.getElementById('from-scrollbars'))return;var s=document.createElement('style');"
+            "s.id='from-scrollbars';s.textContent='::-webkit-scrollbar{width:8px;height:8px;background:transparent}"
+            "::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-corner{background:transparent}"
+            "::-webkit-scrollbar-thumb{background:rgba(128,128,128,.45);border-radius:4px;border:2px solid transparent;background-clip:padding-box}"
+            "::-webkit-scrollbar-thumb:hover{background:rgba(128,128,128,.7);border:1px solid transparent;background-clip:padding-box}';"
+            "(document.head||document.documentElement).appendChild(s);}catch(e){}})");
         if (!frame->IsMain()) return;
         CraBrowser* o = owner_;
         if (!o) return;
@@ -1521,14 +1530,36 @@ public:
                  statusCode:httpStatusCode];
         // Ask the page for its theme colour; the answer comes back as "theme:<css colour>".
         RunPageScript(frame, "",
-            "(function(send){function probe(){try{var c='';var ms=document.querySelectorAll('meta[name=\"theme-color\"]');"
+            "(function(send){function probe(q){try{var c='';var ms=document.querySelectorAll('meta[name=\"theme-color\"]');"
             "for(var i=0;i<ms.length;i++){if(!ms[i].getAttribute('media')){c=ms[i].getAttribute('content')||'';if(c)break;}}"
+            // No theme-color: what the page's own top edge is painted with (a site's header band), so
+            // the bar continues the page as it does in the From browser. Only at the top of the
+            // page, and only an opaque colour: scrolled, the top edge is whatever passes under it.
+            // Every layer stacked at the top edge, front to back, at three points across it: the
+            // band may be a sibling behind the hit element or a ::before (sanjoseca.gov's header).
+            // A gradient counts by its first stop, a nearly opaque colour as opaque.
+            "function col(s){var g=s.backgroundColor;if(g&&g.indexOf('rgb(')===0)return g;"
+            "var a=g&&g.match(/^rgba\\((\\d+), (\\d+), (\\d+), ([\\d.]+)\\)$/);"
+            "if(a&&parseFloat(a[4])>=0.5)return 'rgb('+a[1]+', '+a[2]+', '+a[3]+')';"
+            "if(s.backgroundImage.indexOf('gradient(')>=0){var m=s.backgroundImage.match(/rgb\\([^)]*\\)/);if(m)return m[0];}return '';}"
+            "if(!c){var xs=[innerWidth/2,12,innerWidth-28];for(var k=0;k<xs.length&&!c;k++){"
+            "var es=document.elementsFromPoint(xs[k],1);for(var j=0;j<es.length&&!c;j++){var e=es[j];"
+            "if(e===document.body||e===document.documentElement)break;"
+            // Only a band: as wide as most of the page and at least 24 px tall, and showing. A thin
+            // accent line or a small control at the edge is not the navigation bar's colour.
+            "var r=e.getBoundingClientRect(),st=getComputedStyle(e);"
+            "if(r.width<innerWidth*0.6||r.height<24||st.visibility==='hidden'||parseFloat(st.opacity)<0.5)continue;"
+            "c=col(getComputedStyle(e))||col(getComputedStyle(e,'::before'))||col(getComputedStyle(e,'::after'));}}}"
             "if(!c&&document.body){var b=getComputedStyle(document.body).backgroundColor;if(b&&b!=='rgba(0, 0, 0, 0)'&&b!=='transparent'){c=b;}}"
             "if(!c){var h=getComputedStyle(document.documentElement).backgroundColor;if(h&&h!=='rgba(0, 0, 0, 0)'&&h!=='transparent'){c=h;}}"
             "if(!c){c='rgb(255, 255, 255)';}"
             "var d=document.createElement('div');d.style.color=c;document.body.appendChild(d);"
-            "var rgb=getComputedStyle(d).color;d.remove();send('theme:'+rgb);}catch(e){}}"
-            "probe();setTimeout(probe,1500);})");
+            "var rgb=getComputedStyle(d).color;d.remove();if(q===1&&window.__fromThemeLast===rgb)return;window.__fromThemeLast=rgb;send('theme:'+rgb);}catch(e){}}"
+            // Scrolled, the top edge may be another band (a sticky header, or the page under a
+            // header that scrolled away): ask again once the scroll settles.
+            "probe();setTimeout(probe,1500);"
+            "if(!window.__fromThemeScroll){window.__fromThemeScroll=1;var t=0;"
+            "window.addEventListener('scroll',function(){clearTimeout(t);t=setTimeout(function(){probe(1);},200);},{passive:true,capture:true});}})");
         RunPageScript(frame, "bg", kBackgroundProbe);
     }
 
@@ -1607,7 +1638,7 @@ public:
             "body{display:flex;min-height:90vh;align-items:center;justify-content:center;margin:0}"
             "main{max-width:420px;padding:32px}h1{font-size:22px;margin:0 0 8px}p{opacity:.7;margin:0 0 6px}"
             "code{font:13px ui-monospace,Menlo;opacity:.6;word-break:break-all}</style></head><body><main>"
-            "<h1>Cra can’t reach this page</h1><p>" + err + " (" + std::to_string((int)errorCode) + ")</p>"
+            "<h1>From can’t reach this page</h1><p>" + err + " (" + std::to_string((int)errorCode) + ")</p>"
             "<code>" + url + "</code></main></body></html>";
         CefString encoded = CefBase64Encode(html.data(), html.size());
         frame->LoadURL("data:text/html;base64," + encoded.ToString());
@@ -3508,7 +3539,7 @@ static BOOL CraTestBackground(void) {
     return background;
 }
 // Requests to come to the front made while Cra was in the background that went through, counted
-// before a background test copy refuses them all (cra://debug?activations=).
+// before a background test copy refuses them all (from://debug?activations=).
 static NSInteger g_backgroundActivations = 0;
 + (NSInteger)backgroundActivations { return g_backgroundActivations; }
 - (BOOL)allowsActivation {

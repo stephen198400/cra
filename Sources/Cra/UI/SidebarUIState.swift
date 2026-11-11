@@ -195,6 +195,8 @@ enum SplitDropTarget: Equatable {
 @MainActor
 final class SidebarActions {
     var openCommandBar: (CommandBarMode) -> Void = { _ in }
+    /// The bar hanging from the toolbar's address, as ⌘L opens it (a click on "Search or Enter URL…").
+    var openCommandBarAttached: (CommandBarMode) -> Void = { _ in }
     var closeTab: (UUID) -> Void = { _ in }
     /// A tab dragged out of every Cra window and let go there (screen point): Arc opens it in a
     /// Blank Window where it was dropped (GitHub #219).
@@ -256,6 +258,12 @@ final class SidebarActions {
     var commitAddress: (String) -> Void = { _ in }
     /// A typed URL or search in a new tab (⌘ + New Tab pastes the clipboard's text).
     var openTyped: (String) -> Void = { _ in }
+    /// Bookmark This Page / Remove Bookmark for a tab (nil = the selected tab): the menu's ⌥⌘B and,
+    /// later, the address bar's star. BookmarkStore.shared.isBookmarked(url:) says which it will do.
+    var toggleBookmark: (UUID?) -> Void = { _ in }
+    /// A bookmark from the bookmarks bar: its address, whether in a new background tab (⌘-click,
+    /// middle click), and the pane whose bar it was on (nil = the selected tab).
+    var openBookmark: (String, Bool, UUID?) -> Void = { _, _, _ in }
 }
 
 private struct SidebarActionsKey: EnvironmentKey {

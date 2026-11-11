@@ -12,18 +12,18 @@ seed sidebar.json {"version":1,"spaceOrder":["A0000000-0000-0000-0000-0000000000
 # The Calendar favorite's hidden page opens with the sidebar (offline it just fails to read).
 expect-log live calendar fetch begins
 wait 1
-cra://debug?activations=calendar
+from://debug?activations=calendar
 expect-log activations calendar: active=0 background=0
 
 # A tab opened behind, as a link from another app with background=1 or an extension opens one.
-cra://open?url=${PAGE}?n=behind&background=1
+from://open?url=${PAGE}?n=behind&background=1
 wait 2
-cra://debug?activations=background-tab
+from://debug?activations=background-tab
 expect-log activations background-tab: active=0 background=0
 
 # A tab opened in front of the window: still Cra's own choice whether the app comes forward, and a
 # background test copy never asks.
-cra://open?url=${PAGE}?n=front
+from://open?url=${PAGE}?n=front
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
-cra://debug?activations=front-tab
+from://debug?activations=front-tab
 expect-log activations front-tab: active=0 background=0

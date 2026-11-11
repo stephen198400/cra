@@ -1,6 +1,6 @@
 import Foundation
 
-/// Whether a `cra://` URL (from another app, a shell's `open`, the command file) brings the
+/// Whether a `from://` URL (from another app, a shell's `open`, the command file) brings the
 /// browser window and Cra to the front before it runs.
 public enum InternalURLRaise {
     /// `host`: the URL's host (`open`, `action`, `commandbar`…). `little`, `background`: `open`'s

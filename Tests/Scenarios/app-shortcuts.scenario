@@ -7,25 +7,25 @@
 budget rss=600 stalls50=10
 arg -NSUserKeyEquivalents
 arg {"Hide Sidebar"="^@h";"Show Sidebar"="^@s";}
-cra://debug?windowSize=1280x800
+from://debug?windowSize=1280x800
 wait 2
-cra://debug?sidebarShown=start
+from://debug?sidebarShown=start
 expect-log sidebar shown start: visible=1 menu=Hide Sidebar key=⌃⌘h
-cra://debug?key=h,4,1310720
+from://debug?key=h,4,1310720
 wait 1
-cra://debug?sidebarShown=hidden
+from://debug?sidebarShown=hidden
 expect-log sidebar shown hidden: visible=0 menu=Show Sidebar key=⌃⌘s
-cra://debug?key=s,1,1310720
+from://debug?key=s,1,1310720
 wait 1
-cra://debug?sidebarShown=shown
+from://debug?sidebarShown=shown
 expect-log sidebar shown shown: visible=1 menu=Hide Sidebar key=⌃⌘h
-cra://open?url=${PAGE}
+from://open?url=${PAGE}
 wait 3
-cra://debug?key=h,4,1310720
+from://debug?key=h,4,1310720
 wait 1
-cra://debug?sidebarShown=page-hidden
+from://debug?sidebarShown=page-hidden
 expect-log sidebar shown page-hidden: visible=0 menu=Show Sidebar key=⌃⌘s
-cra://debug?key=s,1,1310720
+from://debug?key=s,1,1310720
 wait 1
-cra://debug?sidebarShown=page-shown
+from://debug?sidebarShown=page-shown
 expect-log sidebar shown page-shown: visible=1 menu=Hide Sidebar key=⌃⌘h

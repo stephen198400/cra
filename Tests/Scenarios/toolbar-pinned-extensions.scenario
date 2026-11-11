@@ -7,24 +7,24 @@
 budget rss=700 stalls50=10
 port 47125
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": true}
-cra://debug?installExtension=${FIXTURES}/Extension
-cra://debug?installExtension=${FIXTURES}/SidePanelExtension
+from://debug?installExtension=${FIXTURES}/Extension
+from://debug?installExtension=${FIXTURES}/SidePanelExtension
 relaunch
-cra://debug?windowSize=1280x800
-cra://open?url=${PAGE}?n=pins
+from://debug?windowSize=1280x800
+from://open?url=${PAGE}?n=pins
 wait 3
-cra://debug?pinExtension=${EXTENSION_ID}
-cra://debug?pinExtension=${SIDE_PANEL_EXTENSION_ID}
+from://debug?pinExtension=${EXTENSION_ID}
+from://debug?pinExtension=${SIDE_PANEL_EXTENSION_ID}
 wait 2
 snapshot PaneToolbarView toolbar-pinned-extensions
-cra://action/toggleDeveloperMode
+from://action/toggleDeveloperMode
 wait 2
 snapshot PaneToolbarView toolbar-pinned-developer
-cra://action/toggleDeveloperMode
+from://action/toggleDeveloperMode
 wait 1
-cra://action/addSplitView
+from://action/addSplitView
 wait 2
-cra://action/previousSplitPane
+from://action/previousSplitPane
 wait 2
 snapshot PaneToolbarView,0 toolbar-pinned-split-pane
 reject-log fault:

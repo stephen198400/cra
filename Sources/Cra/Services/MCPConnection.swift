@@ -98,7 +98,7 @@ enum MCPConnection {
             // The receiving worker exits when the server has drained and closed.
             dispatchMain()
         } catch {
-            FileHandle.standardError.write(Data("Cra MCP is unavailable. Enable it in the running browser's Advanced settings. \(error)\n".utf8))
+            FileHandle.standardError.write(Data("From MCP is unavailable. Enable it in the running browser's Advanced settings. \(error)\n".utf8))
             exit(1)
         }
     }

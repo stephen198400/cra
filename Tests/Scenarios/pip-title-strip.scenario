@@ -6,7 +6,7 @@
 # only Cra's own top bar shows the host, on hover. Whether the strip is drawn is pixels in
 # Chromium's compositor (docs/release-checklist.md); this pins the switch that decides it.
 # promise: #246
-cra://open?url=chrome://version
+from://open?url=chrome://version
 wait 2
-cra://debug?cdp=Runtime.evaluate&params={"expression":"'pip-trusted:'+document.body.innerText.includes('VideoPipForceTrustedForMediaPlaybackForTesting')"}
+from://debug?cdp=Runtime.evaluate&params={"expression":"'pip-trusted:'+document.body.innerText.includes('VideoPipForceTrustedForMediaPlaybackForTesting')"}
 expect-log Cra cdp Runtime.evaluate .*"value":"pip-trusted:true"

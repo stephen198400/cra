@@ -6,15 +6,15 @@
 # (answer-loaded-false-get-missing-created-2). Now the tab Chromium made is the Cra tab, as in
 # Chrome and Arc. The fixture opens its answer as a tab, which `back` reads as the selected URL.
 budget rss=700 stalls50=5
-cra://debug?installExtension=${FIXTURES}/TabsCreateExtension
+from://debug?installExtension=${FIXTURES}/TabsCreateExtension
 relaunch
-cra://open?url=${PAGE}?n=start
+from://open?url=${PAGE}?n=start
 wait 3
-cra://debug?extensionAction=${TABS_CREATE_EXTENSION_ID}
+from://debug?extensionAction=${TABS_CREATE_EXTENSION_ID}
 wait 7
-cra://debug?back=answer
+from://debug?back=answer
 expect-log back answer: selected=.*page\.html\?n=answer-
 expect-log back answer: selected=.*page\.html\?n=answer-loaded-true-get-found-created-1
-cra://debug?removeExtension=${TABS_CREATE_EXTENSION_ID}
+from://debug?removeExtension=${TABS_CREATE_EXTENSION_ID}
 wait 1
 reject-log fault:

@@ -225,14 +225,14 @@ built release app with a test profile. Note anything that fails in the release's
 ## Not pinned yet
 
 Each of these needs a change to production code before a test can pin it: a move into
-CraCore (rule 1 in CLAUDE.md), or a `cra://debug` hook a scenario can read. Do the one for an
+CraCore (rule 1 in CLAUDE.md), or a `from://debug` hook a scenario can read. Do the one for an
 issue when a change touches that code anyway.
 
 | Issue | What would let a test pin it |
 |---|---|
 | #202 | Move where a link's tab lands (`BrowserManager.openLinkTab`) into CraCore, e.g. a `LinkTabPlacement` value |
 | #172 | Move the Little Window's profile order (opener's page, Peek's tab, target space) out of `LittleWindowController.init`; or a `littleProfile` hook logging its profile folder |
-| #186 | `cra://open?…&little=1` honours `CRA_TEST_BACKGROUND`, and `debug?windows=1` logs `collectionBehavior` |
+| #186 | `from://open?…&little=1` honours `CRA_TEST_BACKGROUND`, and `debug?windows=1` logs `collectionBehavior` |
 | #178 | Split panes keep their bars with the toolbar hidden (`ShellView.barsShown`), and View ▸ Show Toolbar is disabled in a split: both in files no harness compiles |
 | #191 | Move the drop-target rule (a tab over a row's middle splits, never into a folder) out of `SpaceListView` |
 | #47 | Move `SpaceListView.revealActiveRow` (scroll the least that shows the row) |

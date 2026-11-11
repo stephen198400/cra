@@ -1,45 +1,14 @@
 import CraCore
 import Testing
 
-/// The toolbar-hidden sidebar header at Arc's narrower widths (issue #287), against Arc's
-/// AX frames (offsets from the sidebar's left edge).
+/// The sidebar header row: the traffic lights and the downloads button. Arc's header layouts
+/// (issue #287: toggle and ← → ↻, or ← → ••• under 212 pt) are gone; the toolbar has the
+/// navigation (ToolbarComposition).
 struct SidebarHeaderLayoutTests {
-    /// 220 pt: ← → ↻ at 114, 148, 182 (32 pt, 2 pt apart, 6 pt from the edge); the toggle
-    /// keeps its place after the traffic lights.
-    @Test(.bug("https://github.com/VictorKildahl/cra/issues/287"))
-    func regularDownTo214() {
-        #expect(!SidebarHeaderLayout.isNarrow(width: 220))
-        #expect(SidebarHeaderLayout.navButtons(width: 220).map(\.x) == [114, 148, 182])
-        #expect(SidebarHeaderLayout.navButtons(width: 220).map(\.size) == [32, 32, 32])
-        #expect(SidebarHeaderLayout.toggleX(width: 220, afterLights: 77) == 77)
-        // 214 pt: still regular, ← at 108 and the toggle moved left to 74 (Arc).
-        #expect(!SidebarHeaderLayout.isNarrow(width: 214))
-        #expect(SidebarHeaderLayout.navButtons(width: 214).map(\.x) == [108, 142, 176])
-        #expect(SidebarHeaderLayout.toggleX(width: 214, afterLights: 77) == 74)
-    }
-
-    /// The switch, each width opened on its own: 213 and 212 regular (toggle at 73 and 72),
-    /// 211 narrow (← → ••• at 121/149/177). Developer Mode pages: toggle at 71 beside ← at 105.
-    @Test(.bug("https://github.com/VictorKildahl/cra/issues/287"))
-    func switchesBetween212And211() {
-        #expect(!SidebarHeaderLayout.isNarrow(width: 212))
-        #expect(SidebarHeaderLayout.isNarrow(width: 211))
-        #expect(SidebarHeaderLayout.toggleX(width: 213, afterLights: 77) == 73)
-        #expect(SidebarHeaderLayout.toggleX(width: 212, afterLights: 77) == 72)
-        #expect(SidebarHeaderLayout.navButtons(width: 211).map(\.x) == [121, 149, 177])
-        #expect(SidebarHeaderLayout.toggleX(width: 212, afterLights: 77, developer: true) == 71)
-        #expect(SidebarHeaderLayout.toggleX(width: 260, afterLights: 77, developer: true) == 77)
-    }
-
-    /// 208 pt and down to Arc's 164 pt minimum: ← → ••• as touching 28 pt boxes, 6 pt from
-    /// the edge (Arc: 118/146/174 at 208, 74/102/130 at 164), where Cra's 32 pt row would have
-    /// run over the traffic lights and the toggle.
-    @Test(.bug("https://github.com/VictorKildahl/cra/issues/287"))
-    func narrowAt208AndDown() {
-        #expect(SidebarHeaderLayout.isNarrow(width: 208))
-        #expect(SidebarHeaderLayout.navButtons(width: 208).map(\.x) == [118, 146, 174])
-        #expect(SidebarHeaderLayout.navButtons(width: 164).map(\.x) == [74, 102, 130])
-        #expect(SidebarHeaderLayout.navButtons(width: 164).map(\.size) == [28, 28, 28])
+    @Test func theRowHoldsOnlyDownloads() {
+        #expect(SidebarHeaderLayout.items() == [.downloads])
+        #expect(SidebarHeaderLayout.items(developerPage: true) == [.downloads], "a Developer Mode page adds no navigation")
+        #expect(!SidebarHeaderLayout.isNarrow(width: 212) && SidebarHeaderLayout.isNarrow(width: 211))
     }
 
     /// The ••• popover's tones from Arc's "Lab" theme (shadedDark 0.437, 0.336, −0.080):

@@ -6,22 +6,22 @@
 requires screen
 budget rss=600 stalls50=10
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true}
-cra://open?url=${PAGE}?n=main
+from://open?url=${PAGE}?n=main
 wait 3
-cra://debug?fullscreen=1
+from://debug?fullscreen=1
 wait 3
-cra://debug?windowState=full-sidebar
+from://debug?windowState=full-sidebar
 expect-log window state full-sidebar: main0 fullscreen=1 .* card=[0-9]+,10,10,10 r[1-9][0-9]* fills=0
 
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 2
-cra://debug?windowState=full-hidden
+from://debug?windowState=full-hidden
 expect-log window state full-hidden: main0 fullscreen=1 .* card=0,0,0,0 r0 fills=1
 
-cra://debug?fullscreen=0
+from://debug?fullscreen=0
 wait 3
-cra://debug?windowState=windowed-hidden
+from://debug?windowState=windowed-hidden
 expect-log window state windowed-hidden: main0 fullscreen=0 .* card=10,10,10,10 r[1-9][0-9]* fills=0
 
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 2

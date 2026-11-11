@@ -51,6 +51,14 @@ enum ChromiumImporter {
             let title = profiles.count == 1 ? browser : "\(browser) · \(p.name)"
             var space = ImportedSpace(title: title, emoji: "🌐", theme: nil)
             let bm = bookmarks(profile: p.dir)
+            // The first profile's bar is the Bookmarks Bar; every other profile's bookmarks go into
+            // Other Bookmarks in a folder of the space's name.
+            if plan.bookmarks.isEmpty, !bm.bar.isEmpty || !bm.other.isEmpty {
+                plan.bookmarks.bar = bm.bar
+                plan.bookmarks.other = bm.other
+            } else if !bm.bar.isEmpty || !bm.other.isEmpty {
+                plan.bookmarks.other.append(ImportedItem(customTitle: title, pageTitle: title, url: nil, isFolder: true, children: bm.bar + bm.other))
+            }
             space.pinned = bm.bar + (bm.other.isEmpty ? [] : [ImportedItem(customTitle: "Other Bookmarks", pageTitle: "Other Bookmarks", url: nil, isFolder: true, children: bm.other)])
             space.today = openTabs(profile: p.dir)
             if !space.pinned.isEmpty || !space.today.isEmpty { plan.spaces.append(space) }

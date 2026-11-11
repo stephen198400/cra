@@ -6,8 +6,9 @@ import Foundation
 /// the left and pinned extensions, Extensions, Split View on the right; the developer bar swaps
 /// the navigation for copy · divider · Console, Network, Inspect (Arc's Toggle Console, Toggle
 /// Network Panel and Inspect Element, GitHub #88; Arc's Capture Window and Capture between them
-/// are not in Cra). The toggle is there only while the sidebar is hidden or floating: otherwise
-/// the sidebar's header carries it (Arc 1.171, GitHub #50).
+/// are not in Cra). This fork's bar is Dia's: the sidebar toggle and ← → ↻ lead every lone page's
+/// bar, the developer bar's too, whether the sidebar is shown or not; the sidebar's header carries
+/// no navigation (it was Arc's place for it, GitHub #50).
 ///
 /// A split pane's bar (Arc 1.171, GitHub #178) has no toggle and no Split View button. The
 /// focused pane carries ← → ↻, the address, the pinned extensions, Extensions, the split options
@@ -51,18 +52,17 @@ public struct ToolbarComposition: Equatable, Sendable {
                 canGoForward: Bool, isLoading: Bool, pinnedExtensions: [String], translatable: Bool = false) {
         // Arc's essential controls only: a split pane that neither has the focus nor the pointer.
         let essentialOnly = inSplit && !focusedPane && !hovered
-        // Never in a split pane or an empty one.
-        if !inSplit, !sidebarVisible, kind != .emptyPane { left.append(.toggleSidebar) }
+        // Dia: always first, whether the sidebar is shown or not. Never in a split pane or an empty one.
+        if !inSplit, kind != .emptyPane { left.append(.toggleSidebar) }
         switch kind {
         case .noTab:
             left += [.back(enabled: false), .forward(enabled: false), .reload(loading: false, enabled: false)]
         case .emptyPane:
             left = [.back(enabled: false), .forward(enabled: false)]
-        case .normal:
+        case .normal, .developer:
             left += [.back(enabled: canGoBack), .forward(enabled: canGoForward)]
             if !essentialOnly { left.append(.reload(loading: isLoading, enabled: true)) }
-        case .developer:
-            right += [.copyURL, .divider, .console, .network, .inspect]
+            if kind == .developer { right += [.copyURL, .divider, .console, .network, .inspect] }
         }
         // Arc's right end: pinned extensions, the Extensions button, then Split View (not in a
         // split); also on the no-tab bar. The developer bar has the Extensions button first.

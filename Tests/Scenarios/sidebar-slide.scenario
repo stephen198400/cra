@@ -2,12 +2,12 @@
 # promise: #317
 budget rss=700 stalls50=10
 pace 0.5
-cra://open?url=${PAGE}?n=slide
+from://open?url=${PAGE}?n=slide
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 wait 1
-cra://action/toggleSidebar
+from://action/toggleSidebar
 expect-log sidebar slide: page moved
 reject-log sidebar slide: page moved ([2-9]|[1-9][0-9]+) pt
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 0.5
 reject-log sidebar slide: page moved ([2-9]|[1-9][0-9]+) pt

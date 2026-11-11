@@ -214,7 +214,7 @@ struct ModelFixtureTests {
                 "Links from other apps → Little Window off becomes the most recent space")
         #expect(legacy.linkRoutes.map(\.text) == ["meet.google.com"], "settings from before Air Traffic Control get Arc's Meet route")
         #expect(legacy.newTabButtonAtTop, "the New Tab row goes back above Today once")
-        #expect(legacy.showToolbar, "Arc's toolbar preference wins over the 0.1.0 value")
+        #expect(legacy.showToolbar, "the address bar is in the toolbar, whatever the file said")
 
         let bad = try Self.loadSettings("settings-bad-routes.json").loaded
         #expect(bad.defaultLinkDestination == .littleWindowInUse && bad.linkRoutes.isEmpty)
@@ -228,20 +228,20 @@ struct ModelFixtureTests {
         #expect(w.selectedTabPerSpace[try #require(w.focusedSpaceID)] != nil)
     }
 
-    // MARK: The toolbar migration, moved out of the decoder
+    // MARK: The address bar lives in the toolbar
 
+    /// Every settings.json reads with the toolbar on: Arc's sidebar address (`showToolbar: false`)
+    /// is gone from this fork, and Arc's own preference is never read.
     @Test func decodingNeverReadsArc() throws {
         let settings = try Self.decoder.decode(AppSettings.self, from: Self.data("input", "settings-empty.json"))
-        #expect(!settings.toolbarDefaultMigrated && !settings.showToolbar, "the decoder leaves the toolbar for the migration")
+        #expect(!settings.toolbarDefaultMigrated && settings.showToolbar)
     }
 
-    @Test(arguments: [(true as Bool?, true), (false, false), (nil, false)])
-    func unmarkedSettingsTakeArcsToolbarOnce(arc: Bool?, shown: Bool) throws {
+    @Test(arguments: [true as Bool?, false, nil])
+    func unmarkedSettingsKeepTheToolbar(arc: Bool?) throws {
         var settings = try Self.decoder.decode(AppSettings.self, from: Self.data("input", "settings-legacy.json"))
-        settings.migrateToolbarDefault(arcShowsToolbar: arc)
-        #expect(settings.showToolbar == shown && settings.toolbarDefaultMigrated)
-        settings.migrateToolbarDefault(arcShowsToolbar: !shown)
-        #expect(settings.showToolbar == shown, "a second launch keeps the migrated value")
+        settings.migrateToolbarDefault(arcShowsToolbar: { Issue.record("Arc's preference was read"); return arc }())
+        #expect(settings.showToolbar && settings.toolbarDefaultMigrated)
     }
 
     @Test func markedSettingsNeverAskArc() throws {
@@ -249,7 +249,17 @@ struct ModelFixtureTests {
         settings.migrateToolbarDefault(arcShowsToolbar: { Issue.record("Arc's preference was read"); return false }())
         #expect(settings.showToolbar)
         var fresh = AppSettings()
-        fresh.migrateToolbarDefault(arcShowsToolbar: { Issue.record("Arc's preference was read"); return true }())
-        #expect(!fresh.showToolbar, "a first launch (no settings.json) starts with the toolbar off")
+        fresh.migrateToolbarDefault(arcShowsToolbar: { Issue.record("Arc's preference was read"); return false }())
+        #expect(fresh.showToolbar, "a first launch (no settings.json) starts with the toolbar on")
+    }
+
+    /// A file saved with the toolbar off (Arc's sidebar address, or a synced Mac on an older Cra)
+    /// loads with it on, and is saved that way.
+    @Test func toolbarOffMigratesToOn() throws {
+        let off = try Self.decoder.decode(AppSettings.self, from: Data(#"{"showToolbar": false, "toolbarDefaultMigrated": true}"#.utf8))
+        #expect(off.showToolbar)
+        let json = try #require(JSONSerialization.jsonObject(with: Self.encoder.encode(off)) as? [String: Any])
+        #expect(json["showToolbar"] as? Bool == true)
+        #expect(AppSettings().showToolbar && AppSettings.addressBarInToolbar)
     }
 }

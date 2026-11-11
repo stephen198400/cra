@@ -304,7 +304,7 @@ typedef NS_ENUM(NSInteger, CraChromiumString) {
 /// What the page area shows before a page reports its background: Arc's black while
 /// websites are dark, white while they are light.
 @property (class, nonatomic, readonly) NSColor *pageCanvasColor;
-/// Runs script in this browser's DevTools frontend, if open (debug aid behind cra://debug?devtoolsjs=).
+/// Runs script in this browser's DevTools frontend, if open (debug aid behind from://debug?devtoolsjs=).
 - (void)executeJavaScript:(NSString *)script inDevTools:(BOOL)inDevTools;
 /// Runtime.evaluate (`params` without a context) in the main frame's isolated world `world`,
 /// where the isolated document start script runs.

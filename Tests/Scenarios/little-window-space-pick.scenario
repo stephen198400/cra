@@ -12,31 +12,31 @@ seed sidebar.json {"version":1,"spaceOrder":["A0000000-0000-0000-0000-0000000000
 pace 0.5
 
 # Nothing picked: the space in use.
-cra://debug?externalURL=${PAGE}?n=first
+from://debug?externalURL=${PAGE}?n=first
 wait 2
-cra://debug?littleShown=first
+from://debug?littleShown=first
 expect-log little shown first: windows=1 space=Personal profile=Default
 
 # Picked in the Little Window: "Open in Random", and the browser window stays on Personal.
-cra://debug?littleCommit=random
+from://debug?littleCommit=random
 expect-log little commit random: Switch to Random
-cra://debug?littleShown=picked
+from://debug?littleShown=picked
 expect-log little shown picked: windows=1 space=Random profile=Default
-cra://debug?themeShown=picked
+from://debug?themeShown=picked
 expect-log Cra theme shown picked: space=Personal
 
 # Back to Personal from the Little Window, though it is the browser window's space, and to Random again.
-cra://debug?littleCommit=personal
+from://debug?littleCommit=personal
 expect-log little commit personal: Switch to Personal
-cra://debug?littleShown=back
+from://debug?littleShown=back
 expect-log little shown back: windows=1 space=Personal profile=Default
-cra://debug?littleCommit=random
+from://debug?littleCommit=random
 expect-log little commit random: Switch to Random
 
 # The next Little Window opens in the space in use, with its sign-ins; the first keeps Random.
-cra://debug?externalURL=${PAGE}?n=second
+from://debug?externalURL=${PAGE}?n=second
 wait 2
-cra://debug?littleShown=second
+from://debug?littleShown=second
 expect-log little shown second: windows=2 space=Personal profile=Default
-cra://debug?themeShown=second
+from://debug?themeShown=second
 expect-log Cra theme shown second: space=Personal

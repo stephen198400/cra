@@ -43,7 +43,7 @@ On the Mac that builds the engine:
 scripts/update-cef.sh $LATEST
 \`\`\`
 
-It builds CEF with H.264/AAC and \`scripts/cef-patches\`, publishes it as the \`cef-${LATEST%%+*}-codecs1\` pre-release and pins it in \`scripts/fetch-cef.sh\`. Then test \`build/Cra.app\`, commit and tag a release. If a patch in \`scripts/cef-patches\` no longer applies, the build stops and says which one.
+It builds CEF with H.264/AAC and \`scripts/cef-patches\`, publishes it as the \`cef-${LATEST%%+*}-codecs1\` pre-release and pins it in \`scripts/fetch-cef.sh\`. Then test \`build/From.app\`, commit and tag a release. If a patch in \`scripts/cef-patches\` no longer applies, the build stops and says which one.
 
 _Checked daily by the CEF updates workflow; this issue is updated when an even newer CEF appears._
 EOF

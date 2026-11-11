@@ -20,7 +20,7 @@ struct BrandMark: View {
                 .resizable()
                 .interpolation(.high)
                 .frame(width: size, height: size)
-                .accessibilityLabel("Cra")
+                .accessibilityLabel("From")
         }
     }
 }

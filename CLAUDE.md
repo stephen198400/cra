@@ -43,7 +43,7 @@ through `Sources/Cra/App/CraCoreExports.swift`.
    `.bug(".../issues/<n>")` (`// promise: #<n>` above a harness func, `# promise: #<n>` in a
    scenario) and run `scripts/promises.py --update`, so it's locked in `Tests/promises.lock`.
    When the decision can't be reached by a test, move it into CraCore (rule 1) or add the
-   `cra://debug` readout a scenario needs as part of the fix. Only what needs a real site, the
+   `from://debug` readout a scenario needs as part of the fix. Only what needs a real site, the
    GPU or a human eye becomes a line in docs/release-checklist.md, and the commit says so.
    When a locked test fails, the change broke something that shipped: fix the change, not the
    test. Only Victor decides that a shipped behaviour changes; then run

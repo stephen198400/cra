@@ -254,7 +254,7 @@ final class MCPInput {
         var result: [String: Any] = ["status": "completed", "input": "chromium", "at": ["x": point.x * screenshotScale, "y": point.y * screenshotScale],
                                      "target": hit, "trustedEvents": counts]
         if name != "page_hover", name != "page_scroll", (counts["mousedown"] ?? 0) == 0 {
-            result["note"] = "The point is inside a frame, whose events Cra doesn't count. Check the result with page_screenshot or page_snapshot."
+            result["note"] = "The point is inside a frame, whose events From doesn't count. Check the result with page_screenshot or page_snapshot."
         }
         return content(result)
     }

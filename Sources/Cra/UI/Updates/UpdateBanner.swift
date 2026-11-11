@@ -453,9 +453,9 @@ final class UpdatedCard: BannerCard {
 
     init() {
         rows = [BannerRow(symbol: "heart", text: "What’s new") { SoftwareUpdater.shared.openReleaseNotes() },
-                BannerRow(symbol: "gift", text: "Sponsor Cra") { SoftwareUpdater.shared.openSponsors() }]
+                BannerRow(symbol: "gift", text: "Sponsor From") { SoftwareUpdater.shared.openSponsors() }]
         super.init(frame: .zero)
-        title.stringValue = "Cra updated!"
+        title.stringValue = "From updated!"
         // Arc's ✕ here is larger and lighter than the ready card's hover one.
         close.image = SidebarSymbols.image("xmark", size: 12, weight: .regular)
         addSubview(title)
@@ -532,7 +532,7 @@ final class SharingCard: BannerCard {
     private let subtitle = NSTextField.sidebarLabel(size: 11)
     private let rows: [BannerRow]
 
-    /// The card's Share row (true) or ✕ (false); also cra://debug?sharing=card-share|card-close.
+    /// The card's Share row (true) or ✕ (false); also from://debug?sharing=card-share|card-close.
     static func answer(share: Bool) {
         guard let app = NSApp.delegate as? AppDelegate else { return }
         app.store.settings.answerSharingPrompt(share: share)
@@ -548,7 +548,7 @@ final class SharingCard: BannerCard {
                     app.main.showWindow(nil)
                 }]
         super.init(frame: .zero)
-        title.stringValue = "Help improve Cra"
+        title.stringValue = "Help improve From"
         subtitle.stringValue = "Anonymous, never the sites you visit"
         subtitle.lineBreakMode = .byTruncatingTail
         close.image = SidebarSymbols.image("xmark", size: 12, weight: .regular)

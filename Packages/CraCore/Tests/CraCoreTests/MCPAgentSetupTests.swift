@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 struct MCPAgentSetupTests {
-    let cra = MCPServerEntry(name: "cra", command: "/Applications/Cra.app/Contents/MacOS/Cra",
+    let cra = MCPServerEntry(name: "cra", command: "/Applications/From.app/Contents/MacOS/From",
                              args: ["--mcp", "/Users/me/Library/Application Support/Cra/mcp.sock"])
     let claude = MCPConfigFormat.json(key: "mcpServers", stdioType: true)
     let cursor = MCPConfigFormat.json(key: "mcpServers", stdioType: false)
@@ -23,7 +23,7 @@ struct MCPAgentSetupTests {
         #expect(server["args"] as? [String] == cra.args)
         #expect(MCPAgentSetup.state(of: cra, in: data, format: claude) == .current)
         // Paths keep their slashes, so the file reads like one the agent wrote.
-        #expect(String(decoding: data, as: UTF8.self).contains("/Applications/Cra.app"))
+        #expect(String(decoding: data, as: UTF8.self).contains("/Applications/From.app"))
         let plain = try MCPAgentSetup.adding(cra, to: Data(), format: cursor)
         #expect(((try json(plain)["mcpServers"] as? [String: Any])?["cra"] as? [String: Any])?["type"] == nil)
     }
@@ -47,7 +47,7 @@ struct MCPAgentSetupTests {
 
     @Test func movedAppIsOutdatedAndAddingAgainKeepsTheEntrysOwnKeys() throws {
         let old = Data("""
-        {"mcpServers": {"cra": {"command": "/Users/me/Downloads/Cra.app/Contents/MacOS/Cra",
+        {"mcpServers": {"cra": {"command": "/Users/me/Downloads/From.app/Contents/MacOS/From",
           "args": ["--mcp", "/old.sock"], "env": {"A": "1"}}}}
         """.utf8)
         #expect(MCPAgentSetup.state(of: cra, in: old, format: cursor) == .outdated)
@@ -95,7 +95,7 @@ struct MCPAgentSetupTests {
         command = "npx"
 
         [mcp_servers.cra]
-        command = "/Applications/Cra.app/Contents/MacOS/Cra"
+        command = "/Applications/From.app/Contents/MacOS/From"
         args = ["--mcp", "/Users/me/Library/Application Support/Cra/mcp.sock"]
 
         """)
@@ -106,7 +106,7 @@ struct MCPAgentSetupTests {
     @Test func codexUpdateRewritesCommandAndArgsOnly() throws {
         let old = Data("""
         [mcp_servers."cra"]
-        command = '/Old/Cra.app/Contents/MacOS/Cra'
+        command = '/Old/From.app/Contents/MacOS/From'
         args = [
           "--mcp",
           "/old.sock",
@@ -123,7 +123,7 @@ struct MCPAgentSetupTests {
         let data = try MCPAgentSetup.adding(cra, to: old, format: .codexTOML)
         #expect(String(decoding: data, as: UTF8.self) == """
         [mcp_servers."cra"]
-        command = "/Applications/Cra.app/Contents/MacOS/Cra"
+        command = "/Applications/From.app/Contents/MacOS/From"
         args = ["--mcp", "/Users/me/Library/Application Support/Cra/mcp.sock"]
         startup_timeout_sec = 20
 

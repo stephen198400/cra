@@ -63,6 +63,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     private var slowResponseToastTab: UUID?
     private var slowResponseCheck: ScheduledWork?
     private var commandObserving = false
+    /// The toolbar whose address the command bar hangs from while it is attached (Dia/Chrome).
+    private weak var attachedToolbar: PaneToolbarView?
     /// Closed for good (another window stayed open): it no longer follows the store.
     private var isTornDown = false
 
@@ -107,7 +109,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         window.minSize = NSSize(width: 640, height: 420)
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
-        window.title = "Cra"
+        window.title = "From"
         // The initializer can shift a saved global frame onto the current screen.
         // Apply it after construction so a window on another display stays there.
         // A test instance (CRA_TEST_SCREEN) keeps every window on its display.
@@ -165,6 +167,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             guard let self else { return NSView() }
             return PaneToolbarView(paneTabID: id, store: self.store, ui: self.sidebarUI, actions: self.sidebarActions)
         }
+        shell.makeBookmarksBar = { [weak self] id in
+            guard let self else { return NSView() }
+            return BookmarksBarView(paneTabID: id, store: self.store, ui: self.sidebarUI, actions: self.sidebarActions, favicons: self.app.favicons)
+        }
+        shell.showBookmarksBar = store.settings.showBookmarksBar
         shell.onPaneResizeBegan = { [weak self] in self?.pageWindowsFollowLive = true }
         shell.onPaneResizeEnded = { [weak self] factors in
             guard let self else { return }
@@ -315,6 +322,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     private func wireActions() {
         sidebarActions.titleBarDoubleClick = { [weak self] in (self?.window as? CraWindow)?.performTitleDoubleClickAction() }
         sidebarActions.openCommandBar = { [weak self] mode in self?.openCommandBar(mode) }
+        sidebarActions.openCommandBarAttached = { [weak self] mode in self?.openCommandBar(mode, attached: true) }
         sidebarActions.closeTab = { [weak self] id in self?.closeTab(id) }
         sidebarActions.moveBlankWindow = { [weak self] space in
             guard let self else { return }
@@ -350,6 +358,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         sidebarActions.separatePinnedTab = { [weak self] id in self?.separatePinnedTab(id) }
         sidebarActions.editPinnedURL = { [weak self] id in self?.editPinnedURL(id) }
         sidebarActions.showToast = { [weak self] text in self?.showToast(text) }
+        sidebarActions.toggleBookmark = { [weak self] tab in self?.toggleBookmark(tab: tab) }
+        sidebarActions.openBookmark = { [weak self] url, newTab, pane in self?.openBookmark(url, newTab: newTab, pane: pane) }
         sidebarActions.openURL = { [weak self] url in
             guard let self else { return }
             self.store.createTab(url: url, window: self.windowID)
@@ -531,6 +541,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         // A lone page's bar: the toolbar, or the developer bar on a Developer Mode site (#185).
         let loneBar = store.settings.showsBar(above: panes.count == 1 ? store.item(panes[0])?.tab?.url : nil)
         if shell.showToolbar != loneBar { shell.showToolbar = loneBar }
+        if shell.showBookmarksBar != store.settings.showBookmarksBar { shell.showBookmarksBar = store.settings.showBookmarksBar }
         if shell.edgeToEdge != store.settings.edgeToEdgeContent { shell.edgeToEdge = store.settings.edgeToEdgeContent }
         // Before setPanes: a pane whose page is not live yet gets its bar colour now, not white.
         let bars = toolbarColors(panes: panes)
@@ -578,7 +589,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     /// The browser window the user is in (AppDelegate follows the key window).
     private var isActiveWindow: Bool { store.activeWindowID == windowID }
 
-    /// `cra://debug?dragEnd`: a drag of a row of this window's list let go at a screen point
+    /// `from://debug?dragEnd`: a drag of a row of this window's list let go at a screen point
     /// with nothing taking it, as a drag out of the sidebar ends (#219).
     func testDragEnded(_ id: UUID, at screenPoint: NSPoint) {
         func list(in v: NSView) -> SpaceListView? {
@@ -755,7 +766,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         if colors != shell.pageColors { shell.pageColors = colors }
         let bars = toolbarColors(panes: shell.paneIDs)
         if bars != shell.toolbarColors { shell.toolbarColors = bars }
-        if tabID == browsers.visibleTabID { window?.title = store.item(tabID)?.displayTitle ?? "Cra" }
+        if tabID == browsers.visibleTabID { window?.title = store.item(tabID)?.displayTitle ?? "From" }
     }
 
     /// Each live page's and each pane's bar colour, by PaneToolbarView's rule (ToolbarColor):
@@ -1249,7 +1260,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         if embedFocusTab == id { focusEmbeddedPage(id) }
     }
 
-    /// `cra://debug?pageInsets=1`: where the focused page's input view sits against the compositor
+    /// `from://debug?pageInsets=1`: where the focused page's input view sits against the compositor
     /// that draws the page, after its card lays out again, and the insets Chromium gave it. While
     /// the debugger bar shows, both say the bar's height at the top (#241).
     func pageInsetsReadout() -> String {
@@ -1272,7 +1283,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     private var pageInsetsReadouts = 0
 
-    /// `cra://debug?screenshotPick=x,y`: the window a screenshot app's "window under the pointer"
+    /// `from://debug?screenshotPick=x,y`: the window a screenshot app's "window under the pointer"
     /// takes at that point of this window (from its top left), read from the window list it reads.
     /// Over a page that is this window, whose card draws the page (#346). Only Cra's windows
     /// count: a test copy runs behind other apps.
@@ -1294,7 +1305,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         return "screenshot pick at \(Int(p.x)),\(Int(p.y)): \(name)"
     }
 
-    /// `cra://debug?embedDump=1`: where every page view is, for EmbeddedPages work.
+    /// `from://debug?embedDump=1`: where every page view is, for EmbeddedPages work.
     func embeddedPagesDump() -> String {
         func tree(_ v: NSView, _ depth: Int) -> String {
             var s = String(repeating: "  ", count: depth) + "\(type(of: v)) \(v.frame) hidden=\(v.isHidden) layer=\(v.layer.map { "\(type(of: $0)) \($0.bounds) hidden=\($0.isHidden) sub=\($0.sublayers?.count ?? 0)" } ?? "nil")\n"
@@ -1366,7 +1377,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             // Chrome's docked frontend spans its pane's body, under the page.
             if devTools[id] != nil, browsers.devToolsDockedState[id] ?? true { positionDevToolsWindow(body, tab: id) }
             if w.frame != target { w.setFrame(target, display: live) }
-            updatePageCorners(w, page: page, body: body)
+            updatePageCorners(w, page: page, body: body, tab: id)
             // A switch can show the page before its card exists; the card is laid out by now.
             embedPage(id, from: w)
             if shell.devToolsFrontendDocked, w.isVisible {
@@ -1401,7 +1412,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
                 w.setFrame(target, display: true)
                 fillContentView(w)
             }
-            updatePageCorners(w, page: page, body: body)
+            updatePageCorners(w, page: page, body: body, tab: id)
             if w.isVisible, !EmbeddedPages.isHost(w), let cv = w.contentView {
                 revealPage(cv, from: from, to: target, duration: duration, timing: timing)
             }
@@ -1473,7 +1484,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     /// Only the page corners that are card corners get rounded (a page docked beside
     /// DevTools meets it with a straight edge, like Arc).
-    private func updatePageCorners(_ w: NSWindow, page: NSRect, body: NSRect) {
+    private func updatePageCorners(_ w: NSWindow, page: NSRect, body: NSRect, tab: UUID) {
         guard let cv = w.contentView, let layer = cv.layer else { return }
         fillContentView(w)
         // Chromium can restore its own style mask (fullscreen, display changes), which brings
@@ -1505,8 +1516,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             if abs(page.minX - body.minX) < 0.5 { corners.insert(bottomLeft) }
             if abs(page.maxX - body.maxX) < 0.5 { corners.insert(bottomRight) }
         }
-        // Without the toolbar the page's top edge is the card's top edge too.
-        if !shell.contentFullscreen, !shell.panesShowBars, abs(page.maxY - body.maxY) < 0.5 {
+        // Without the toolbar (or the bookmarks bar) the page's top edge is the card's top edge too.
+        if !shell.contentFullscreen, !shell.pageBelowBar(tab), abs(page.maxY - body.maxY) < 0.5 {
             if abs(page.minX - body.minX) < 0.5 { corners.insert(topLeft) }
             if abs(page.maxX - body.maxX) < 0.5 { corners.insert(topRight) }
         }
@@ -1649,7 +1660,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         let selfDock = browsers.runtime(for: tab)?.hostWindow != nil
         let bottom: CACornerMask = cv.isFlipped ? [.layerMinXMaxYCorner, .layerMaxXMaxYCorner] : [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         let all: CACornerMask = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-        layer.maskedCorners = selfDock ? (shell.panesShowBars ? bottom : all) : [.layerMaxXMaxYCorner, .layerMaxXMinYCorner]
+        layer.maskedCorners = selfDock ? (shell.pageBelowBar(tab) ? bottom : all) : [.layerMaxXMaxYCorner, .layerMaxXMinYCorner]
     }
 
     /// "Undock into separate window": the frontend's window becomes a floating window of its own.
@@ -1805,8 +1816,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     /// Open Link in Split View (#257): the link opens as a pane beside the page it was clicked in,
     /// as ⌥Return does from the command bar; a split of four says so, as Add Split View does.
     func browserManagerOpenLinkInSplit(_ url: String, fromTab tabID: UUID) {
-        // cra:// is Cra's scripting scheme; a page must not drive it.
-        if url.isEmpty || url.lowercased().hasPrefix("cra:") || store.item(tabID) == nil { return }
+        // from:// is Cra's scripting scheme; a page must not drive it.
+        if url.isEmpty || url.lowercased().hasPrefix("from:") || store.item(tabID) == nil { return }
         guard store.openLinkInSplit(url, from: tabID, window: windowID) != nil else {
             showToast("Cannot Add New Pane")
             return
@@ -1837,7 +1848,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         return PeekLayout.dismissArea(covering: window.frame, contentMinX: peekContentMinX())
     }
 
-    /// cra://debug?peekCatcher: whether the shown Peek's click catcher leaves the sidebar's rows to
+    /// from://debug?peekCatcher: whether the shown Peek's click catcher leaves the sidebar's rows to
     /// the sidebar (#242).
     func peekCatcherReadout() -> String {
         guard let window, let dim = peeks.first(where: { !$0.isParked })?.dimFrame else { return "none" }
@@ -1981,7 +1992,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         applyPeekVeil(duration: 0)
     }
 
-    /// cra://debug?peekShown: the page behind a Peek as it is set now (the peek-backdrop scenario).
+    /// from://debug?peekShown: the page behind a Peek as it is set now (the peek-backdrop scenario).
     func peekBackdropShown() -> String {
         func scale(_ v: NSView?) -> String {
             String(format: "%.3f", v?.layer.map { CATransform3DGetAffineTransform($0.sublayerTransform).a } ?? 1)
@@ -2049,7 +2060,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         for p in peeks where p.peekSourceTab == tab { p.dropPeek() }
     }
 
-    /// cra://debug?peeks: this window's Peeks, on screen or not, and their pages (#242).
+    /// from://debug?peeks: this window's Peeks, on screen or not, and their pages (#242).
     func peeksShown() -> String {
         let list = peeks.map { p in "\(p.window.map { $0.isVisible && $0.alphaValue > 0 } == true ? "shown" : "hidden") \(p.currentURL)" }
         return list.isEmpty ? "none" : list.joined(separator: ", ")
@@ -2061,7 +2072,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     // MARK: Tabs
 
-    /// cra://debug?devtoolsjs=…: run script in the current tab's DevTools frontend.
+    /// from://debug?devtoolsjs=…: run script in the current tab's DevTools frontend.
     func debugRunInDevTools(_ script: String) { currentBrowser?.executeJavaScript(script, inDevTools: true) }
 
     func closeCurrentTab() {
@@ -2194,7 +2205,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         }
     }
 
-    /// Testing without the pointer (cra://debug?captureToEasel=1): the visible page captured and
+    /// Testing without the pointer (from://debug?captureToEasel=1): the visible page captured and
     /// the capture menu's New Easel chosen.
     func debugCaptureToEasel(send: Bool = false) {
         currentBrowser?.sendDevToolsMethod("Page.captureScreenshot", params: #"{"format":"png"}"#) { [weak self] shot, _ in
@@ -2250,7 +2261,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     /// Arc's "Send via iMessage…": Messages' compose sheet with the capture attached.
     private func sendCaptureViaMessages(_ png: Data) {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Cra Captures", isDirectory: true)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("From Captures", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(PageCommands.captureFileName())
         guard (try? png.write(to: url)) != nil, let service = NSSharingService(named: .composeMessage),
@@ -2801,7 +2812,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         return true
     }
 
-    /// A space swipe of `steps` trackpad samples `dx` apart, 8 ms apart (cra://debug?swipe=).
+    /// A space swipe of `steps` trackpad samples `dx` apart, 8 ms apart (from://debug?swipe=).
     func debugSpaceSwipe(dx: CGFloat, steps: Int) {
         beginSpaceSwipe()
         for i in 1...max(1, steps) {
@@ -3136,6 +3147,37 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         }
     }
 
+    /// `from://debug?toolbar=state|star|bar|popover:<step>`: the focused pane's toolbar, written to
+    /// stderr as "Cra toolbar …" (it carries the page's address and title, which cra.log leaves out).
+    func debugToolbar(_ step: String) {
+        guard let bar = (selectedTabID.flatMap { shell.card(for: $0) } ?? shell.focusedCard)?.toolbarHost as? PaneToolbarView else {
+            NSLog("Cra toolbar none")
+            return
+        }
+        if step.hasPrefix("popover:") {
+            NSLog("Cra toolbar popover %@", bar.debugBookmarkPopover(String(step.dropFirst(8))))
+            return
+        }
+        if step == "bar" {
+            let a = bar.addressFrameOnScreen() ?? .zero, p = commandPanel.frame
+            let rows = commandBar.result.items.map { "\($0.kind)".prefix(while: { $0 != "(" }) + ":" + $0.title }
+            NSLog("Cra toolbar bar open=%d attached=%d mode=%@ field=\"%@\" panel=%@ address=%@ rows=%d %@",
+                  commandBar.isOpen ? 1 : 0, commandBar.attached ? 1 : 0, "\(commandBar.mode)", commandBar.fieldText,
+                  NSStringFromRect(p), NSStringFromRect(a), rows.count, rows.joined(separator: " | "))
+            return
+        }
+        let pressed = step == "star" ? bar.debugPressStar() : true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NSLog("Cra toolbar %@ pressed=%d %@", step, pressed ? 1 : 0, bar.debugState)
+        }
+    }
+
+    /// `from://debug?downloadsPanel=1|0|state`: the sidebar header's downloads card opened, closed or
+    /// left as it is, then "downloads card: button x=… open=… rows=… mark=…" in cra.log.
+    func debugDownloadsCard(_ op: String) {
+        CraLog.note("downloads card: " + ((shell.sidebarHost as? SidebarView)?.debugDownloadsCard(op) ?? "no sidebar"))
+    }
+
     /// Scenario hooks (#226): the sidebar's URL field hovered, its buttons logged as
     /// "url field: copyURL extensions" ("url field: none" while the toolbar has the address).
     func debugURLFieldHover(_ on: Bool) {
@@ -3255,7 +3297,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     /// The code panel's eyedropper (BoostPicker): the page outlines the element under the pointer
     /// and the ones like it, and holds a click; Cra polls for it and offers Arc's menu there. The
     /// poll puts the picker back after a navigation.
-    /// Testing without the pointer (cra://debug?boostPick=1|0|copyThis|copyRelated|zapRelated):
+    /// Testing without the pointer (from://debug?boostPick=1|0|copyThis|copyRelated|zapRelated):
     /// on (answering the menu with that action) or off.
     func debugPick(_ value: String) {
         pickAnswer = BoostPicker.Action(rawValue: value)
@@ -3324,7 +3366,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     /// Zap: the page outlines what's under the pointer, and a click hides it and keeps a selector
     /// for it; when Zap ends the selectors go into the boost.
-    /// Testing without the pointer (cra://debug?boostZap=1|0): Zap on or off, as its button does.
+    /// Testing without the pointer (from://debug?boostZap=1|0): Zap on or off, as its button does.
     func debugZap(_ on: Bool) { setZapping(on) }
 
     private func setZapping(_ on: Bool) {
@@ -3460,7 +3502,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     // MARK: Command bar
 
-    func openCommandBar(_ mode: CommandBarMode) {
+    /// ⌘T's bar floats in the middle of the window. ⌘L and a click on the toolbar's address (or its
+    /// "Search or Enter URL…") edit the address in place instead: the bar's field lies over the
+    /// address, the full URL selected, and the suggestions hang under it at its width (Dia, Chrome).
+    func openCommandBar(_ mode: CommandBarMode, attached wantsAttached: Bool = false) {
         guard let window else { return }
         // The bar takes over from the sidebar's address field edited in place (#344).
         (shell.sidebarHost as? SidebarView)?.endAddressEditing()
@@ -3480,8 +3525,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         // Arc draws the New Tab row as the active one while the bar makes a new tab; the
         // sidebar scrolls to it (SpaceListView.revealActiveRow).
         sidebarUI.newTabPlaceholderActive = effectiveMode == .newTab && !fillingEmptyPane
-        // Always centred in the window, also when opened from the toolbar.
-        commandBar.attached = false
+        // Hanging from the toolbar's address for ⌘L and clicks on it; centred in the window for ⌘T.
+        attachedToolbar?.addressEditing = false
+        attachedToolbar = mode == .editURL || wantsAttached ? addressToolbar() : nil
+        attachedToolbar?.addressEditing = true
+        commandBar.attached = attachedToolbar != nil
         commandBar.panelWidth = min(CraMetrics.commandBarWidth, window.frame.width - 80)
         // The panel keeps no appearance of its own, so it follows macOS like the menus, sheets and
         // popovers (#171): Arc's bar is dark over a light space while the Mac runs dark (#187).
@@ -3510,8 +3558,26 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         }
     }
 
+    /// The toolbar of the pane the bar acts on, while its address is on screen.
+    private func addressToolbar() -> PaneToolbarView? {
+        let card = selectedTabID.flatMap { shell.card(for: $0) } ?? shell.focusedCard
+        guard let bar = (card?.toolbarHost ?? shell.focusedCard?.toolbarHost) as? PaneToolbarView,
+              bar.addressFrameOnScreen() != nil else { return nil }
+        return bar
+    }
+
     private func positionCommandPanel() {
         guard let window else { return }
+        if commandBar.attached, let address = attachedToolbar?.addressFrameOnScreen() {
+            // The field's text where the address's was (AddressMetrics), the rows under it at its width.
+            let h = CommandBarView.height(forRows: commandBar.rowPlaces, attached: true)
+            let fh = CommandBarView.attachedFieldHeight
+            let x = address.minX + ToolbarURLButton.textInset - 12
+            let w = max(address.width - ToolbarURLButton.textInset + 12, min(360, window.frame.width - 40))
+            commandBar.panelWidth = w
+            commandPanel.setFrame(NSRect(x: x, y: address.midY + fh / 2 - h, width: w, height: h), display: true)
+            return
+        }
         let h = CommandBarView.height(forRows: commandBar.rowPlaces)
         let w = commandBar.panelWidth
         let wf = window.frame
@@ -3523,6 +3589,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     private func hideCommandPanel() {
         sidebarUI.newTabPlaceholderActive = false
+        attachedToolbar?.addressEditing = false
+        attachedToolbar = nil
         if commandPanel.parent != nil { window?.removeChildWindow(commandPanel) }
         let panel = commandPanel!
         // Let CommandBarView's fade-out (0.08 s) play before the panel goes away.
@@ -3681,6 +3749,43 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
                    page: page, in: window, theme: focusedSpace.theme, onClose: {})
     }
 
+    // MARK: Bookmarks
+
+    /// ⌘D and the address's star (Chrome): the tab's page goes on the Bookmarks Bar, or
+    /// its bookmarks go. `tab` nil is the selected tab. Returns whether it is bookmarked afterwards.
+    @discardableResult
+    func toggleBookmark(tab: UUID? = nil) -> Bool {
+        guard let id = tab ?? selectedTabID, let item = store.item(id), let url = item.tab?.url,
+              !url.isEmpty, !item.isEmptyTab else {
+            showToast("Open a Page First")
+            return false
+        }
+        let on = BookmarkStore.shared.toggle(url: url, title: item.displayTitle)
+        CraLog.note("bookmark \(on ? "added" : "removed") \(CraLog.host(url))")
+        // Chrome: "Bookmark added" under the address's star, to name it and pick its folder.
+        let bar = (shell.card(for: id)?.toolbarHost ?? shell.focusedCard?.toolbarHost) as? PaneToolbarView
+        if on, let mark = BookmarkStore.shared.bookmark(for: url), bar?.showBookmarkAdded(mark.id) == true { return on }
+        showToast(on ? "Bookmark Added" : "Bookmark Removed")
+        return on
+    }
+
+    /// A bookmark clicked on the bar: in the pane's tab (the selected one without a pane), or a new tab.
+    func openBookmark(_ url: String, newTab: Bool, pane: UUID?) {
+        if newTab {
+            let tab = store.createTab(url: url, select: false, window: windowID)
+            store.markUnread(tab.id, false)
+            browsers.ensureRuntime(for: tab.id)
+            if !sidebarVisible { showToast("New Tab Created") }
+            return
+        }
+        if let pane, selectedTabID != pane { store.selectTab(pane, window: windowID) }
+        if selectedTabID == nil || store.item(selectedTabID!)?.tab == nil {
+            store.createTab(url: url, window: windowID)
+        } else {
+            loadInSelectedTab(url)
+        }
+    }
+
     /// Navigate the focused tab (an empty split pane gets its first page here).
     func loadInSelectedTab(_ url: String) {
         guard let id = selectedTabID else { return }
@@ -3789,7 +3894,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         panel.contentView = NSHostingView(rootView: view)
         spaceEditor = panel
         window.beginSheet(panel) { [weak self] _ in
-            // Closed without Save (Cancel, Escape, cra://dismiss): the stored theme comes back.
+            // Closed without Save (Cancel, Escape, from://dismiss): the stored theme comes back.
             // Save already wrote it, so this does nothing then.
             if let sid = space?.id { store.endThemePreview(forSpace: sid, keep: false) }
             self?.spaceEditor = nil
@@ -3816,7 +3921,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     var isImportVisible: Bool { importWindow?.window?.isVisible == true }
 
-    /// Close whatever transient UI is up (used by cra://dismiss for scripting).
+    /// Close whatever transient UI is up (used by from://dismiss for scripting).
     func dismissTransientUI() {
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
         importWindow?.close()

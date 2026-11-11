@@ -45,11 +45,11 @@ final class MCPAgentInstaller {
             for file in targets(agent) {
                 try edit(file) { try MCPAgentSetup.adding(entry, to: $0, format: file.format) }
             }
-            say("Cra is added to \(agent.name). \(agent.afterAdding) Cra asks before it’s used the first time.")
+            say("From is added to \(agent.name). \(agent.afterAdding) From asks before it’s used the first time.")
         } catch let failure as Failure {
-            say("Cra couldn’t change \(failure.path), so it left the file as it was. Copy the configuration and add it by hand.", error: true)
+            say("From couldn’t change \(failure.path), so it left the file as it was. Copy the configuration and add it by hand.", error: true)
         } catch {
-            say("Cra couldn’t add itself to \(agent.name): \(error.localizedDescription)", error: true)
+            say("From couldn’t add itself to \(agent.name): \(error.localizedDescription)", error: true)
         }
         refresh()
     }
@@ -60,11 +60,11 @@ final class MCPAgentInstaller {
             for file in targets(agent) where FileManager.default.fileExists(atPath: url(file).path) {
                 try edit(file) { try MCPAgentSetup.removing(name, from: $0, format: file.format) }
             }
-            say("Cra is removed from \(agent.name).")
+            say("From is removed from \(agent.name).")
         } catch let failure as Failure {
-            say("Cra couldn’t change \(failure.path), so it left the file as it was.", error: true)
+            say("From couldn’t change \(failure.path), so it left the file as it was.", error: true)
         } catch {
-            say("Cra couldn’t remove itself from \(agent.name): \(error.localizedDescription)", error: true)
+            say("From couldn’t remove itself from \(agent.name): \(error.localizedDescription)", error: true)
         }
         refresh()
     }

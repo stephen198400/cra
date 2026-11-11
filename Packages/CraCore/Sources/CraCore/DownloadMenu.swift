@@ -56,7 +56,7 @@ public enum DownloadMenu {
         case .pause: return "Pause Download"
         case .resume: return "Resume Download"
         case .cancel: return "Cancel Download"
-        case .hide: return "Hide from Cra"
+        case .hide: return "Hide from From"
         case .moveToTrash: return "Move to Trash"
         }
     }

@@ -2,13 +2,13 @@ import AppKit
 import Observation
 
 /// Rendering constants calibrated against Arc. They can be changed at run time
-/// for calibration with `cra://debug?lift=0.15&liftInactive=0.93&alpha=1&toolbar=0.4&material=21`.
+/// for calibration with `from://debug?lift=0.15&liftInactive=0.93&alpha=1&toolbar=0.4&material=21`.
 @MainActor @Observable
 final class CraTuning {
     static let shared: CraTuning = {
         let t = CraTuning()
         // CRA_TUNING="lift=0.1&alpha=1&material=21" configures a test instance at launch
-        // (cra://debug URLs only reach the installed app).
+        // (from://debug URLs only reach the installed app).
         if let env = ProcessInfo.processInfo.environment["CRA_TUNING"] {
             var q: [String: String] = [:]
             for pair in env.split(separator: "&") {

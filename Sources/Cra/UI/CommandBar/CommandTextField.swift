@@ -16,13 +16,22 @@ final class CommandTextField {
         field = Self.makeField(controller: controller, coordinator: coordinator)
     }
 
+    /// The toolbar's attached bar (Dia/Chrome): the address's own size, not the floating bar's 18 pt.
+    var fontSize: CGFloat = 18 {
+        didSet {
+            guard fontSize != oldValue else { return }
+            field.font = .systemFont(ofSize: fontSize, weight: fontSize < 18 ? .regular : .medium)
+            field.placeholderAttributedString = Self.placeholder(controller.placeholder, size: fontSize)
+        }
+    }
+
     func update() {
-        Self.update(field, controller: controller, coordinator: coordinator)
+        Self.update(field, controller: controller, coordinator: coordinator, fontSize: fontSize)
         // A completion needs the field's editor, which exists once the field is first responder
         // (made so on the next turn when the bar opens): apply what is pending again then.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            Self.update(self.field, controller: self.controller, coordinator: self.coordinator)
+            Self.update(self.field, controller: self.controller, coordinator: self.coordinator, fontSize: self.fontSize)
         }
     }
 
@@ -45,18 +54,18 @@ final class CommandTextField {
         return field
     }
 
-    private static func placeholder(_ text: String) -> NSAttributedString {
+    private static func placeholder(_ text: String, size: CGFloat = 18) -> NSAttributedString {
         NSAttributedString(string: text, attributes: [
-            .font: NSFont.systemFont(ofSize: 18, weight: .medium),
+            .font: NSFont.systemFont(ofSize: size, weight: size < 18 ? .regular : .medium),
             // Arc 1.172.1 live: the placeholder's ink peaks at (163,162,162).
             .foregroundColor: NSColor(white: 0.64, alpha: 1),
         ])
     }
 
-    private static func update(_ field: NSTextField, controller: CommandBarController, coordinator coord: Coordinator) {
+    private static func update(_ field: NSTextField, controller: CommandBarController, coordinator coord: Coordinator, fontSize: CGFloat) {
         // Runs on every keystroke: rebuild the placeholder only when its text changes.
         if field.placeholderAttributedString?.string != controller.placeholder {
-            field.placeholderAttributedString = placeholder(controller.placeholder)
+            field.placeholderAttributedString = placeholder(controller.placeholder, size: fontSize)
         }
         if coord.appliedVersion != controller.fieldTextVersion {
             coord.appliedVersion = controller.fieldTextVersion

@@ -26,6 +26,8 @@ final class SidebarView: NSView {
     var debugURLFieldState: String { topBar.debugURLFieldState }
     /// The URL field edited in place puts the address back (#344).
     func endAddressEditing() { topBar.endAddressEditing() }
+    /// `from://debug?downloadsPanel=1|0|state`: opens or closes the header's downloads card, then its state.
+    func debugDownloadsCard(_ op: String) -> String { topBar.debugDownloadsCard(op) }
     func debugURLFieldType(_ text: String, commit: Bool) -> Bool { topBar.debugURLFieldType(text, commit: commit) }
     private let pager: SpacePagerView
     private let trayHost: DownloadsTrayView
@@ -311,13 +313,13 @@ final class FlippedView: NSView {
 
 // MARK: - Top bar
 
-/// Row 1: traffic lights, the sidebar toggle right after them, nav buttons right-aligned. When
-/// the toolbar is hidden the URL pill moves into the sidebar on a second row.
+/// Row 1: traffic lights and the downloads button at the far right (SidebarHeaderLayout). The
+/// sidebar toggle and ← → ↻ are in the toolbar above the page, Dia style (ToolbarComposition).
 ///
-/// Toolbar hidden, measured on Arc 1.170 (window capture and AX tree, 26 Oct): toggle and
-/// ← → ↻ are 32 pt buttons centred 1 pt above the traffic lights, the nav buttons 2 pt apart
-/// and 6 pt from the sidebar edge, no ⌄ menu. The URL pill spans the sidebar 8 pt in from each
-/// side, 36 pt tall, 2 pt under the title area, radius 10, the bare host in 13 pt at 12 pt in.
+/// The URL pill below is Arc's toolbar-hidden address. The address bar is always in the toolbar
+/// now (AppSettings.addressBarInToolbar), so `compact` stays off and the pill stays hidden; it is
+/// kept for the #344 scenario hooks. Arc 1.170: it spans the sidebar 8 pt in from each side,
+/// 36 pt tall, 2 pt under the title area, radius 10, the bare host in 13 pt at 12 pt in.
 /// Its accessories (pinned extensions, copy link, site controls) show while the header is hovered.
 /// Pins that would crowd the address out move to a grid over the favorites instead, as in Arc
 /// 1.171 (PinnedExtensionGrid.fitsInURLField, FavoritesGridView; 4 Nov).
@@ -327,18 +329,9 @@ final class SidebarTopBarView: NSView {
     private let actions: SidebarActions
     private var colors = SidebarColors()
     private var compact = false
-    /// Toolbar hidden and the sidebar under 214 pt: ← → ••• with no toggle (#287).
-    private var narrow = false
-    /// The sidebar is under 212 pt, whatever the header carries.
-    private var narrowWidth = false
-    private var toggleShown = true
-    private var morePanel: SidebarMorePanel?
-    private var devNav = false
-    private var fullscreen = false
-    private var buttons: [String: SidebarGlyphButton] = [:]
-    private var rowButtons: [SidebarGlyphButton] = []
-    private var chevron: NSView?
     private let pill = SidebarURLPill()
+    /// Downloads, at the row's far right (DownloadsCard), always there.
+    private let downloads = SidebarDownloadsControl()
 
     /// Where the URL field's sliders button is or appears on hover (screen rect): its last
     /// accessory, 28 pt ending 5 pt in. nil while the field isn't shown (the toolbar has it).
@@ -366,6 +359,13 @@ final class SidebarTopBarView: NSView {
     }
     func debugURLFieldType(_ text: String, commit: Bool) -> Bool { !pill.isHidden && pill.debugType(text, commit: commit) }
     func endAddressEditing() { pill.endEditing(commit: false) }
+    func debugDownloadsCard(_ op: String) -> String {
+        layoutSubtreeIfNeeded()
+        if op == "1" { downloads.openCard() } else if op == "0" { downloads.closeCard() }
+        let f = downloads.frame
+        return "button x=\(Int(f.minX)) w=\(Int(f.width)) header=\(Int(bounds.width)) inWindow=\(window == nil ? 0 : 1) "
+            + "row= " + downloads.debugState
+    }
     var debugURLFieldState: String { pill.isHidden ? "hidden" : pill.editingText.map { "editing \($0)" } ?? "not editing" }
     private var syncQueued = false
 
@@ -385,6 +385,12 @@ final class SidebarTopBarView: NSView {
         pill.actions = actions
         pill.onCommit = { [weak actions] in actions?.commitAddress($0) }
         addSubview(pill)
+        downloads.showAll = { [weak actions] in actions?.showLibrary(.downloads) }
+        downloads.sidebarShown = { [weak store, weak ui] in
+            guard let store, let ui else { return false }
+            return store.window(ui.windowID).sidebarVisible
+        }
+        addSubview(downloads)
         sync()
     }
 
@@ -409,79 +415,21 @@ final class SidebarTopBarView: NSView {
         }
     }
 
-    private func button(_ key: String, symbol: String, help: String, size: CGFloat, height: CGFloat, iconSize: CGFloat,
-                        weight: NSFont.Weight = .regular, active: Bool?, enabled: Bool = true, animated: Bool = false,
-                        action: @escaping () -> Void) -> SidebarGlyphButton {
-        let b = buttons[key] ?? {
-            let b = SidebarGlyphButton(symbol: symbol, size: size, height: height, iconSize: iconSize, weight: weight, help: help, colors: colors, action: action)
-            buttons[key] = b
-            addSubview(b)
-            return b
-        }()
-        b.setSymbol(symbol, iconSize: iconSize, weight: weight, help: help, animated: animated)
-        b.colors = colors
-        b.active = active
-        b.enabled = enabled
-        b.action = action
-        return b
-    }
-
     private func apply() {
         let wasCompact = compact
         let wasHeight = preferredHeight
         compact = !store.settings.showToolbar
         colors = SidebarColors(store.focusedSpace(window: ui.windowID).theme.palette)
         let tab = store.selectedTab(window: ui.windowID)
-        devNav = !compact && (tab?.tab.map { store.settings.isDeveloperMode(url: $0.url) } ?? false)
         let active = ui.appActive
-        let reloadSymbol = ui.isLoading ? "xmark" : "arrow.clockwise"
-        fullscreen = ui.windowFullscreen
-        // Arc 1.171: the header always carries the sidebar toggle; the toolbar has one only while the
-        // sidebar is hidden (PaneToolbarView), so a floating sidebar shows both.
-        let help = store.window(ui.windowID).sidebarVisible ? "Hide Sidebar (⌘S)" : "Show Sidebar (⌘S)"
-        // Below 212 pt Arc's header goes narrow (#287): where it carries ← → ↻ (toolbar hidden, or
-        // a Developer Mode page) the toggle goes and ← → ••• take its place, Reload and Toggle
-        // Sidebar under the •••; with only the toggle, the toggle shrinks to 28 pt.
-        narrowWidth = SidebarHeaderLayout.isNarrow(width: Double(bounds.width))
-        narrow = (compact || devNav) && narrowWidth
-        if !narrow, let p = morePanel {
-            morePanel = nil
-            p.onClose = nil
-            p.dismiss()
+        downloads.colors = colors
+        downloads.active = active
+        // The card goes with the sidebar when it hides (it stays only over a floating one).
+        if !store.window(ui.windowID).sidebarVisible, !(window is FloatingSidebarPanel) { downloads.closeCard() }
+        downloads.palette = { [weak self] in
+            guard let self else { return nil }
+            return self.store.focusedSpace(window: self.ui.windowID).theme.palette
         }
-        let toggle = narrowWidth
-            ? button("toggleS", symbol: "sidebar.left", help: help, size: 28, height: 28, iconSize: 15.5, active: active) { [weak self] in self?.actions.toggleSidebar() }
-            : button("toggle", symbol: "sidebar.left", help: help, size: 32, height: 32, iconSize: 15.5, active: active) { [weak self] in self?.actions.toggleSidebar() }
-        var shown = narrow ? [] : [toggle]
-        if narrow {
-            shown.append(button("nback", symbol: "arrow.left", help: "Go Back (⌘[)", size: 28, height: 28, iconSize: 15, active: active, enabled: ui.canGoBack) { [weak self] in self?.actions.goBack() })
-            shown.append(button("nforward", symbol: "arrow.right", help: "Go Forward (⌘])", size: 28, height: 28, iconSize: 15, active: active, enabled: ui.canGoForward) { [weak self] in self?.actions.goForward() })
-            shown.append(button("more", symbol: morePanel == nil ? "ellipsis" : "xmark", help: "More options", size: 28, height: 28, iconSize: 15,
-                                weight: .semibold, active: active) { [weak self] in self?.toggleMorePanel() })
-        } else if compact {
-            shown.append(button("back", symbol: "arrow.left", help: "Go Back (⌘[)", size: 32, height: 32, iconSize: 15, active: active, enabled: ui.canGoBack) { [weak self] in self?.actions.goBack() })
-            shown.append(button("forward", symbol: "arrow.right", help: "Go Forward (⌘])", size: 32, height: 32, iconSize: 15, active: active, enabled: ui.canGoForward) { [weak self] in self?.actions.goForward() })
-            shown.append(button("reload", symbol: reloadSymbol, help: "Refresh (⌘R)", size: 32, height: 32, iconSize: 15, active: active, animated: true) { [weak self] in self?.actions.reload() })
-        } else if devNav {
-            shown.append(button("dback", symbol: "arrow.left", help: "Go Back (⌘[)", size: 34, height: 28, iconSize: 15, active: nil, enabled: ui.canGoBack) { [weak self] in self?.actions.goBack() })
-            shown.append(button("dforward", symbol: "arrow.right", help: "Go Forward (⌘])", size: 34, height: 28, iconSize: 15, active: nil, enabled: ui.canGoForward) { [weak self] in self?.actions.goForward() })
-            shown.append(button("dreload", symbol: reloadSymbol, help: "Refresh (⌘R)", size: 24, height: 24, iconSize: 15, active: nil, animated: true) { [weak self] in self?.actions.reload() })
-        }
-        for (k, b) in buttons where !shown.contains(where: { $0 === b }) {
-            b.removeFromSuperview()
-            buttons[k] = nil
-        }
-        rowButtons = shown
-        toggleShown = !narrow
-        if devNav, !narrow, chevron == nil {
-            let c = DevMenuChevron(actions: actions)
-            addSubview(c)
-            chevron = c
-        } else if !devNav || narrow, let c = chevron {
-            c.removeFromSuperview()
-            chevron = nil
-        }
-        (chevron as? DevMenuChevron)?.tint = colors.textTertiary
         pill.isHidden = !compact
         if !compact { pill.endEditing(commit: false) }
         if compact {
@@ -501,7 +449,8 @@ final class SidebarTopBarView: NSView {
             let translation = tab.flatMap { ui.navState(for: $0.id).translation }
             pill.show(text: text, url: url, hasTab: tab != nil, colors: colors, active: active,
                       pinned: pinned, protectedMedia: tab.flatMap { ui.navState(for: $0.id).protectedMedia },
-                      translate: translation?.offersTranslation == true ? (narrowWidth ? "Translate" : "Translation Available") : nil,
+                      translate: translation?.offersTranslation == true
+                          ? (SidebarHeaderLayout.isNarrow(width: Double(bounds.width)) ? "Translate" : "Translation Available") : nil,
                       tabID: tab?.id,
                       // An empty split pane has no address: the bar's "Search or Enter URL…" fills it.
                       editInPlace: store.settings.editAddressInPlace && tab?.isEmptyTab != true)
@@ -518,69 +467,15 @@ final class SidebarTopBarView: NSView {
     override func layout() {
         super.layout()
         let w = bounds.width
-        // A drag across 212 pt swaps the header's layout (#287).
-        if SidebarHeaderLayout.isNarrow(width: Double(w)) != narrowWidth { apply() }
-        // Row 1: 71 pt for the traffic lights, then the toggle. In fullscreen the lights are gone and
-        // Arc draws it from 20 pt in (glyph 20–38.5 pt), in the floating panel too (#315); a windowed
-        // floating panel draws stand-in lights.
-        // It moves left to stay 2 pt clear of ← when the sidebar is just wide enough for both.
-        let lights = !fullscreen
-        let nav = toggleShown ? Array(rowButtons.dropFirst()) : rowButtons
-        let afterLights: CGFloat = lights ? 6 + 71 + 2 : 13
-        if toggleShown, let t = rowButtons.first {
-            let size = t.size.width
-            t.frame = NSRect(x: afterLights, y: CraMetrics.titleRowCenter - 1 - size / 2, width: size, height: size)
-        }
-        if narrow {
-            for (b, box) in zip(nav, SidebarHeaderLayout.navButtons(width: Double(w))) {
-                b.frame = NSRect(x: box.x, y: CraMetrics.titleRowCenter - 1 - box.size / 2, width: box.size, height: box.size)
-            }
-        }
+        // Row 1: the traffic lights (71 pt), then downloads 6 pt from the edge, centred 1 pt above the
+        // lights. The toggle and the navigation are the toolbar's.
+        let rowY = { (h: CGFloat) in CraMetrics.titleRowCenter - 1 - h / 2 }
+        let d = DownloadsCard.button(width: Double(w))
+        downloads.setBox(CGFloat(d.size))
+        downloads.frame = NSRect(x: d.x, y: rowY(d.size), width: d.size, height: d.size)
         if compact {
-            // ← → ↻ 2 pt apart (32 pt), or ← → ••• touching (28 pt) when narrow; 6 pt from the
-            // edge, centred on the same line.
-            if !narrow {
-                for (b, box) in zip(nav, SidebarHeaderLayout.navButtons(width: Double(w))) {
-                    b.frame = NSRect(x: box.x, y: CraMetrics.titleRowCenter - 1 - box.size / 2, width: box.size, height: box.size)
-                }
-            }
             pill.frame = NSRect(x: 8, y: CraMetrics.titleAreaHeight + 2, width: w - 16, height: pill.height)
-        } else if devNav, !narrow {
-            let y = CraMetrics.titleRowCenter - 14
-            var x = w - 6
-            if let c = chevron {
-                x -= 12
-                c.frame = NSRect(x: x, y: y, width: 12, height: 28)
-            }
-            for b in nav.reversed() {
-                x -= b.size.width
-                b.frame = NSRect(x: x, y: y + (28 - b.size.height) / 2, width: b.size.width, height: b.size.height)
-            }
         }
-        // The toggle steps left to stay 2 pt clear of ← (Arc, #287).
-        if toggleShown, compact || devNav, !narrow, let t = rowButtons.first {
-            t.frame.origin.x = SidebarHeaderLayout.toggleX(width: Double(w), afterLights: afterLights, developer: devNav)
-        }
-    }
-
-    /// The narrow header's ••• (Arc 1.17x, #287): Reload and Toggle Sidebar with their shortcuts,
-    /// in a popover under the button, which shows ✕ while it's open.
-    private func toggleMorePanel() {
-        if let p = morePanel { p.dismiss(); return }
-        guard let window, let b = buttons["more"] else { return }
-        let keys = { (id: String) in KeyBindingRegistry.shared.action(id)?.primary?.caps ?? [] }
-        let hasTab = store.selectedTab(window: ui.windowID) != nil
-        let panel = SidebarMorePanel(items: [
-            .init(symbol: "arrow.clockwise", title: "Reload", keys: keys("reload"), enabled: hasTab) { [weak self] in self?.actions.reload() },
-            .init(symbol: "sidebar.left", title: "Toggle Sidebar", keys: keys("toggleSidebar"), enabled: true) { [weak self] in self?.actions.toggleSidebar() },
-        ], ink: store.focusedSpace(window: ui.windowID).theme.shadedDark)
-        panel.onClose = { [weak self] in
-            self?.morePanel = nil
-            self?.apply()
-        }
-        morePanel = panel
-        panel.show(under: window.convertToScreen(b.convert(b.bounds, to: nil)), in: window)
-        apply()
     }
 
     // A double click on the empty strip does the title bar's double-click action; a drag moves
@@ -607,44 +502,6 @@ final class SidebarTopBarView: NSView {
     override func mouseExited(with event: NSEvent) { hoverHeader = false }
 }
 
-/// The ⌄ after the developer-mode nav buttons: page actions in a menu.
-private final class DevMenuChevron: NSView {
-    private let actions: SidebarActions
-    private let image = NSImageView()
-    var tint: NSColor = .tertiaryLabelColor { didSet { image.contentTintColor = tint } }
-
-    init(actions: SidebarActions) {
-        self.actions = actions
-        super.init(frame: .zero)
-        image.image = SidebarSymbols.image("chevron.down", size: 8, weight: .bold)
-        image.imageScaling = .scaleNone
-        image.autoresizingMask = [.width, .height]
-        addSubview(image)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var mouseDownCanMoveWindow: Bool { false }
-    override func layout() {
-        super.layout()
-        image.frame = bounds
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let m = NSMenu()
-        m.autoenablesItems = false
-        let a = actions
-        // Arc's menu (Reload ✓ ⌘R, Refresh (Ignore Cache) ⇧⌘R | Clear Cookies and Refresh) in the
-        // registry's words, with Clear Cache beside Clear Cookies and Cra's developer items under
-        // them (#89).
-        for group in [["reload", "hardReload"], ["clearCookies", "clearCache"], ["viewSource", "devTools"]] {
-            if m.numberOfItems > 0 { m.addItem(.separator()) }
-            for id in group { MenuItems.add(m, action: id, on: id == "reload" ? true : nil) { a.performAction(id) } }
-        }
-        m.popUp(positioning: nil, at: NSPoint(x: 0, y: -4), in: self)
-    }
-}
-
 /// The URL pill on the sidebar's second row while the toolbar is hidden.
 final class SidebarURLPill: NSView, NSTextFieldDelegate {
     var actions: SidebarActions?
@@ -668,7 +525,7 @@ final class SidebarURLPill: NSView, NSTextFieldDelegate {
     private var resignObserver: NSObjectProtocol?
     /// Return in the field, with what was typed.
     var onCommit: (String) -> Void = { _ in }
-    /// Scenarios (cra://debug?hover=SidebarURLPill): the pill as the pointer leaves it hovered (#293).
+    /// Scenarios (from://debug?hover=SidebarURLPill): the pill as the pointer leaves it hovered (#293).
     func debugHover() { hovering = true }
     private var model: (pinned: [(String, String, NSImage?)], active: Bool)?
 
@@ -992,6 +849,8 @@ final class SpaceDockView: NSView {
     private let actions: SidebarActions
     private let library: LibraryButtonView
     private let plus: SidebarGlyphButton
+    /// This fork: Settings at the dock's far left, before the Library, in the Library's 28 pt box.
+    private let settings: SidebarGlyphButton
     private let creationMenu = SidebarCreationMenuController()
     private var cells: [UUID: SpaceCellView] = [:]
     private var order: [UUID] = []
@@ -1009,9 +868,12 @@ final class SpaceDockView: NSView {
         library = LibraryButtonView(ui: ui, actions: actions)
         // Arc 1.172.1: a 32 pt button (sidebarPlusButton) with no tooltip.
         plus = SidebarGlyphButton(symbol: "plus", size: 32, height: 32, iconSize: 14, help: "", colors: SidebarColors(), action: {})
+        settings = SidebarGlyphButton(symbol: "gearshape", size: 28, height: 28, iconSize: 15, help: "Settings (⌘,)", colors: SidebarColors(),
+                                      action: { [actions] in actions.performAction("settings") })
         super.init(frame: .zero)
         plus.setMenuOpen(false)
         plus.action = { [weak self] in self?.toggleCreationMenu() }
+        addSubview(settings)
         addSubview(library)
         addSubview(plus)
         sync()
@@ -1074,6 +936,7 @@ final class SpaceDockView: NSView {
             }
         }
         library.colors = colors
+        settings.colors = colors
         plus.colors = colors
         plus.isHidden = incognito
         let ids = spaces.map(\.id)
@@ -1095,7 +958,7 @@ final class SpaceDockView: NSView {
         needsLayout = true
     }
 
-    /// Scenarios (cra://debug?hover=SpaceCellView,n): that space hovered as if the pointer were on
+    /// Scenarios (from://debug?hover=SpaceCellView,n): that space hovered as if the pointer were on
     /// it, until the pointer moves (#252: a squeezed dot takes the wide cell and shows its icon).
     func debugHover(_ cell: SpaceCellView) {
         hovered = cells.first { $0.value === cell }?.key
@@ -1135,8 +998,9 @@ final class SpaceDockView: NSView {
         }
     }
 
-    /// The room between the Library and + buttons: 217 pt in a 300 pt sidebar.
-    private var room: CGFloat { max(0, bounds.width - 63) }
+    /// The room between the Library and + buttons. The strip is centred, so it gives up the
+    /// width of the wider side (Settings and the Library, 58 pt) on both.
+    private var room: CGFloat { max(0, bounds.width - 122) }
 
     /// SpaceDock's widths, Arc's: 34 pt each until the share drops under 22, then the open space
     /// (or the hovered one, #252) keeps 22 and the others split the rest. The strip stays centred,
@@ -1158,7 +1022,8 @@ final class SpaceDockView: NSView {
     override func layout() {
         super.layout()
         let h = bounds.height
-        library.frame = NSRect(x: 0, y: (h - 28) / 2, width: 28, height: 28)
+        settings.frame = NSRect(x: 0, y: (h - 28) / 2, width: 28, height: 28)
+        library.frame = NSRect(x: 30, y: (h - 28) / 2, width: 28, height: 28)
         plus.frame = NSRect(x: bounds.width - plus.size.width, y: (h - plus.size.height) / 2,
                             width: plus.size.width, height: plus.size.height)
         // A narrower sidebar can squeeze the dock into dots.
@@ -1493,7 +1358,7 @@ final class SpaceCellView: NSView, ArcTooltipTarget {
     var hostWindow: NSWindow? { window }
 }
 
-/// Arc's Library button (a box with a confetti puff, drawn by LibraryGlyph) and, over it, the
+/// The Library button (this fork: the `tray.full` symbol) and, over it, the
 /// latest download's "bin" (DownloadsUI.DownloadToLibrary): the file's thumbnail, 32 pt with
 /// 8 pt corners, up and to the right of the glyph. It drops in from 6 pt above, overshoots 12 pt
 /// below and settles (Arc 1.170 at 60 fps), and is faint while the window is in the background.
@@ -1509,7 +1374,7 @@ final class LibraryButtonView: NSView {
     private let badge = DownloadProgressBadgeView()
     private var shownDownload: UInt32?
     private var hovering = false { didSet { if hovering != oldValue { refresh() } } }
-    var colors = SidebarColors() { didSet { if colors != oldValue { glyph.image = LibraryGlyph.image(dark: colors.isDark); badge.colors = colors; refresh() } } }
+    var colors = SidebarColors() { didSet { if colors != oldValue { badge.colors = colors; refresh() } } }
     static let binOffset = CGSize(width: 9, height: -12)
     /// The download bin's frame, for Tidy Downloads' card to point at.
     var binFrame: NSRect { bin.frame }
@@ -1526,7 +1391,9 @@ final class LibraryButtonView: NSView {
         glyph.layer?.cornerRadius = 7
         glyph.layer?.cornerCurve = .continuous
         glyph.imageScaling = .scaleNone
-        glyph.image = LibraryGlyph.image(dark: false)
+        // This fork: a line symbol in the dock's glyph ink, like Settings beside it, instead of
+        // Arc's drawn Library mark.
+        glyph.image = SidebarSymbols.image("tray.full", size: 15, weight: .medium)
         addSubview(glyph)
         (tip.text, tip.keys) = ArcTooltipLabel.split("View Library (⇧⌘L)")
         tip.placement = .trailing
@@ -1599,6 +1466,7 @@ final class LibraryButtonView: NSView {
 
     private func refresh() {
         glyph.layer?.backgroundColor = (hovering ? colors.hoverFill : .clear).cgColor
+        glyph.contentTintColor = colors.isDark ? NSColor.white.withAlphaComponent(0.55) : colors.glyph
     }
 
     override func layout() {

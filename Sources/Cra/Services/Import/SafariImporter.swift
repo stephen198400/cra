@@ -51,6 +51,8 @@ enum SafariImporter {
         var plan = ImportPlan(source: "Safari")
         if let html = try? String(contentsOf: root.appendingPathComponent("Bookmarks.html"), encoding: .utf8) {
             let (favorites, folders) = bookmarks(html: html)
+            // Safari's Favorites bar is its bookmarks bar.
+            plan.bookmarks = ImportedBookmarks(bar: favorites, other: folders)
             let pinned = favorites + folders
             if !pinned.isEmpty { plan.spaces.append(ImportedSpace(title: "Safari", emoji: "🧭", theme: nil, pinned: pinned)) }
         }

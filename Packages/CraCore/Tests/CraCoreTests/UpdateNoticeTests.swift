@@ -13,7 +13,7 @@ struct UpdateNoticeTests {
     @Test func theBannerKeepsArcsWords() {
         let ready = UpdateNotice.ready(version: "0.1.36"), found = UpdateNotice.available(version: "0.1.36")
         #expect((ready.title, ready.subtitle, ready.button) == ("An update is ready!", "Click to restart", "Restart"))
-        #expect((found.title, found.subtitle, found.button) == ("New Cra Version Available", "Cra 0.1.36", "Update"))
+        #expect((found.title, found.subtitle, found.button) == ("New From Version Available", "From 0.1.36", "Update"))
     }
 
     /// With the sidebar out the banner says it; hidden, the toast does.

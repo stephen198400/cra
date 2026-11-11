@@ -54,7 +54,7 @@ jobs:
           gh pr comment "$PR" --body-file comment.md --edit-last 2>/dev/null || gh pr comment "$PR" --body-file comment.md
 
   build:
-    name: Build Cra.app
+    name: Build From.app
     # Same runner as release.yml, so CI builds what ships.
     runs-on: macos-26
     steps:
@@ -75,15 +75,15 @@ jobs:
 
       - name: Verify bundle
         run: |
-          codesign --verify --deep --strict --verbose=2 build/Cra.app
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/Cra.app/Contents/Info.plist
+          codesign --verify --deep --strict --verbose=2 build/From.app
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/From.app/Contents/Info.plist
 
       # Launches the app three times and quits it; fails on a crash, hang or crash report.
       # Not blocking until it has proved steady on the hosted runners.
       - name: Smoke test
         continue-on-error: true
         timeout-minutes: 5
-        run: Tests/smoke-launch.sh build/Cra.app
+        run: Tests/smoke-launch.sh build/From.app
 
       # One short journey on every pull request (thirty tabs put to sleep); the full set and the
       # component snapshots run nightly (nightly.yml). Not blocking until steady on these runners.
@@ -101,7 +101,7 @@ jobs:
           if-no-files-found: ignore
 
   build-intel:
-    name: Build Cra.app (Intel)
+    name: Build From.app (Intel)
     # Every release ships an Intel copy too (scripts/release.sh), cross-compiled on this runner.
     runs-on: macos-26
     steps:
@@ -122,5 +122,5 @@ jobs:
 
       - name: Verify bundle
         run: |
-          codesign --verify --deep --strict --verbose=2 build/x86_64/Cra.app
-          lipo -archs build/x86_64/Cra.app/Contents/MacOS/Cra
+          codesign --verify --deep --strict --verbose=2 build/x86_64/From.app
+          lipo -archs build/x86_64/From.app/Contents/MacOS/From

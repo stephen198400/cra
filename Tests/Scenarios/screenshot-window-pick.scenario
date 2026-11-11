@@ -6,15 +6,15 @@
 # the page in its card; the bubble's panel is only its strip at the page's bottom left.
 # promise: #346
 budget rss=700 stalls50=5
-cra://debug?windowSize=1200x800
+from://debug?windowSize=1200x800
 wait 1
-cra://open?url=${PAGE}?n=screenshot
+from://open?url=${PAGE}?n=screenshot
 wait 2
 # The page area spans x 328…1190 from y 10 (debugger-infobar), the strip its bottom left.
-cra://debug?screenshotPick=760,400
+from://debug?screenshotPick=760,400
 expect-log screenshot pick at 760,400: main window
-cra://debug?screenshotPick=1100,780
+from://debug?screenshotPick=1100,780
 expect-log screenshot pick at 1100,780: main window
-cra://debug?screenshotPick=340,780
+from://debug?screenshotPick=340,780
 expect-log screenshot pick at 340,780: window [0-9]+ 540x34
 reject-log fault:

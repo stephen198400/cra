@@ -8,23 +8,23 @@ budget rss=700 stalls50=20
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true}
 pace 0.5
 
-cra://action/newLittleWindow
+from://action/newLittleWindow
 wait 1
-cra://debug?littleShown=card
+from://debug?littleShown=card
 expect-log little shown card: windows=1 .* card=1 size=490x329 corner=20,20 strip=0 lights=0
 
 # Return: the full window (1400 × 900 pt unless the screen is smaller), same top-right corner.
-cra://debug?littleCard=go:${PAGE}
+from://debug?littleCard=go:${PAGE}
 wait 1.5
-cra://debug?littleShown=page
+from://debug?littleShown=page
 expect-log little shown page: windows=1 .* card=0 size=1[0-9]{3}x[0-9]{3} corner=20,20 strip=1 lights=1
 
 # A second card, closed with Esc: only the page's window is left.
-cra://action/newLittleWindow
+from://action/newLittleWindow
 wait 1
-cra://debug?littleShown=second
+from://debug?littleShown=second
 expect-log little shown second: windows=2 .* card=1 size=490x329
-cra://debug?littleCard=close
+from://debug?littleCard=close
 wait 1
-cra://debug?littleShown=closed
+from://debug?littleShown=closed
 expect-log little shown closed: windows=1 .* card=0

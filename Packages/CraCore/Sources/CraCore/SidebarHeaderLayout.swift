@@ -1,44 +1,25 @@
 import Foundation
 
-/// The sidebar header with the toolbar hidden, by sidebar width (issue #287). Arc 1.17x keeps
-/// three layouts (`SidebarHeaderWidthLayout`: regular, compact, narrow); measured live on an
-/// offline Arc over AX, 9 Nov 2026, from 274 pt down to its 164 pt minimum:
-///
-/// - 212 pt and wider: the sidebar toggle after the traffic lights, then ← → ↻ as 32 pt
-///   boxes 2 pt apart, ending 6 pt from the sidebar's edge. The toggle moves left to stay 2 pt
-///   clear of ← (Arc's x 77 → 74 at 214, 73 at 213, 72 at 212).
-/// - 211 pt and narrower: no toggle; ← → and "More options" (•••) as 28 pt boxes with no gap,
-///   ending 6 pt from the edge, centred on the same line. ••• turns into ✕ while its popover
-///   (Reload ⌘R, Toggle Sidebar ⌘S) is open. Each of 213, 212, 211, 210 and 209 was opened
-///   on its own (the resize snapping skips some widths during a drag).
-///
-/// With the toolbar shown the header holds only the toggle, which is 28 pt under 212. On a
-/// Developer Mode page it holds toggle + ← → ↻ again (← at width − 107) and goes narrow
-/// below 212 the same way, ← → ••• included.
+/// The sidebar header row. Arc 1.17x kept the sidebar toggle and ← → ↻ there (issue #287 measured
+/// its regular, compact and narrow layouts); this fork puts them in the toolbar, Dia style, so the
+/// row holds the traffic lights and the downloads button at its far right, `edgeInset` from the
+/// sidebar's edge, 32 pt or 28 pt under `narrowBelow` (DownloadsCard.button).
 public enum SidebarHeaderLayout {
     public static let narrowBelow: Double = 212
     public static let edgeInset: Double = 6
 
     public static func isNarrow(width: Double) -> Bool { width < narrowBelow }
 
-    /// The nav buttons' boxes, left to right (← → ↻, or ← → ••• when narrow): x and size.
-    public static func navButtons(width: Double) -> [(x: Double, size: Double)] {
-        let narrow = isNarrow(width: width)
-        let size = narrow ? 28.0 : 32.0, gap = narrow ? 0.0 : 2.0
-        let first = width - edgeInset - 3 * size - 2 * gap
-        return (0..<3).map { (first + Double($0) * (size + gap), size) }
-    }
+    /// What the row carries after the traffic lights, left to right.
+    public enum Item: Equatable, Sendable { case downloads }
 
-    /// The toggle's x in the regular layout: right after the traffic lights (`afterLights`),
-    /// or further left when ← comes within 2 pt of it. On a Developer Mode page Arc's ← sits
-    /// 1 pt further left (Arc: 71 beside ← at 105 for 212 pt).
-    public static func toggleX(width: Double, afterLights: Double, developer: Bool = false, toggleSize: Double = 32) -> Double {
-        let back = developer ? width - 107 : navButtons(width: width)[0].x
-        return min(afterLights, back - 2 - toggleSize)
-    }
+    /// Only downloads: the toggle and the navigation are the toolbar's (ToolbarComposition), on a
+    /// Developer Mode page too.
+    public static func items(developerPage: Bool = false) -> [Item] { [.downloads] }
 }
 
-/// The popover under the narrow header's ••• (Arc 1.17x, 1x window capture, 9 Nov 2026).
+/// Arc's popover under the narrow header's ••• (Arc 1.17x, 1x window capture, 9 Nov 2026); its tones
+/// are the downloads card's (DownloadsCardPanel).
 public enum SidebarMoreMenu {
     public static let width: Double = 200
     public static let rowHeight: Double = 40

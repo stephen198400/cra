@@ -292,7 +292,7 @@ final class MCPPage {
             screenshotScale = imageScale
             let info: [String: Any] = ["width": Int((width * imageScale).rounded()), "height": Int((height * imageScale).rounded()),
                                        "coordinates": imageScale == 1 ? "x/y for page_click, page_hover and page_scroll are these image pixels (CSS pixels)."
-                                           : "x/y for page_click, page_hover and page_scroll are these image pixels; Cra scales them by \(1 / imageScale) to CSS pixels."]
+                                           : "x/y for page_click, page_hover and page_scroll are these image pixels; From scales them by \(1 / imageScale) to CSS pixels."]
             return ["content": [["type": "image", "mimeType": "image/jpeg", "data": data],
                                 ["type": "text", "text": String(decoding: try JSONSerialization.data(withJSONObject: info, options: [.sortedKeys]), as: UTF8.self)]],
                     "isError": false]

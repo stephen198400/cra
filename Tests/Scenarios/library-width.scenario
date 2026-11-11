@@ -3,7 +3,7 @@
 # promise: #302
 budget rss=700 stalls50=10
 seed windows.json {"sidebarWidth": 218}
-cra://open?url=${PAGE}?n=one
+from://open?url=${PAGE}?n=one
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
-cra://action/viewDownloads
+from://action/viewDownloads
 expect-log library opens 417 pt wide beside a 218 pt tab sidebar

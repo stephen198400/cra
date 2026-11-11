@@ -19,7 +19,7 @@ Only the latest release is supported. Cra updates itself, and fixes are not back
 
 In scope: anything Cra adds on top of Chromium, for example
 
-- the `cra://` scheme and what pages or other apps can reach through it
+- the `from://` scheme and what pages or other apps can reach through it
 - import from other browsers, and the passwords and cookies it moves
 - the update feed and signature checks (Sparkle)
 - extensions, native messaging hosts and the Chrome Web Store install flow

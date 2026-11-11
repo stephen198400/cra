@@ -24,8 +24,9 @@ struct AppLinksTests {
         ("/relative/path", .page),
         ("1password:x", .page),
         // Never to an app.
-        ("cra://action/closeTab", .refused),
+        ("from://action/closeTab", .refused),
         ("CRA:action", .refused),
+        ("FROM:action", .refused),
         ("afp://server/share", .refused),
         ("ms-help://x", .refused),
         // The engines' own, allowed or not: never an app's.

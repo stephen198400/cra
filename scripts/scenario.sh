@@ -1,5 +1,5 @@
 #!/bin/bash
-# Drives the real Cra.app through a user journey (Tests/Scenarios/<name>.scenario) on a
+# Drives the real From.app through a user journey (Tests/Scenarios/<name>.scenario) on a
 # throwaway profile, behind your other windows, then checks the same invariants for every
 # scenario: still running, no new crash report, no fault in cra.log, the sidebar sound,
 # main-thread stalls and memory inside the scenario's budget, helper processes back to
@@ -8,7 +8,7 @@
 #   scripts/scenario.sh fifty-tabs        one scenario
 #   scripts/scenario.sh all               every scenario, one after another
 #
-# CRA_APP (default build/Cra.app) picks the build; CRA_FLAGS (FeatureFlags) is passed on, so
+# CRA_APP (default build/From.app) picks the build; CRA_FLAGS (FeatureFlags) is passed on, so
 # CRA_FLAGS=backdrop=material runs the NSVisualEffectView path. Scenarios marked
 # "requires screen" (they take over a Space) run only with CRA_SCENARIO_SCREEN=1, as in CI.
 # CRA_BUDGETS=report (the nightly on GitHub's runners) prints budgets and snapshot differences
@@ -16,15 +16,15 @@
 # does (expect-log, faults, crashes, helpers, quitting) fails everywhere.
 # Logs land in build/scenarios/<name>/.
 #
-# Scenario lines: a cra:// command (sent through CRA_COMMAND_FILE, then `pace` seconds),
+# Scenario lines: a from:// command (sent through CRA_COMMAND_FILE, then `pace` seconds),
 # or one of
 #   wait <s>                    let the app work
 #   pace <s>                    pause after each command (default 0.2)
-#   repeat <n> <cra://…${i}…>   the command n times, ${i} = 1…n
+#   repeat <n> <from://…${i}…>   the command n times, ${i} = 1…n
 #   budget rss=<MB> maxstall=<ms> stalls50=<n> launchstall=<ms> perfcpu=<% of a core>
 #     (stalls count from the first command; start-up has its own launchstall budget)
 #   helpers baseline | helpers settle [slack]
-#   relaunch                    cra://debug?relaunch=1, then follow the new process
+#   relaunch                    from://debug?relaunch=1, then follow the new process
 #   expect-log <regex>          a line Cra logged (cra.log or stdout)
 #   reject-log <regex>          no such line logged so far
 #   snapshot <View[,n]> <name>  the nth visible view of that class drawn to PNG and compared with
@@ -57,7 +57,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-APP="${CRA_APP:-$ROOT/build/Cra.app}"
+APP="${CRA_APP:-$ROOT/build/From.app}"
 FIXTURES="$ROOT/Tests/Fixtures"
 EXTENSION_ID="$(cat "$FIXTURES/Extension/ID")"
 SIDE_PANEL_EXTENSION_ID="$(cat "$FIXTURES/SidePanelExtension/ID")"
@@ -78,7 +78,7 @@ fi
 NAME="${1:?usage: scripts/scenario.sh <name>|all}"
 FILE="Tests/Scenarios/$NAME.scenario"
 [ -f "$FILE" ] || { echo "No scenario $FILE"; exit 2; }
-[ -x "$APP/Contents/MacOS/Cra" ] || { echo "No Cra at $APP (scripts/build.sh; budgets are a release build's)"; exit 2; }
+[ -x "$APP/Contents/MacOS/From" ] || { echo "No From at $APP (scripts/build.sh; budgets are a release build's)"; exit 2; }
 if grep -q '^requires screen' "$FILE" && [ "${CRA_SCENARIO_SCREEN:-}" != "1" ]; then
   echo "$NAME: skipped (takes over the screen; CRA_SCENARIO_SCREEN=1 runs it)"; exit 0
 fi
@@ -210,7 +210,7 @@ for i in "${!app_env[@]}"; do app_env[$i]="$(expand "${app_env[$i]}")"; done
 
 CRA_DATA_DIR="$DATA" CRA_COMMAND_FILE="$CMD" CRA_HITCH_LOG="$HITCH" CRA_TEST_BACKGROUND=1 CRA_WEBKIT_HOSTS=localhost \
   CRA_ARC_DIR="$FIXTURES/Arc" CRA_FLAGS="${CRA_FLAGS:-}" \
-  "${app_env[@]}" "$APP/Contents/MacOS/Cra" ${app_args[@]+"${app_args[@]}"} >"$OUT/stdout.log" 2>&1 &
+  "${app_env[@]}" "$APP/Contents/MacOS/From" ${app_args[@]+"${app_args[@]}"} >"$OUT/stdout.log" 2>&1 &
 PID=$!
 PIDS+=("$PID")
 
@@ -255,7 +255,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   alive || { problem "Cra exited during: $line"; break; }
   set -f; set -- $line; set +f
   case "$1" in
-    cra://*) send "$line"; sleep "$PACE" ;;
+    from://*) send "$line"; sleep "$PACE" ;;
     wait) sleep "$2" ;;
     pace) PACE="$2" ;;
     repeat)
@@ -277,7 +277,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
       count_faults
       # The next Cra starts its hitch log afresh: keep this one's.
       { cat "$HITCH" 2>/dev/null; echo "0 relaunch"; } >> "$OUT/hitch.earlier"
-      old="$PID"; send "cra://debug?relaunch=1"
+      old="$PID"; send "from://debug?relaunch=1"
       PID=""
       for _ in $(seq 1 200); do
         p=$(grep -ho 'starts, pid [0-9]*' "$DATA"/cra*.log 2>/dev/null | awk '{print $3}' | grep -vx "$old" | grep -vxF "$(printf '%s\n' "${PIDS[@]}")" | tail -1)
@@ -299,7 +299,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
       shot="$OUT/snapshots/$3.png"; ref="$ROOT/Tests/Snapshots/$3.png"
       # A name shot twice (before and after a relaunch) must not find the first file and stop waiting.
       shot1x="$OUT/snapshots/$3.1x.png"
-      mkdir -p "$OUT/snapshots"; rm -f "$shot" "$shot1x"; send "cra://debug?snapshot=$2&out=$shot"
+      mkdir -p "$OUT/snapshots"; rm -f "$shot" "$shot1x"; send "from://debug?snapshot=$2&out=$shot"
       for _ in $(seq 1 25); do [ -s "$shot" ] || [ -s "$shot1x" ] && break; sleep 0.2; done
       # References are 2x. On a 1x display (an external monitor, CRA_TEST_SCREEN) text and images
       # are only scaled up, so every one would differ; say that instead, and never record it.
@@ -320,7 +320,7 @@ done < "$FILE"
 
 # Invariants.
 if alive; then
-  send "cra://debug?checkStore=1"; sleep 1
+  send "from://debug?checkStore=1"; sleep 1
   rss=$(ps -o rss= -p "$PID" | tr -d ' ')
   total=$(( rss + $(ps -o rss= -p "$(pgrep -P "$PID" | paste -sd, -)" 2>/dev/null | awk '{s+=$1} END {print s+0}') ))
   echo "  memory: Cra $((rss / 1024)) MB, with helpers $((total / 1024)) MB (budget $RSS_BUDGET MB for Cra)"
@@ -342,7 +342,7 @@ echo "  stalls: start-up ${launch} ms (budget ${LAUNCHSTALL}); then longest ${ma
 
 # The performance recorder (#91): what it costs, and whether it saw the stalls HitchMonitor saw.
 if alive; then
-  send "cra://debug?perfReport=$OUT/perf.json"
+  send "from://debug?perfReport=$OUT/perf.json"
   for _ in $(seq 1 25); do [ -s "$OUT/perf.json" ] && break; sleep 0.2; done
   hitch250=$(cat "$OUT/hitch.earlier" "$HITCH" 2>/dev/null | awk '$2 == "stall" && $3 >= 250 { n++ } END { print n + 0 }')
   if [ ! -s "$OUT/perf.json" ]; then problem "no perf.json from the performance recorder"
@@ -366,7 +366,7 @@ fi
 
 # A clean quit, within the CefShutdown watchdog.
 if alive; then
-  send "cra://debug?quit=1"
+  send "from://debug?quit=1"
   for _ in $(seq 1 100); do alive || break; sleep 0.2; done
   alive && problem "Cra did not quit within 20 s"
 fi

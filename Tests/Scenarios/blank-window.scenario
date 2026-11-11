@@ -6,39 +6,39 @@
 # page as it was, and closes the Blank Window. File ▸ Blank Window (⌃⌘N, #220) opens an empty one,
 # and a relaunch brings it back.
 budget rss=700 stalls50=10
-cra://debug?windowSize=1000x700
-cra://open?url=${PAGE}?n=stays
+from://debug?windowSize=1000x700
+from://open?url=${PAGE}?n=stays
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
-cra://open?url=${PAGE}?n=torn
+from://open?url=${PAGE}?n=torn
 wait 3
-cra://debug?cdp=Runtime.evaluate&params={"expression":"window.mark='kept-'+location.search.slice(3)"}
+from://debug?cdp=Runtime.evaluate&params={"expression":"window.mark='kept-'+location.search.slice(3)"}
 expect-log Cra cdp Runtime.evaluate .*"value":"kept-torn"
-cra://debug?browserWindows=before
+from://debug?browserWindows=before
 expect-log Cra browser windows before: kind=normal .*listed=1 .*open=\S*n=torn page=1
-cra://debug?dragEnd=n=torn
+from://debug?dragEnd=n=torn
 expect-log dragEnd: let go at
 wait 2
-cra://debug?browserWindows=torn
+from://debug?browserWindows=torn
 expect-log Cra browser windows torn: kind=blank space=This Window listed=0 tabs=\[\S*n=torn\] open=\S*n=torn page=1
 expect-log Cra browser windows torn: kind=normal .*listed=1 tabs=\[\S*n=stays\] open=- page=0
 expect-log takes over another window's page
 # The page in the new window is the same page: what it held is still there.
-cra://debug?cdp=Runtime.evaluate&params={"expression":"String(window.mark)"}
+from://debug?cdp=Runtime.evaluate&params={"expression":"String(window.mark)"}
 expect-log Cra cdp Runtime.evaluate .*"value":"kept-torn"
-cra://debug?blankMoveTo=1
+from://debug?blankMoveTo=1
 wait 2
-cra://debug?browserWindows=moved
+from://debug?browserWindows=moved
 expect-log Cra browser windows moved: kind=normal .*listed=1 tabs=\[\S*n=torn \S*n=stays\] open=\S*n=torn page=1
 reject-log Cra browser windows moved: kind=blank
-cra://debug?cdp=Runtime.evaluate&params={"expression":"'again-'+String(window.mark)"}
+from://debug?cdp=Runtime.evaluate&params={"expression":"'again-'+String(window.mark)"}
 expect-log Cra cdp Runtime.evaluate .*"value":"again-kept-torn"
-cra://action/newBlankWindow
+from://action/newBlankWindow
 wait 2
-cra://debug?browserWindows=new
+from://debug?browserWindows=new
 expect-log Cra browser windows new: kind=blank space=This Window listed=0 tabs=\[\] open=- page=0
 relaunch
 wait 4
-cra://debug?browserWindows=relaunched
+from://debug?browserWindows=relaunched
 # The relaunched Cra's lines reach cra.log only, which names no pages: kinds and counts.
 expect-log browser windows relaunched: kind=blank listed=0 tabs=0 open=0
 expect-log browser windows relaunched: kind=normal listed=1 tabs=2 open=1

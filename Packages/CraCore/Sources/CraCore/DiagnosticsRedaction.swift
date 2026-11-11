@@ -24,6 +24,6 @@ public enum DiagnosticsRedaction {
     /// macOS names a crash report after the process that crashed: `Cra-<date>.ips` and
     /// `Cra Helper (Renderer)-<date>.ips`. Other apps' names can start with "Cra" too (Craft).
     public static func isCraCrashReport(_ fileName: String) -> Bool {
-        fileName.hasPrefix("Cra-") || fileName.hasPrefix("Cra Helper")
+        fileName.hasPrefix("From-") || fileName.hasPrefix("From Helper")
     }
 }

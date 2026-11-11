@@ -24,20 +24,20 @@ stop() {
 }
 
 # A renamed copy: executable and helpers become CraTest*, so it is its own app.
-make_copy() {  # make_copy <Cra.app> <out dir> [idle seconds]
+make_copy() {  # make_copy <From.app> <out dir> [idle seconds]
   local src="$1" out="$2" idle="${3:-}" app pb=/usr/libexec/PlistBuddy
   rm -rf "$out/CraTest.app" && mkdir -p "$out"
   ditto "$src" "$out/CraTest.app"
   app="$out/CraTest.app"
-  mv "$app/Contents/MacOS/Cra" "$app/Contents/MacOS/CraTest"
+  mv "$app/Contents/MacOS/From" "$app/Contents/MacOS/CraTest"
   $pb -c "Set :CFBundleExecutable CraTest" -c "Set :CFBundleIdentifier $DOMAIN" -c "Set :CFBundleName CraTest" \
       -c "Add :LSEnvironment dict" -c "Add :LSEnvironment:CRA_DATA_DIR string $DIR/data" \
       -c "Add :LSEnvironment:CRA_UPDATE_FEED string http://127.0.0.1:$PORT/appcast.xml" "$app/Contents/Info.plist"
   [ -n "$idle" ] && $pb -c "Add :LSEnvironment:CRA_UPDATE_IDLE_SECONDS string $idle" "$app/Contents/Info.plist"
-  for h in "$app"/Contents/Frameworks/Cra\ Helper*.app; do
+  for h in "$app"/Contents/Frameworks/From\ Helper*.app; do
     local name new
     name="$(basename "$h" .app)"
-    new="CraTest${name#Cra}"
+    new="CraTest${name#From}"
     mv "$h/Contents/MacOS/$name" "$h/Contents/MacOS/$new"
     $pb -c "Set :CFBundleExecutable $new" -c "Set :CFBundleName $new" "$h/Contents/Info.plist"
     mv "$h" "$app/Contents/Frameworks/$new.app"
@@ -61,9 +61,9 @@ if [ "$MODE" != again ] || [ ! -d "$DIR/old.app" ]; then
   echo "Building Cra 0.0.1 (old) and 0.0.2 (new)…"
   mkdir -p "$DIR"
   CRA_VERSION=0.0.1 CRA_BUILD=1000 scripts/build.sh debug > "$DIR/build.log" 2>&1
-  rm -rf "$DIR/old.app" && ditto build/Cra.app "$DIR/old.app"
+  rm -rf "$DIR/old.app" && ditto build/From.app "$DIR/old.app"
   CRA_VERSION=0.0.2 CRA_BUILD=1001 scripts/build.sh debug >> "$DIR/build.log" 2>&1
-  make_copy build/Cra.app "$DIR/new"
+  make_copy build/From.app "$DIR/new"
   rm -rf "$DIR/feed" && mkdir -p "$DIR/feed"
   ditto -c -k --keepParent "$DIR/new/CraTest.app" "$DIR/feed/Cra.zip"
   printf '<h3>Cra 0.0.2</h3><ul><li>A test update served from your Mac.</li><li>Nothing here is real.</li></ul>' > "$DIR/notes.html"

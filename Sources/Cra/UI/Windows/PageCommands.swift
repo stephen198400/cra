@@ -174,7 +174,7 @@ enum PageCommands {
     static func captureFileName() -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        return "Cra Capture \(f.string(from: Date())).png"
+        return "From Capture \(f.string(from: Date())).png"
     }
 }
 

@@ -4,11 +4,11 @@
 # promise: #218
 home
 budget rss=600 stalls50=5
-cra://debug?installExtension=${FIXTURES}/DownloadExtension
+from://debug?installExtension=${FIXTURES}/DownloadExtension
 relaunch
-cra://open?url=${PAGE}?n=download
+from://open?url=${PAGE}?n=download
 wait 3
-cra://debug?extensionAction=${DOWNLOAD_EXTENSION_ID}
+from://debug?extensionAction=${DOWNLOAD_EXTENSION_ID}
 expect-log Download finished from a blob: address
-cra://dismiss
-cra://debug?removeExtension=${DOWNLOAD_EXTENSION_ID}
+from://dismiss
+from://debug?removeExtension=${DOWNLOAD_EXTENSION_ID}

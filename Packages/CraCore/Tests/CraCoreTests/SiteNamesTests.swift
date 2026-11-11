@@ -52,7 +52,7 @@ struct SiteNamesTests {
     }
 
     @Test(arguments: [("https://www.Example.com/a", "www.Example.com"), ("wss://x.example.com", "x.example.com"),
-                      ("chrome://settings", nil), ("cra://newtab", nil), ("file:///Users/a", nil), ("data:text/html,x", nil),
+                      ("chrome://settings", nil), ("from://newtab", nil), ("file:///Users/a", nil), ("data:text/html,x", nil),
                       ("not a url", nil)] as [(String, String?)])
     func onlyWebAddressesNameASite(url: String, host: String?) {
         #expect(SiteNames.siteHost(of: url) == host)

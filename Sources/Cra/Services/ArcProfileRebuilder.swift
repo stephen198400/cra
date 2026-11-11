@@ -13,7 +13,7 @@ enum ArcProfileRebuilder {
     /// Asks, moves the spaces and restarts; says so when there is nothing to do or Arc can't be read.
     static func run(store: SidebarStore, relaunch: @escaping () -> Void) {
         guard let plan = try? ArcImporter.plan() else {
-            alert("Cra couldn't read Arc's spaces.", "Arc's sidebar file is missing or in a format this version doesn't know.")
+            alert("From couldn't read Arc's spaces.", "Arc's sidebar file is missing or in a format this version doesn't know.")
             return
         }
         let moves = store.arcProfileMoves(plan)
@@ -22,8 +22,8 @@ enum ArcProfileRebuilder {
             return
         }
         let message = moves.map { "\($0.spaceTitle) → \($0.profileName)" }.joined(separator: "\n") + "\n\n"
-            + "Cra brings over the sign-ins, passwords and extensions these Arc profiles have, so the spaces work as they did in Arc. "
-            + "Sign-ins and passwords you added in Cra since the import stay with Default. macOS asks for your password to unlock Arc's data, then Cra restarts."
+            + "From brings over the sign-ins, passwords and extensions these Arc profiles have, so the spaces work as they did in Arc. "
+            + "Sign-ins and passwords you added in From since the import stay with Default. macOS asks for your password to unlock Arc's data, then From restarts."
         let a = AppDialog(title: "Move \(moves.count == 1 ? "this space" : "these spaces") to \(moves.count == 1 ? "its" : "their") Arc profile\(moves.count == 1 ? "" : "s")?",
                           message: message, actions: [DialogAction("Move and Restart"), .cancel])
         guard a.runModal() == .alertFirstButtonReturn else { return }
@@ -50,7 +50,7 @@ enum ArcProfileRebuilder {
             let map = store.applyArcProfileMoves(moves)
             CraLog.note("rebuild from Arc: moved \(moves.count) space(s), \(credentials.cookies.count) cookies, \(credentials.logins.count) passwords")
             if !credentials.isEmpty, !(await Task.detached(priority: .userInitiated) { CredentialImport.stage(credentials, profiles: map) }.value) {
-                alert("Cra couldn't save Arc's sign-ins.", "The spaces moved, but they start signed out.")
+                alert("From couldn't save Arc's sign-ins.", "The spaces moved, but they start signed out.")
             }
             scopeExtensions(map, store: store)
             seedPins(map)

@@ -133,7 +133,7 @@ public struct UsageStats: Codable, Equatable, Sendable {
         "littleWindowShortcutEverywhere", "liveCalendar", "mediaLibraryEnabled", "newTabButtonAtTop", "newTabsAtTop",
         "openLinksInForeground", "pageTopWindowDrag", "peekInEveryTab", "peekLinksToOtherSites", "peekOnShiftClick",
         "perfRecording", "restoreWindows", "searchEngine", "searchSuggestions", "shareThemeWithWebsites",
-        "sharedFavorites", "showSpaceHeaderOnSingleSpace", "showStatusBar", "showToolbar", "soundEffects",
+        "sharedFavorites", "showBookmarksBar", "showSpaceHeaderOnSingleSpace", "showStatusBar", "showToolbar", "soundEffects",
         "startOnNewTab", "tabSleepAfter", "tabSleepOnMemoryPressure", "tabSleepTimerEnabled", "tidyDownloads",
         "tidyTabTitles", "tidyTabs", "toolbarShowsFullURL", "warnBeforeQuitting", "websiteAppearance",
         "allowAppleEventsJavaScript", "perfHidesSiteNames",
@@ -207,7 +207,7 @@ public enum CrashReports {
     }
 
     /// Cra itself, not one of its helpers: the report of Cra quitting.
-    public static func isAppQuit(_ name: String) -> Bool { name.hasPrefix("Cra-") }
+    public static func isAppQuit(_ name: String) -> Bool { name.hasPrefix("From-") }
 
     private static let headerKeys: Set<String> = [
         "app_name", "app_version", "build_version", "slice_uuid", "bundleID", "bug_type", "os_version", "name", "platform",

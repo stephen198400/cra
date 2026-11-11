@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 /// passwords or page content leave the Mac.
 @MainActor
 enum Diagnostics {
-    /// Asks where to save, unless `destination` is given (cra://debug?exportDiagnostics=<path>).
+    /// Asks where to save, unless `destination` is given (from://debug?exportDiagnostics=<path>).
     static func export(windows: [MainWindowController], store: SidebarStore, to destination: URL? = nil) {
         CraLog.note("diagnostics export started")
         HitchMonitor.mark("diagnostics-export")
@@ -62,7 +62,7 @@ enum Diagnostics {
             f.dateFormat = "yyyy-MM-dd HH.mm"
             return f.string(from: Date())
         }()
-        let name = "Cra Diagnostics \(stamp)"
+        let name = "From Diagnostics \(stamp)"
         guard let destination = chosen ?? askWhere(name + ".zip") else { return }
 
         let fm = FileManager.default
@@ -110,7 +110,7 @@ enum Diagnostics {
         }
         try? fm.removeItem(at: staging)
         guard ditto.terminationStatus == 0, fm.fileExists(atPath: destination.path) else {
-            let alert = AppDialog(title: "Cra couldn’t save the diagnostics", message: "Try another folder.")
+            let alert = AppDialog(title: "From couldn’t save the diagnostics", message: "Try another folder.")
             alert.runModal()
             return
         }
@@ -133,7 +133,7 @@ enum Diagnostics {
     private static func askWhere(_ fileName: String) -> URL? {
         let panel = NSSavePanel()
         panel.title = "Export Diagnostics"
-        panel.message = "Cra's logs, its performance record, the state of the pages on screen and recent crash reports. Site names only: no addresses, history, cookies or passwords."
+        panel.message = "From's logs, its performance record, the state of the pages on screen and recent crash reports. Site names only: no addresses, history, cookies or passwords."
         panel.nameFieldStringValue = fileName
         panel.allowedContentTypes = [.zip]
         panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
@@ -158,7 +158,7 @@ enum Diagnostics {
         // Chromium switches part of its window tracking off under Stage Manager (crbug 448103577).
         let stageManager = UserDefaults.standard.persistentDomain(forName: "com.apple.WindowManager")?["GloballyEnabled"] as? Bool ?? false
         var lines = [
-            "Cra \(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))",
+            "From \(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))",
             "Chromium \(CraCEFRuntime.chromiumVersion()), CEF \(CraCEFRuntime.cefVersion())",
             "macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion), \(String(cString: model)), \(ProcessInfo.processInfo.physicalMemory >> 30) GB, \(ProcessInfo.processInfo.activeProcessorCount) cores",
             DisplayDiagnostics.summary(displays),
@@ -166,7 +166,7 @@ enum Diagnostics {
             // The sidebar goes opaque under it, like AppKit's materials (GitHub #156).
             "Reduce transparency: \(NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? "on" : "off"), increase contrast: \(NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? "on" : "off")",
             "Running from: \(Bundle.main.bundlePath)",
-            "Up for: \(Int(ProcessInfo.processInfo.systemUptime / 60)) min (Mac), \(Int(-(NSRunningApplication.current.launchDate ?? Date()).timeIntervalSinceNow / 60)) min (Cra)",
+            "Up for: \(Int(ProcessInfo.processInfo.systemUptime / 60)) min (Mac), \(Int(-(NSRunningApplication.current.launchDate ?? Date()).timeIntervalSinceNow / 60)) min (From)",
             "Embedded pages: \(EmbeddedPages.isEnabled), Chrome-style hosting: \(CraCEFRuntime.chromeHosting())",
             "Secure DNS: \(CraCEFRuntime.secureDNSMode().map { SecureDNS(mode: $0, templates: CraCEFRuntime.secureDNSTemplates() ?? "").line } ?? "unknown")",
             "",

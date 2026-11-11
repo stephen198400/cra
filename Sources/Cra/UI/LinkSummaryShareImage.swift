@@ -9,7 +9,7 @@ enum LinkSummaryShareImage {
     private typealias L = LinkSummaryCardLayout
     static let width: CGFloat = 304
     static let footerHeight: CGFloat = 50
-    static let brand = "Cra"
+    static let brand = "From"
 
     private static func color(_ hex: UInt32) -> NSColor {
         NSColor(srgbRed: CGFloat(hex >> 16 & 0xff) / 255, green: CGFloat(hex >> 8 & 0xff) / 255, blue: CGFloat(hex & 0xff) / 255, alpha: 1)

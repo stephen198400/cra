@@ -19,7 +19,7 @@ struct LittleWindowTargetTests {
     /// A space picked in the Little Window stays, whichever space the browser window switches to
     /// (#316). It is that window's only: the next Little Window follows the window used last again,
     /// so a link from another app doesn't open in a space (and its sign-ins) picked earlier. A
-    /// Little Window that names its space (cra://open, an Air Traffic Control route) keeps it.
+    /// Little Window that names its space (from://open, an Air Traffic Control route) keeps it.
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/316"))
     func aPickedSpaceStaysInItsWindowOnly() {
         var first = LittleWindowTarget()

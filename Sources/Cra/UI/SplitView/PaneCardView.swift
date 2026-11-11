@@ -22,6 +22,24 @@ final class PaneCardView: NSView {
     /// them as a light rim in every rounded corner.
     private let pageBackground = NSView()
     var showToolbar = true { didSet { needsLayout = true } }
+    /// Chrome's bookmarks bar (BookmarksBarView) under the toolbar, or at the card's top without one.
+    /// The shell sets the view once and switches it with `showBookmarksBar`.
+    var bookmarksBar: NSView? {
+        didSet {
+            oldValue?.removeFromSuperview()
+            if let bookmarksBar { addSubview(bookmarksBar, positioned: .above, relativeTo: toolbarHost) }
+            needsLayout = true
+        }
+    }
+    var showBookmarksBar = false {
+        didSet { if showBookmarksBar != oldValue { needsLayout = true; onToolbarHeightChange?() } }
+    }
+    /// Whether the bookmarks bar is on this card: never on the no-tab stand-in.
+    var showsBookmarksBar: Bool { showBookmarksBar && bookmarksBar != nil && !transparent }
+    /// How far the page sits below the card's top: the toolbar when `toolbar`, plus the bookmarks bar.
+    func topInset(toolbar: Bool) -> CGFloat {
+        (toolbar ? toolbarHeight : 0) + (showsBookmarksBar ? BookmarksBarView.height : 0)
+    }
     var toolbarHeight: CGFloat = CraMetrics.toolbarHeight {
         didSet { if toolbarHeight != oldValue { needsLayout = true; onToolbarHeightChange?() } }
     }
@@ -57,7 +75,7 @@ final class PaneCardView: NSView {
     /// under a dark bar shows through the bar's anti-aliased left edge as a 1px light line.
     var toolbarColor: String? { didSet { refreshBackground() } }
     /// The no-tab stand-in: toolbar on the gradient, no card at all.
-    var transparent = false { didSet { refreshBackground(); syncShadow() } }
+    var transparent = false { didSet { refreshBackground(); syncShadow(); needsLayout = true } }
     /// While a pane is being dragged open/closed its page keeps its last size.
     var frozenWebBounds: NSRect? { didSet { if frozenWebBounds == nil { frozenPageInWindow = nil } } }
     /// The page's final frame in the window while the sidebar slides. Cleared with `frozenWebBounds`.
@@ -120,6 +138,7 @@ final class PaneCardView: NSView {
     func retarget(to id: UUID) {
         tabID = id
         (toolbarHost as? PaneToolbarView)?.paneTabID = id == ShellView.noTabID ? nil : id
+        (bookmarksBar as? BookmarksBarView)?.paneTabID = id == ShellView.noTabID ? nil : id
         frozenWebBounds = nil
         showsElsewhere = false
         elsewhereSnapshot = nil
@@ -187,10 +206,14 @@ final class PaneCardView: NSView {
     override func layout() {
         super.layout()
         let b = bounds
-        let th: CGFloat = showToolbar ? toolbarHeight : 0
-        toolbarHost.isHidden = th == 0
-        toolbarHost.frame = NSRect(x: 0, y: b.height - th, width: b.width, height: th)
+        let tb: CGFloat = showToolbar ? toolbarHeight : 0
+        toolbarHost.isHidden = tb == 0
+        toolbarHost.frame = NSRect(x: 0, y: b.height - tb, width: b.width, height: tb)
         toolbarBackground.frame = toolbarHost.frame
+        let bh: CGFloat = showsBookmarksBar ? BookmarksBarView.height : 0
+        bookmarksBar?.isHidden = bh == 0
+        bookmarksBar?.frame = NSRect(x: 0, y: b.height - tb - bh, width: b.width, height: bh)
+        let th = tb + bh
         hairline.frame = NSRect(x: 0, y: b.height - th - 1, width: b.width, height: 1)
         hairline.isHidden = hasPage || transparent || th == 0
         webArea.frame = NSRect(x: 0, y: 0, width: b.width, height: max(0, b.height - th))

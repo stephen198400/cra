@@ -7,25 +7,25 @@
 # the card again.
 # promise: #241
 budget rss=700 stalls50=5
-cra://debug?installExtension=${FIXTURES}/DebuggerExtension
+from://debug?installExtension=${FIXTURES}/DebuggerExtension
 relaunch
-cra://debug?windowSize=1200x800
+from://debug?windowSize=1200x800
 wait 1
-cra://open?url=${PAGE}?n=debugger
+from://open?url=${PAGE}?n=debugger
 expect-log page view: Chromium insets top=[1-9][0-9]* left=0 bottom=0 right=0
 wait 1
-cra://debug?pageInsets=1
+from://debug?pageInsets=1
 expect-log page view insets 1: top=[1-9][0-9]* left=0 bottom=0 right=0; Chromium's top=[1-9]
-cra://debug?windowSize=1000x700
+from://debug?windowSize=1000x700
 wait 1
-cra://debug?pageInsets=1
+from://debug?pageInsets=1
 expect-log page view insets 2: top=[1-9][0-9]* left=0 bottom=0 right=0; Chromium's top=[1-9]
-cra://debug?windowSize=1200x800
+from://debug?windowSize=1200x800
 wait 1
 # The bar's ✕, 20 pt in from the page's right edge (the page area spans x 328…1190 from y 10).
-cra://debug?clickAt=1170,38
+from://debug?clickAt=1170,38
 expect-log page view: Chromium insets top=0 left=0 bottom=0 right=0
 wait 1
-cra://debug?pageInsets=1
+from://debug?pageInsets=1
 expect-log page view insets 3: top=0 left=0 bottom=0 right=0; Chromium's top=0
 reject-log fault:

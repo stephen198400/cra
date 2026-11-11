@@ -39,13 +39,16 @@ struct ToolbarCompositionTests {
         #expect(T.urlFieldAccessories(pinnedExtensions: ["a", "b", "c", "d", "e"], fieldWidth: 224) == [.copyURL, .extensions])
     }
 
-    /// With the sidebar shown its header carries the toggle and the bar has none (#50).
+    /// Dia's bar: the toggle and ← → ↻ whether the sidebar is shown or not; the sidebar's header
+    /// carries no navigation any more (#50 was Arc's header toggle; this fork changed it).
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/50"))
-    func theShownSidebarCarriesTheToggle() {
-        // Arc 1.171, #50: the sidebar's header has the toggle, the bar none.
-        #expect(bar(.normal, sidebar: true).left == [.back(enabled: false), .forward(enabled: false), .reload(loading: false, enabled: true)])
-        #expect(bar(.noTab, sidebar: true).left.first == .back(enabled: false))
-        #expect(bar(.developer, sidebar: true).left.isEmpty)
+    func theToggleLeadsTheBarWithTheSidebarShown() {
+        let nav: [T.Item] = [.back(enabled: false), .forward(enabled: false), .reload(loading: false, enabled: true)]
+        #expect(bar(.normal, sidebar: true).left == [.toggleSidebar] + nav)
+        #expect(bar(.normal, sidebar: true) == bar(.normal, sidebar: false))
+        #expect(bar(.noTab, sidebar: true).left.first == .toggleSidebar)
+        #expect(bar(.developer, sidebar: true).left == [.toggleSidebar] + nav)
+        #expect(bar(.normal, split: true, sidebar: false).left.first == .back(enabled: false), "a split pane's bar has no toggle")
     }
 
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/178")) func theFocusedPaneHasEverythingButTheToggleAndSplitView() {
@@ -92,13 +95,14 @@ struct ToolbarCompositionTests {
         #expect(noTab.right == [.pinnedExtension("a"), .extensions, .addSplit])
     }
 
-    /// The developer bar: Copy, a divider, then Console, Network and Inspect (#88), then Arc's
+    /// The developer bar: the toggle and ← → ↻ on the left (the sidebar header no longer has them),
+    /// Copy, a divider, then Console, Network and Inspect (#88), then Arc's
     /// Extensions Menu before the pinned extensions and Split View (Arc 1.171, AX read 8 Nov 2026).
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/88"))
     func theDeveloperBar() {
         // Copy · divider · Console, Network, Inspect before the right end (Arc 1.170, #88).
         let dev = bar(.developer, pinned: ["a", "b"])
-        #expect(dev.left == [.toggleSidebar])
+        #expect(dev.left == [.toggleSidebar, .back(enabled: false), .forward(enabled: false), .reload(loading: false, enabled: true)])
         #expect(dev.right == [.copyURL, .divider, .console, .network, .inspect, .extensions, .pinnedExtension("a"),
                               .pinnedExtension("b"), .addSplit])
     }

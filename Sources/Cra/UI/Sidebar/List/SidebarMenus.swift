@@ -401,7 +401,7 @@ enum SidebarMenus {
         let menu = menu()
         // Arc's sidebar menu starts with the space's look, as the header's does (#170).
         if let s = store.space(space) {
-            if let header = list.header, !store.hidesSpaceHeader(space) {
+            if SidebarStore.showsSpaceHeaderRow, let header = list.header, !store.hidesSpaceHeader(space) {
                 add(menu, "Change Space Icon…") { [weak header] in if let header { actions.changeSpaceIcon(s, header) } }
                 add(menu, "Rename Space…") { [weak header] in header?.beginRename() }
             }
@@ -420,7 +420,7 @@ enum SidebarMenus {
             add(menu, action: "editSpace") { actions.editSpace(s) }
         }
         // With the header hidden (one space), its menu items live here.
-        if store.hidesSpaceHeader(space) {
+        if SidebarStore.showsSpaceHeaderRow, store.hidesSpaceHeader(space) {
             add(menu, "Show Space Header") { store.settings.showSpaceHeaderOnSingleSpace = true }
         }
         return menu

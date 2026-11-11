@@ -120,7 +120,7 @@ def activations():
     """How often Cra asked to come to the front while in the background (the test copy refuses)."""
     label = "a" + str(time.monotonic_ns())
     with commands.open("a") as file:
-        file.write("cra://debug?activations=" + label + "\n")
+        file.write("from://debug?activations=" + label + "\n")
     line = eventually(lambda: next((l for l in (folder / "browser.log").read_text(errors="replace").splitlines() if "activations " + label + ":" in l), None))
     if "active=1" in line:
         return None  # Cra is the active app already (nothing else is in front): requests aren't counted
@@ -149,8 +149,8 @@ try:
     # A new agent gets nothing until the user allows it; Cra asks once and remembers.
     asked = client.tool("tabs_list")
     check("a new agent waits for the user's answer", "asking the user to allow cra-agent" in failure(asked))
-    check("Cra asks the user", eventually(lambda: "Let \u201ccra-agent\u201d use Cra?" in window_titles(), timeout=20))
-    command("cra://debug?mcpAnswer=allow")
+    check("Cra asks the user", eventually(lambda: "Let \u201ccra-agent\u201d use From?" in window_titles(), timeout=20))
+    command("from://debug?mcpAnswer=allow")
     eventually(lambda: not client.tool("tabs_list")["result"]["isError"])
     client.close()
     client = Client()
@@ -158,17 +158,17 @@ try:
     stranger = Client("other-agent")
     stranger.tool("tabs_list")
     eventually(lambda: "other-agent" in window_titles(), timeout=20)
-    command("cra://debug?mcpAnswer=deny")
+    command("from://debug?mcpAnswer=deny")
     check("refusing an agent closes its connection", eventually(lambda: stranger.proc.poll() is not None))
     stranger = Client("other-agent")
     check("a refused agent is refused again", "didn't allow other-agent" in failure(stranger.tool("tabs_list")))
     stranger.close()
 
     check("32 tools advertised (history off)", len(client.call("tools/list")["result"]["tools"]) == 32)
-    command("cra://debug?mcpScripts=off")
+    command("from://debug?mcpScripts=off")
     eventually(lambda: len(client.call("tools/list")["result"]["tools"]) == 31)
     check("page_evaluate is off unless the user turns it on", "page_evaluate is off" in failure(client.tool("page_evaluate", tabId="x", expression="1")))
-    command("cra://debug?mcpScripts=on")
+    command("from://debug?mcpScripts=on")
     eventually(lambda: len(client.call("tools/list")["result"]["tools"]) == 32)
     def js(tab, expression):
         return value(client.tool("page_evaluate", tabId=tab, expression=expression))["result"].get("value")
@@ -373,10 +373,10 @@ try:
 
     # History: off until the user turns it on.
     check("history_search is off by default", "history_search is off" in failure(client.tool("history_search", query="agent fixture")))
-    command("cra://debug?mcpHistory=on")
+    command("from://debug?mcpHistory=on")
     found = eventually(lambda: (lambda r: r if not r["result"]["isError"] and value(r)["count"] else None)(client.tool("history_search", query="agent fixture")))
     check("history_search finds visited pages", any("agent.html" in e["url"] for e in value(found)["entries"]))
-    command("cra://debug?mcpHistory=off")
+    command("from://debug?mcpHistory=off")
 
     # Organizing tabs like the sidebar does.
     spare = value(client.tool("tab_open", url=url + "/index.html?spare"))["tabId"]
@@ -414,7 +414,7 @@ try:
     value(client.tool("tab_close", tabId=probe))
 
     # Only web pages: a browser or extension page in the sidebar is listed but out of reach.
-    command("cra://open?url=chrome://version&background=1")
+    command("from://open?url=chrome://version&background=1")
     browser_page = eventually(lambda: next((t for t in value(client.tool("tabs_list")) if t["url"].startswith("chrome://")), None))
     check("a browser page is marked as not a web page", browser_page.get("webPage") is False)
     check("agents can't work in browser pages", "isn't a web page" in failure(client.tool("page_read", tabId=browser_page["id"])))
@@ -424,7 +424,7 @@ try:
     value(client.tool("page_wait", tabId=sleepy))
     time.sleep(2.5)
     with commands.open("a") as file:
-        file.write("cra://debug?sleepTabs=1\n")
+        file.write("from://debug?sleepTabs=1\n")
     eventually(lambda: not next(t for t in value(client.tool("tabs_list")) if t["id"] == sleepy)["loaded"])
     woken = client.tool("page_read", tabId=sleepy)
     check("a sleeping tab wakes for the request that needs it", "MCP" in value(woken)["text"] and next(t for t in value(client.tool("tabs_list")) if t["id"] == sleepy)["loaded"])
@@ -441,14 +441,14 @@ try:
     check("a today tab closes", user_tab not in [t["id"] for t in value(client.tool("tabs_list"))])
 
     # The pill: Cra's toast names the agent while it acts; Stop ends every connection and MCP.
-    check("acting shows the pill with the agent's name", "mcp pill: cra-agent is using Cra" in (folder / "browser.log").read_text(errors="replace"))
-    command("cra://debug?mcpStop=1")
+    check("acting shows the pill with the agent's name", "mcp pill: cra-agent is using From" in (folder / "browser.log").read_text(errors="replace"))
+    command("from://debug?mcpStop=1")
     check("Stop disconnects agents and turns MCP off", eventually(lambda: client.proc.poll() is not None or not listening()) and eventually(lambda: not listening()))
     print("ALL " + str(len(checks)) + " CHECKS PASSED", flush=True)
 finally:
     if process.poll() is None:
         with commands.open("a") as file:
-            file.write("cra://debug?quit=1\n")
+            file.write("from://debug?quit=1\n")
         try:
             process.wait(timeout=20)
         except subprocess.TimeoutExpired:

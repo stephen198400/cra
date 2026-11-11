@@ -28,7 +28,7 @@ struct MusicNotesTests {
         "https://notspotify.com/",
         "https://spotify.com.example.org/",
         "https://example.org/?next=spotify.com",
-        "cra://settings",
+        "from://settings",
         "about:blank",
         "",
         "not a url",

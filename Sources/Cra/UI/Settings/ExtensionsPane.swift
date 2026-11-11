@@ -47,7 +47,7 @@ struct ExtensionsPane: View {
             .padding(.top, 7.5)
             if let error { SettingsFootnote(error).foregroundStyle(.red) }
             SettingsFootnote(store.settings.chromeEngine
-                             ? (extensions.needsRestart ? "Restart Cra to apply the change." : "Extensions load when Cra starts.")
+                             ? (extensions.needsRestart ? "Restart From to apply the change." : "Extensions load when From starts.")
                              : "Extensions need the Chrome engine (Advanced pane).")
         }
     }

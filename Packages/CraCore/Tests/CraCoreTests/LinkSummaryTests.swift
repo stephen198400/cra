@@ -68,7 +68,7 @@ struct LinkSummaryTests {
         #expect(LinkSummaryPolicy.canPreview(link: u("https://8.8.8.8/"), page: page))
         #expect(!LinkSummaryPolicy.canPreview(link: u("https://example.com/blog/article?x=1#comments"), page: page))
         #expect(!LinkSummaryPolicy.canPreview(link: nil))
-        for s in ["javascript:void(0)", "mailto:hello@example.com", "cra://settings", "about:blank", "file:///etc/hosts",
+        for s in ["javascript:void(0)", "mailto:hello@example.com", "from://settings", "about:blank", "file:///etc/hosts",
                   "http://localhost:3000/", "http://app.localhost/", "http://127.0.0.1:8080/", "http://127.1:8765/",
                   "http://[::1]:8765/", "http://[fe80::1]/", "http://10.0.0.1/", "http://172.16.4.2/", "http://172.31.0.1/",
                   "http://192.168.1.1/", "http://169.254.169.254/latest/meta-data", "http://100.64.0.1/", "http://0.0.0.0/",

@@ -11,8 +11,8 @@ struct MCPAgentTiles: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Add Cra to an agent").font(.system(size: 13))
-                Text("Cra writes itself into the agent’s MCP settings. Each agent asks before it uses Cra the first time.")
+                Text("Add From to an agent").font(.system(size: 13))
+                Text("From writes itself into the agent’s MCP settings. Each agent asks before it uses From the first time.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -87,7 +87,7 @@ private struct MCPAgentTile: View {
         .help(help(state, installed: installed))
         .contextMenu {
             if state == .current || state == .outdated {
-                Button("Remove Cra from \(agent.name)") { installer.remove(agent) }
+                Button("Remove From from \(agent.name)") { installer.remove(agent) }
             }
             Button("Show Settings File in Finder") { installer.reveal(agent) }
         }
@@ -116,12 +116,12 @@ private struct MCPAgentTile: View {
     }
 
     private func help(_ state: MCPEntryState, installed: Bool) -> String {
-        if !installed { return "Cra didn’t find \(agent.name) on this Mac." }
+        if !installed { return "From didn’t find \(agent.name) on this Mac." }
         switch state {
-        case .current: return "Cra is in \(agent.name)’s MCP settings."
-        case .outdated: return "\(agent.name) has Cra at another location. Click to point it at this Cra."
-        case .unreadable: return "\(agent.name)’s settings file isn’t one Cra can change safely. Copy the configuration and add it by hand."
-        case .absent: return "Add Cra to \(agent.name)’s MCP settings."
+        case .current: return "From is in \(agent.name)’s MCP settings."
+        case .outdated: return "\(agent.name) has From at another location. Click to point it at this From."
+        case .unreadable: return "\(agent.name)’s settings file isn’t one From can change safely. Copy the configuration and add it by hand."
+        case .absent: return "Add From to \(agent.name)’s MCP settings."
         }
     }
 }

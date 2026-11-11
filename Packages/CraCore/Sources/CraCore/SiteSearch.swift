@@ -207,12 +207,15 @@ public struct SiteSearch: Equatable, Sendable {
     public let url: String
     /// The pill's colour, "#RRGGBB"; nil takes the space's, as the tabs scope does.
     public let color: String?
+    /// Short words typed out in full that take Tab too ("yt", "gh"), as in the From browser.
+    public let aliases: [String]
 
-    public init(name: String, host: String, url: String, color: String?) {
+    public init(name: String, host: String, url: String, color: String?, aliases: [String] = []) {
         self.name = name
         self.host = host
         self.url = url
         self.color = color
+        self.aliases = aliases
     }
 
     public init(_ engine: ChromiumSearchEngine) {
@@ -237,6 +240,7 @@ public struct SiteSearch: Equatable, Sendable {
         guard !t.isEmpty, !t.contains(" "), !t.contains("/") else { return nil }
         let offered = keywords.filter(\.takesTab)
         if let exact = offered.first(where: { $0.keyword.lowercased() == t }) { return SiteSearch(exact) }
+        if let site = all.first(where: { $0.aliases.contains(t) }) { return site }
         if let completion, let site = all.first(where: { $0.host == completion && $0.host.hasPrefix(t) }) { return site }
         if let site = all.first(where: { $0.host.hasPrefix(t) }) { return site }
         guard t.count >= 2 else { return nil }
@@ -247,22 +251,77 @@ public struct SiteSearch: Equatable, Sendable {
     public static let all: [SiteSearch] = [
         SiteSearch(name: "Google Drive", host: "drive.google.com", url: "https://drive.google.com/drive/search?q=%s", color: "#0F9D58"),
         SiteSearch(name: "Gmail", host: "mail.google.com", url: "https://mail.google.com/mail/u/0/#search/%s", color: "#D44638"),
-        SiteSearch(name: "Google Maps", host: "maps.google.com", url: "https://www.google.com/maps/search/%s", color: "#FBBC05"),
+        SiteSearch(name: "Google Maps", host: "maps.google.com", url: "https://www.google.com/maps/search/%s", color: "#FBBC05", aliases: ["maps"]),
         SiteSearch(name: "Google Calendar", host: "calendar.google.com", url: "https://calendar.google.com/calendar/u/0/r/search?q=%s", color: "#9C27B0"),
         SiteSearch(name: "Google Docs", host: "docs.google.com", url: "https://docs.google.com/document/u/0/?q=%s", color: "#4285F4"),
         SiteSearch(name: "Dropbox", host: "dropbox.com", url: "https://www.dropbox.com/search/personal?&query=%s", color: "#007EE5"),
         SiteSearch(name: "Amazon", host: "amazon.com", url: "https://www.amazon.com/s?k=%s", color: "#FF9900"),
-        SiteSearch(name: "GitHub", host: "github.com", url: "https://github.com/search?q=%s", color: "#743FC7"),
+        SiteSearch(name: "GitHub", host: "github.com", url: "https://github.com/search?q=%s", color: "#743FC7", aliases: ["gh"]),
         SiteSearch(name: "Figma", host: "figma.com", url: "https://www.figma.com/files/search?q=%s", color: "#F24E1E"),
-        SiteSearch(name: "X", host: "x.com", url: "https://x.com/search?q=%s", color: "#000000"),
+        SiteSearch(name: "X", host: "x.com", url: "https://x.com/search?q=%s", color: "#000000", aliases: ["twitter"]),
         SiteSearch(name: "X", host: "twitter.com", url: "https://x.com/search?q=%s", color: "#000000"),
-        SiteSearch(name: "YouTube", host: "youtube.com", url: "https://www.youtube.com/results?search_query=%s", color: "#FF0000"),
-        SiteSearch(name: "Wikipedia", host: "wikipedia.org", url: "https://wikipedia.org/w/index.php?search=%s", color: "#FFA500"),
+        SiteSearch(name: "YouTube", host: "youtube.com", url: "https://www.youtube.com/results?search_query=%s", color: "#FF0000", aliases: ["yt"]),
+        SiteSearch(name: "Wikipedia", host: "wikipedia.org", url: "https://wikipedia.org/w/index.php?search=%s", color: "#FFA500", aliases: ["wiki"]),
         SiteSearch(name: "Reddit", host: "reddit.com", url: "https://www.reddit.com/search/?q=%s", color: "#FF4500"),
         SiteSearch(name: "SoundCloud", host: "soundcloud.com", url: "https://soundcloud.com/search?q=%s", color: "#F85216"),
         SiteSearch(name: "Asana", host: "asana.com", url: "https://app.asana.com/0/search?q=%s", color: "#F06A6A"),
         SiteSearch(name: "LinkedIn", host: "linkedin.com", url: "https://linkedin.com/search/results/all/?keywords=%s", color: "#0B66C2"),
         SiteSearch(name: "Apple Music", host: "music.apple.com", url: "https://music.apple.com/us/search?term=%s", color: "#FA2A44"),
         SiteSearch(name: "Spotify", host: "spotify.com", url: "https://open.spotify.com/search/%s", color: "#1DB954"),
+        // The From browser's sites that Arc's list lacks (From's SiteSearch.swift, 11 Nov 2026).
+        SiteSearch(name: "ChatGPT", host: "chatgpt.com", url: "https://chatgpt.com/?q=%s", color: "#10A37F", aliases: ["gpt", "openai"]),
+        SiteSearch(name: "Claude", host: "claude.ai", url: "https://claude.ai/new?q=%s", color: "#D97757"),
+        SiteSearch(name: "Perplexity", host: "perplexity.ai", url: "https://www.perplexity.ai/search?q=%s", color: "#20808D"),
+        SiteSearch(name: "Stack Overflow", host: "stackoverflow.com", url: "https://stackoverflow.com/search?q=%s", color: "#F48024", aliases: ["so"]),
+        SiteSearch(name: "MDN", host: "developer.mozilla.org", url: "https://developer.mozilla.org/search?q=%s", color: nil, aliases: ["mdn"]),
+        SiteSearch(name: "IMDb", host: "imdb.com", url: "https://www.imdb.com/find/?q=%s", color: "#F5C518"),
+        // Checked signed in by From, 11 Nov 2026: the account's own spaces, by name or address.
+        SiteSearch(name: "Matterport", host: "matterport.com", url: "https://my.matterport.com/search?search=%s", color: nil, aliases: ["mp"]),
+        // No search page of its own: the words ride in on the home page's fragment (`finder`).
+        SiteSearch(name: "Redfin", host: "redfin.com", url: "https://www.redfin.com/#\(redfinMark)%s", color: "#A02021", aliases: ["rf"]),
     ]
+
+    // MARK: A site with no search page (Redfin)
+
+    /// Redfin has no address that takes words: its own field asks its autocomplete and goes to
+    /// what that names, and the autocomplete answers only a page of Redfin's (asked from anywhere
+    /// else it sends you to ratelimited.redfin.com; From, 11 Nov 2026). So the words ride in on the
+    /// home page's fragment, and the page asks for them itself and goes to the first answer: an
+    /// address's home, a city, a ZIP. Nothing found, the home page stays.
+    static let redfinMark = "cra-search="
+
+    /// What a page that has just loaded is to run to go on to what its words name, or nil for
+    /// every page but Redfin's home page with words on it.
+    public static func finder(for url: URL) -> String? {
+        guard url.scheme == "https", url.host == "www.redfin.com", url.path.isEmpty || url.path == "/",
+              url.fragment?.hasPrefix(redfinMark) == true else { return nil }
+        return redfinFinder
+    }
+
+    /// Only ever to a path on the site itself, whatever the answer says.
+    private static let redfinFinder = """
+    (function () {
+      var mark = '#\(redfinMark)';
+      if (location.hostname !== 'www.redfin.com' || location.hash.indexOf(mark) !== 0) return;
+      var words = '';
+      try { words = decodeURIComponent(location.hash.slice(mark.length)).trim(); } catch (e) {}
+      history.replaceState(null, '', location.pathname + location.search);
+      if (!words) return;
+      var tries = 0;
+      (function ask() {
+        tries += 1;
+        fetch('/stingray/do/location-autocomplete?v=2&location=' + encodeURIComponent(words), { credentials: 'same-origin' })
+          .then(function (answer) { if (!answer.ok) throw new Error('turned away'); return answer.text(); })
+          .then(function (text) {
+            var payload = (JSON.parse(text.replace(/^\\{\\}&&/, '')) || {}).payload || {};
+            var found = payload.exactMatch && payload.exactMatch.url;
+            (payload.sections || []).forEach(function (section) {
+              (section.rows || []).forEach(function (row) { if (!found && row.url) found = row.url; });
+            });
+            if (typeof found === 'string' && found.charAt(0) === '/' && found.charAt(1) !== '/') location.replace(found);
+          })
+          .catch(function () { if (tries < 6) setTimeout(ask, 800); });
+      })();
+    })();
+    """
 }

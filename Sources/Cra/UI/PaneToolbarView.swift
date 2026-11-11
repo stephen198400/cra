@@ -1,9 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// Arc's toolbar above the page, in AppKit: nav buttons, the friendly URL (or the full URL in
-/// developer mode), extensions and Split View. With no tab it carries the nav buttons and a
-/// centred "Search or Enter URL…" placeholder; an empty split pane shows only that.
+/// The toolbar above the page, in AppKit, laid out like Dia's: the sidebar toggle, ← → ↻, then the
+/// address left-aligned right after them (`host / Page title`, AddressDisplay) with the bookmark star
+/// at its end, then extensions and Split View on the right (the full URL in monospace in developer
+/// mode). A click on the address or ⌘L edits it in place: the command bar attaches over it with the
+/// suggestions underneath (MainWindowController.openCommandBar). With no tab the address is
+/// "Search or Enter URL…"; an empty split pane shows only that.
 ///
 /// One bar per pane card. A tab switch points the same bar at another tab; the bar reads the
 /// store inside an observation scope and changes only the views whose state changed, so a
@@ -12,6 +15,14 @@ import SwiftUI
 final class PaneToolbarView: NSView {
     /// Between Arc's 32 pt right-hand boxes: a 36 pt pitch.
     static let rightGap: CGFloat = 4
+    /// Dia's left group: the toggle and ← → ↻ as 28 pt boxes 2 pt apart, the first starting where the
+    /// bookmarks bar's first item does, so their icons line up.
+    static let leftBox: CGFloat = 28
+    static let leftGap: CGFloat = 2
+    static var leftStart: CGFloat { BookmarksBarView.inset }
+    /// The address after the left group, and the star's box at its right end.
+    static let addressGap: CGFloat = 8
+    static let starBox: CGFloat = 28
     /// Split view: the pane's tab (nil = the window's selected tab).
     var paneTabID: UUID? { didSet { if paneTabID != oldValue { sync() } } }
     private let store: SidebarStore
@@ -32,6 +43,10 @@ final class PaneToolbarView: NSView {
         var url = ""
         var host = ""
         var path = ""
+        /// The page's title, after the host (Dia).
+        var title = ""
+        /// The page is in bookmarks.json: the star is filled.
+        var bookmarked = false
         var sidebarVisible = true
         var pinned: [Ext] = []
         /// A WebKit page's service: its extension buttons dim (none run there).
@@ -62,6 +77,19 @@ final class PaneToolbarView: NSView {
     private var left: [ToolbarGlyphButton] = []
     private var right: [NSView] = []
     private let urlButton = ToolbarURLButton()
+    /// Chrome's star at the address's right end: bookmarks the page, or removes its bookmark.
+    private let star = ToolbarGlyphButton()
+    private var bookmarkPopover: NSPopover?
+    /// The command bar lies over the address while it's edited (MainWindowController): the text and
+    /// the star step aside so nothing shows through.
+    var addressEditing = false {
+        didSet {
+            guard addressEditing != oldValue else { return }
+            urlButton.contentHidden = addressEditing
+            placeholderLabel.alphaValue = addressEditing ? 0 : 1
+            needsLayout = true
+        }
+    }
     private let placeholderLabel = NSTextField.sidebarLabel(size: 13)
     private let hairline = NSView()
     private let devDivider = NSView()
@@ -91,16 +119,16 @@ final class PaneToolbarView: NSView {
         addSubview(stripes)
         placeholderLabel.stringValue = "Search or Enter URL…"
         urlButton.action = { [weak self] in self?.editURL() }
-        urlButton.onCopy = { [weak self] in self?.copyURL() }
         urlButton.menuProvider = { [weak self] in self?.addressMenu() }
         urlButton.onCommit = { [weak self] in self?.actions.loadTyped($0) }
         urlButton.onEditingChange = { [weak self] in self?.editVeil.isHidden = !$0 }
         editVeil.wantsLayer = true
         editVeil.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.09).cgColor
-        for v in [hairline, editVeil, devDivider, devTrailingDivider, urlButton, placeholderLabel] as [NSView] {
+        for v in [hairline, editVeil, devDivider, devTrailingDivider, urlButton, placeholderLabel, star] as [NSView] {
             v.isHidden = true
             addSubview(v)
         }
+        star.action = { [weak self] in self?.toggleBookmark() }
         sync()
     }
 
@@ -173,8 +201,10 @@ final class PaneToolbarView: NSView {
             m.host = AppSettings.siteKey(for: t.url) ?? human
             // Arc shows the host only unless "Show Full URL" is on (#88).
             m.path = store.settings.toolbarShowsFullURL && human.hasPrefix(m.host) ? String(human.dropFirst(m.host.count)) : ""
+            m.title = item.displayTitle
             // An easel's bar shows its name (Arc 1.172.1).
-            if Easel.id(fromURL: t.url) != nil { m.host = item.displayTitle; m.path = "" }
+            if Easel.id(fromURL: t.url) != nil { m.host = item.displayTitle; m.path = ""; m.title = "" }
+            m.bookmarked = !t.url.isEmpty && BookmarkStore.shared.isBookmarked(url: t.url)
         }
         m.protectedMedia = m.tabID.flatMap { ui.navState(for: $0).protectedMedia }
         m.translation = m.tabID.flatMap { ui.navState(for: $0).translation }
@@ -286,14 +316,14 @@ final class PaneToolbarView: NSView {
             switch item {
             case .toggleSidebar:
                 return glyph("toggle", "sidebar.left", help: m.sidebarVisible ? "Hide Sidebar (⌘S)" : "Show Sidebar (⌘S)",
-                             width: 37, iconSize: 15.5) { $0.actions.toggleSidebar() }
+                             width: Self.leftBox, iconSize: 15.5) { $0.actions.toggleSidebar() }
             case .back(let enabled):
-                return glyph("back", "arrow.left", help: wide ? "" : "Go Back (⌘[)", enabled: enabled, width: 37, iconSize: 15) { if !wide { $0.navigate("goBack") } }
+                return glyph("back", "arrow.left", help: wide ? "" : "Go Back (⌘[)", enabled: enabled, width: Self.leftBox, iconSize: 15) { if !wide { $0.navigate("goBack") } }
             case .forward(let enabled):
-                return glyph("forward", "arrow.right", help: wide ? "" : "Go Forward (⌘])", enabled: enabled, width: 37, iconSize: 15) { if !wide { $0.navigate("goForward") } }
+                return glyph("forward", "arrow.right", help: wide ? "" : "Go Forward (⌘])", enabled: enabled, width: Self.leftBox, iconSize: 15) { if !wide { $0.navigate("goForward") } }
             case .reload(let loading, let enabled):
-                return glyph("reload", loading ? "xmark" : "arrow.clockwise", help: enabled ? "Refresh (⌘R)" : "", enabled: enabled, width: 37,
-                             iconSize: 15, animated: enabled) { if !wide { $0.navigate("reload") } }
+                return glyph("reload", loading ? "xmark" : "arrow.clockwise", help: enabled ? "Refresh (⌘R)" : "", enabled: enabled,
+                             width: Self.leftBox, iconSize: 15, animated: enabled) { if !wide { $0.navigate("reload") } }
             case .copyURL:
                 return glyph("copy", "link", help: "Copy URL (⇧⌘C)", width: 28) { $0.actions.performAction("copyURL") }
             case .divider:
@@ -356,14 +386,26 @@ final class PaneToolbarView: NSView {
         right = r
 
         if m.kind != .developer || m.tabID != old.tabID { urlButton.endEditing(commit: false) }
+        star.isHidden = m.kind != .normal || m.tabID == nil
+        if !star.isHidden {
+            star.configure(symbol: m.bookmarked ? "star.fill" : "star", image: nil,
+                           help: m.bookmarked ? "Remove Bookmark" : "Bookmark This Page (\(KeyBindingRegistry.shared.action("toggleBookmark")?.primary?.display ?? "⌘D"))",
+                           enabled: true, width: Self.starBox, iconSize: 14, tint: m.fgDim, hover: m.hover)
+        }
         switch m.kind {
-        case .normal, .developer:
+        case .normal:
+            urlButton.isHidden = false
+            placeholderLabel.isHidden = true
+            // Dia: host, then " / title" dimmed; the address's hover is a faint fill of the bar's ink.
+            let parts = AddressDisplay.parts(host: m.host, title: m.title, path: m.path)
+            urlButton.showAddress(parts, url: m.url, fg: m.fg, fgDim: m.fgDim, hover: m.fg.withAlphaComponent(0.07),
+                                  trailingReserve: Self.starBox)
+        case .developer:
             urlButton.isHidden = false
             placeholderLabel.isHidden = true
             // Arc's developer URL has no hover fill (it edits in place on a click).
-            let urlHover = m.kind == .developer ? NSColor.clear : NSColor.white.withAlphaComponent(0.08)
-            urlButton.show(host: m.host, path: m.path, url: m.url, developer: m.kind == .developer,
-                           fg: m.fg, fgDim: m.fgDim, hover: urlHover, copyHover: m.hover)
+            urlButton.show(host: m.host, path: m.path, url: m.url, developer: true,
+                           fg: m.fg, fgDim: m.fgDim, hover: .clear, copyHover: m.hover)
             urlButton.selection = m.selection
         case .noTab, .emptyPane:
             urlButton.isHidden = true
@@ -412,25 +454,14 @@ final class PaneToolbarView: NSView {
         let gapAfter = { (items: [NSView], i: Int) -> CGFloat in
             i + 1 < items.count && isBox(items[i]) && isBox(items[i + 1]) ? PaneToolbarView.rightGap : 0
         }
-        // The copy glyph goes in every pane at the width where a focused pane loses its sliders
-        // (Arc, 3-pane split): judged on that pane's full set, so all panes of a width agree.
-        var showsCopy = true
-        if m.kind == .normal {
-            let fullLeft: CGFloat = 2.5 + 3 * 37 + 6
-            let fullRight: CGFloat = (m.inSplit ? 5 + 32 + 32 + 4 : 5 + 32 + 4) + 32 + 6
-            let fullRoom = w - fullLeft - fullRight - 2 * (8 + 6)
-            showsCopy = !ToolbarRoom.plan(pins: [], reload: 37, settings: 32 + PaneToolbarView.rightGap, needed: urlButton.idealWidth(withCopy: true),
-                                          room: fullRoom).hidesSettings
-        }
-        urlButton.showsCopy = showsCopy
         var plan = ToolbarRoom.Plan()
         if m.kind == .normal {
-            let start: CGFloat = 2.5
-            let leftEnd = left.isEmpty ? 0 : start + left.reduce(0) { $0 + widthOf($1) }
+            let start = Self.leftStart
+            let leftEnd = left.isEmpty ? 0 : start + left.reduce(0) { $0 + widthOf($1) + Self.leftGap } - Self.leftGap
             // Broken into sub-expressions: newer Swift type-checkers time out on the one-liner.
             let trailingWidth: CGFloat = trailing.indices.reduce(0) { $0 + widthOf(trailing[$1]) + gapAfter(trailing, $1) }
-            let leftWidth: CGFloat = leftEnd + (left.isEmpty ? 0 : 6)
-            let room = rx - trailingWidth - 6 - leftWidth - 2 * (8 + 6)
+            let leftWidth: CGFloat = leftEnd + (left.isEmpty ? 0 : Self.addressGap)
+            let room = rx - trailingWidth - Self.addressGap - leftWidth
             // Each hidden box frees its width and the gap after it.
             let slot = { (v: NSView) -> CGFloat in
                 let i = trailing.firstIndex { $0 === v }!
@@ -444,14 +475,14 @@ final class PaneToolbarView: NSView {
         settings?.isHidden = plan.hidesSettings
         let dropped: [NSView] = Array(pins.prefix(plan.hiddenPins)) + (plan.hidesSettings ? settings.map { [$0] } ?? [] : [])
         trailing.removeAll { v in dropped.contains { $0 === v } }
-        // Left group: icons edge to edge, the first (toggle or ←) centred 21 pt from the card edge (Arc 1.171).
-        var x: CGFloat = m.kind == .emptyPane ? 1 : 2.5
+        // Left group (Dia): toggle ← → ↻, 2 pt apart, from the bookmarks bar's first item's inset.
+        var x: CGFloat = Self.leftStart
         let shownLeft = left.filter { !(plan.hidesReload && $0 === reload) }
         for b in shownLeft {
             b.frame = NSRect(x: x, y: (h - bh) / 2, width: b.width, height: bh)
-            x += b.width
+            x += b.width + Self.leftGap
         }
-        let leftEnd = shownLeft.isEmpty ? 0 : x
+        let leftEnd = shownLeft.isEmpty ? 0 : x - Self.leftGap
         for (i, v) in trailing.enumerated().reversed() {
             let bw = (v as? ToolbarGlyphButton)?.width ?? 26
             rx -= gapAfter(trailing, i) + bw
@@ -480,22 +511,26 @@ final class PaneToolbarView: NSView {
         let rightStart = rx
         // The middle, between the groups with the HStack's 6 pt spacing around it.
         let a = leftEnd + (left.isEmpty ? 0 : 6), b = rightStart - (right.isEmpty ? 0 : 6)
+        // Dia: the address starts right after the left group and runs to the right group, the star at its end.
+        let fieldStart = (left.isEmpty ? Self.leftStart : leftEnd + Self.addressGap)
+        let fieldEnd = rightStart - (right.isEmpty ? Self.leftStart : Self.addressGap)
         switch m.kind {
         case .normal:
-            // Spacer(min 8) either side, the URL centred between them.
-            let room = max(0, b - a - 2 * (8 + 6))
-            let uw = min(urlButton.idealWidth, room)
-            let ux = a + (b - a - uw) / 2
-            urlButton.frame = NSRect(x: ux, y: (h - 28) / 2, width: uw, height: 28)
+            let uw = max(0, fieldEnd - fieldStart)
+            urlButton.frame = NSRect(x: fieldStart, y: (h - 28) / 2, width: uw, height: 28)
+            star.frame = NSRect(x: urlButton.frame.maxX - Self.starBox - 1, y: (h - 26) / 2, width: Self.starBox, height: 26)
+            star.isHidden = model.tabID == nil || addressEditing || uw < Self.starBox * 2
         case .developer:
             // Arc's address field (contentPanelTextField) runs from its 8 pt lead to 7 pt before
             // Copy Link (Arc 1.170, #88); it has no hover, so only clicks and long URLs see its width.
             let start = a + 8
             urlButton.frame = NSRect(x: start, y: (h - 28) / 2, width: max(0, rightStart - 7 - start), height: 28)
         case .noTab, .emptyPane:
+            // Left-aligned where the address's text would be (Dia).
             let s = placeholderLabel.intrinsicContentSize
-            let pw = min(ceil(placeholderLabel.attributedStringValue.size().width), max(0, b - a))
-            placeholderLabel.frame = NSRect(x: a + (b - a - pw) / 2 - SidebarText.inset, y: (h - s.height) / 2,
+            let px = fieldStart + ToolbarURLButton.textInset
+            let pw = min(ceil(placeholderLabel.attributedStringValue.size().width), max(0, max(fieldEnd, b) - px))
+            placeholderLabel.frame = NSRect(x: px - SidebarText.inset, y: (h - s.height) / 2,
                                             width: pw + 2 * SidebarText.inset, height: s.height)
         }
     }
@@ -511,11 +546,71 @@ final class PaneToolbarView: NSView {
         }
     }
 
-    /// Arc: the developer bar edits its full URL in place (ContentPanelTextField, GitHub #42); every
-    /// other bar opens the command bar.
+    /// Arc: the developer bar edits its full URL in place (ContentPanelTextField, GitHub #42). Every
+    /// other bar edits its address in place too, Dia/Chrome style: the command bar attaches over it,
+    /// full URL selected, suggestions underneath.
     private func editURL() {
         if model.kind == .developer, !urlButton.isHidden { urlButton.beginEditing(); return }
-        if let id = paneTabID { actions.editPaneURL(id) } else { actions.openCommandBar(model.kind == .noTab ? .newTab : .editURL) }
+        if let id = paneTabID, model.kind != .noTab { actions.editPaneURL(id) } else { actions.openCommandBarAttached(model.kind == .noTab ? .newTab : .editURL) }
+    }
+
+    /// The address's box on screen, while it (or the no-tab "Search or Enter URL…") is shown: where the
+    /// attached command bar's field goes.
+    func addressFrameOnScreen() -> NSRect? {
+        guard let window, !isHiddenOrHasHiddenAncestor, bounds.width > 0 else { return nil }
+        let r: NSRect
+        switch model.kind {
+        case .normal: r = urlButton.frame
+        case .noTab, .emptyPane:
+            let start = placeholderLabel.frame.minX + SidebarText.inset - ToolbarURLButton.textInset
+            r = NSRect(x: start, y: (bounds.height - 28) / 2, width: max(0, bounds.width - start - Self.leftStart), height: 28)
+        case .developer: return nil
+        }
+        guard r.width > 0 else { return nil }
+        return window.convertToScreen(convert(r, to: nil))
+    }
+
+    // MARK: Bookmark star
+
+    private func toggleBookmark() {
+        guard let tab = model.tabID else { return }
+        bookmarkPopover?.close()
+        actions.toggleBookmark(tab)
+    }
+
+    /// Chrome's "Bookmark added" under the star: the name, the folder, Remove and Done. False when the
+    /// star isn't on screen (MainWindowController shows a toast instead).
+    @discardableResult
+    func showBookmarkAdded(_ id: UUID) -> Bool {
+        guard !star.isHiddenOrHasHiddenAncestor, star.window != nil, star.frame.width > 0 else { return false }
+        bookmarkPopover?.close()
+        let popover = BookmarkAddedPopover.make(bookmarkID: id)
+        bookmarkPopover = popover
+        popover.show(relativeTo: star.bounds, of: star, preferredEdge: .maxY)
+        return true
+    }
+
+    /// Scenario readout (`from://debug?toolbar=state`): the left group, the address as drawn, the star.
+    var debugState: String {
+        let keys = left.compactMap { b in buttons.first { $0.value === b }?.key }
+        let address = model.kind == .normal ? urlButton.debugText : placeholderLabel.isHidden ? "" : placeholderLabel.stringValue
+        return "left=\(keys.joined(separator: ",")) leftX=\(left.first.map { Int($0.frame.minX) } ?? -1) "
+            + "address=\"\(address)\" addressX=\(Int(urlButton.frame.minX)) addressW=\(Int(urlButton.frame.width)) "
+            + "star=\(star.isHidden ? "hidden" : model.bookmarked ? "filled" : "empty") editing=\(addressEditing) "
+            + "popover=\(bookmarkPopover?.isShown == true ? "shown" : "none")"
+    }
+
+    /// Scenario hook: a press on the star.
+    func debugPressStar() -> Bool {
+        guard !star.isHidden else { return false }
+        toggleBookmark()
+        return true
+    }
+
+    /// Scenario hook: the bookmark popover's buttons ("done", "remove") and fields.
+    func debugBookmarkPopover(_ step: String) -> String {
+        guard let popover = bookmarkPopover, popover.isShown, let vc = popover.contentViewController as? BookmarkAddedPopover else { return "none" }
+        return vc.debug(step)
     }
 
     private func copyURL() {
@@ -525,7 +620,7 @@ final class PaneToolbarView: NSView {
 
     /// Arc's menu on the toolbar address (Arc 1.172.1): Copy URL, Capture…, Capture Full Page,
     /// Manage Extensions…, then Show Full URL / Hide Full URL for the normal bar (the developer
-    /// bar always shows it) and Hide Toolbar. Arc's Share ▸ is in the Site Control Center here, and
+    /// bar always shows it). Arc's Hide Toolbar is gone: the address bar always lives here. Arc's Share ▸ is in the Site Control Center here, and
     /// Shared Quotes go through arc.net, so neither is listed.
     private func addressMenu() -> NSMenu? {
         guard model.kind == .normal || model.kind == .developer else { return nil }
@@ -536,14 +631,13 @@ final class PaneToolbarView: NSView {
         menu.addItem(ToolbarMenuAction.item("Capture Full Page", shortcut: "captureFullPage", { [weak self] in focus(); self?.actions.performAction("captureFullPage") }))
         menu.addItem(.separator())
         menu.addItem(ToolbarMenuAction.item("Manage Extensions…", { [weak self] in self?.actions.performAction("manageExtensions") }))
-        menu.addItem(.separator())
         if model.kind == .normal {
+            menu.addItem(.separator())
             let full = store.settings.toolbarShowsFullURL
             menu.addItem(ToolbarMenuAction.item(full ? "Hide Full URL" : "Show Full URL", { [weak self] in
                 self?.store.settings.toolbarShowsFullURL.toggle()
             }))
         }
-        menu.addItem(ToolbarMenuAction.item("Hide Toolbar", shortcut: "toggleToolbar", { [weak self] in self?.store.settings.showToolbar = false }))
         return menu
     }
 
@@ -711,9 +805,13 @@ final class ToolbarGlyphButton: NSView {
     override func menu(for event: NSEvent) -> NSMenu? { menuProvider?() }
 }
 
-/// The URL in the middle of the bar: Arc's Copy Current URL glyph and the host (the dimmer path
-/// after it with Show Full URL; the full URL in monospace after a lock in developer mode).
+/// The address in the bar. The page toolbar's is Dia's (`showAddress`): `host / title` from the
+/// left, the star's room kept at its end. Peek's bar keeps Arc's: the Copy Current URL glyph and the
+/// host (the dimmer path after it). Developer mode: the full URL in monospace after a lock.
 final class ToolbarURLButton: NSView, NSTextFieldDelegate {
+    /// Where Dia's address text starts inside the button; the attached command bar's field text
+    /// lines up with it.
+    static let textInset: CGFloat = 8
     var action: () -> Void = {}
     /// The link glyph's own click (Copy Current URL) and the address's right-click menu.
     var onCopy: () -> Void = {}
@@ -735,6 +833,20 @@ final class ToolbarURLButton: NSView, NSTextFieldDelegate {
     private let tip: ArcTooltipAnchorView
     private let copyTip: ArcTooltipAnchorView
     private var developer = false
+    /// Dia's address (the page toolbar): no copy glyph, text from `textInset`, `trailingReserve` kept
+    /// free at the end for the star the bar lays over it.
+    private var dia = false
+    private var trailingReserve: CGFloat = 0
+    /// The attached command bar covers the address: draw nothing under it.
+    var contentHidden = false {
+        didSet {
+            content.isHidden = contentHidden
+            tip.isHidden = contentHidden || field != nil
+            refreshFill()
+        }
+    }
+    /// The address as drawn, for scenario readouts.
+    var debugText: String { label.stringValue }
     private var hover = NSColor.white.withAlphaComponent(0.08)
     private var copyHover = NSColor.white.withAlphaComponent(0.1)
     /// Arc's normal bar (1.171, #88): the glyph is a 24 pt button of its own and the host has its
@@ -796,6 +908,7 @@ final class ToolbarURLButton: NSView, NSTextFieldDelegate {
 
     func idealWidth(withCopy: Bool) -> CGFloat {
         let text = label.attributedStringValue.size().width
+        if dia { return ceil(Self.textInset + text + Self.textInset + trailingReserve) }
         let start = Self.textStart - (withCopy ? 0 : Self.pillStart)
         return ceil(split ? start + text + Self.pillPad : 10 + iconWidth + 7 + text + 10)
     }
@@ -803,8 +916,30 @@ final class ToolbarURLButton: NSView, NSTextFieldDelegate {
     /// The glyph's own width, as SwiftUI lays an Image out; developer mode boxes it at 14 pt.
     private var iconWidth: CGFloat { developer ? 14 : ceil(icon.image?.size.width ?? 12) }
 
+    /// Dia's address: the host in `fg`, then the title (or the path) in `fgDim`, truncating at the tail.
+    func showAddress(_ parts: AddressDisplay.Parts, url: String, fg: NSColor, fgDim: NSColor, hover: NSColor, trailingReserve: CGFloat) {
+        developer = false
+        dia = true
+        split = false
+        self.trailingReserve = trailingReserve
+        self.hover = hover
+        for v in [icon, copyFill, copyTip] as [NSView] { v.isHidden = true }
+        self.url = url
+        ink = fg
+        tip.text = url
+        let s = NSMutableAttributedString(string: parts.host, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: fg])
+        s.append(NSAttributedString(string: parts.detail, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: fgDim]))
+        label.attributedStringValue = s
+        label.lineBreakMode = .byTruncatingTail
+        layer?.cornerRadius = 7
+        refreshFill()
+        needsLayout = true
+    }
+
     func show(host: String, path: String, url: String, developer: Bool, fg: NSColor, fgDim: NSColor, hover: NSColor,
               copyHover: NSColor) {
+        dia = false
+        icon.isHidden = false
         self.developer = developer
         self.hover = hover
         self.copyHover = copyHover
@@ -835,6 +970,14 @@ final class ToolbarURLButton: NSView, NSTextFieldDelegate {
         super.layout()
         content.frame = bounds
         let h = bounds.height
+        if dia {
+            tip.frame = NSRect(x: 0, y: 0, width: max(0, bounds.width - trailingReserve), height: h)
+            let lh = label.intrinsicContentSize.height
+            label.frame = NSRect(x: Self.textInset - SidebarText.inset, y: (h - lh) / 2,
+                                 width: max(0, bounds.width - 2 * Self.textInset - trailingReserve) + 2 * SidebarText.inset, height: lh)
+            field?.frame = label.frame
+            return
+        }
         if split {
             let box = Self.copyBox, y = (h - box) / 2
             copyFill.frame = NSRect(x: 0, y: y, width: box, height: box)
@@ -924,7 +1067,7 @@ final class ToolbarURLButton: NSView, NSTextFieldDelegate {
     func controlTextDidEndEditing(_ obj: Notification) { endEditing(commit: false) }
 
     private func refreshFill() {
-        layer?.backgroundColor = (!split && region != .none ? hover : .clear).cgColor
+        layer?.backgroundColor = (!split && region != .none && !contentHidden ? hover : .clear).cgColor
         copyFill.layer?.backgroundColor = (split && region == .copy ? copyHover : .clear).cgColor
         addressFill.layer?.backgroundColor = (split && region == .address ? hover : .clear).cgColor
     }

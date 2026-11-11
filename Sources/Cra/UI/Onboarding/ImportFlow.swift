@@ -180,7 +180,7 @@ final class ImportFlowModel {
                 applyingSystemOptions = true
                 systemError = nil
                 if setAsDefault && !system.isDefaultBrowser { await system.makeDefaultBrowser() }
-                if addToDock && !system.isInDock && !system.addToDock() { systemError = "Cra could not be added to the Dock." }
+                if addToDock && !system.isInDock && !system.addToDock() { systemError = "From could not be added to the Dock." }
                 if launchAtLogin != system.launchesAtLogin, let err = system.setLaunchAtLogin(launchAtLogin) { systemError = err }
                 applyingSystemOptions = false
                 // A refusal is worth reading before the step goes away.
@@ -346,8 +346,8 @@ final class ImportFlowModel {
             case .failure(let error)?:
                 // Dia's older files no longer match its sidebar: stay here rather than import them.
                 unlockError = error is CredentialImportError
-                    ? "macOS didn't unlock Dia's data. Dia encrypts your spaces and tabs, so Cra needs your computer password to bring them over."
-                    : "Cra couldn't read your Dia spaces and tabs. This version of Dia may store them differently."
+                    ? "macOS didn't unlock Dia's data. Dia encrypts your spaces and tabs, so From needs your computer password to bring them over."
+                    : "From couldn't read your Dia spaces and tabs. This version of Dia may store them differently."
                 return
             case nil: break
             }
@@ -511,7 +511,7 @@ final class ImportFlowModel {
                     if !credentialsStaged && credentialError == nil {
                         let ok = await Task.detached(priority: .userInitiated) { CredentialImport.stage(creds, profiles: profiles) }.value
                         credentialsStaged = ok
-                        if !ok { credentialError = "Cra could not save the imported passwords and cookies." }
+                        if !ok { credentialError = "From could not save the imported passwords and cookies." }
                     }
                     try? await Task.sleep(nanoseconds: 420_000_000)
                     categories[i].state = credentialsStaged ? .done : .failed
@@ -646,10 +646,8 @@ final class ImportFlowModel {
         store.updateSpace(space)
     }
 
-    var classicLayout: Bool {
-        get { store.settings.showToolbar }
-        set { store.settings.showToolbar = newValue }
-    }
+    /// The address bar is always in the toolbar (Dia): the preview draws that layout.
+    var classicLayout: Bool { true }
 
     func continueFromPersonalization() { go(.outro) }
 }
@@ -669,7 +667,7 @@ final class ImportWindowController: NSWindowController, NSWindowDelegate {
                               backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.title = firstRun ? "Welcome to Cra" : "Import"
+        window.title = firstRun ? "Welcome to From" : "Import"
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { window.standardWindowButton(b)?.isHidden = true }

@@ -12,15 +12,15 @@
 		<string>en-GB</string>
 	</array>
 	<key>CFBundleExecutable</key>
-	<string>Cra</string>
+	<string>From</string>
 	<key>CFBundleIdentifier</key>
 	<string>dk.kildahl.cra</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Cra</string>
+	<string>From</string>
 	<key>CFBundleDisplayName</key>
-	<string>Cra</string>
+	<string>From</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -91,10 +91,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>Cra internal</string>
+			<string>From internal</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>cra</string>
+				<string>from</string>
 			</array>
 		</dict>
 	</array>
@@ -117,7 +117,7 @@
 			<key>UTTypeIdentifier</key>
 			<string>dk.kildahl.cra.sidebar-item</string>
 			<key>UTTypeDescription</key>
-			<string>Cra sidebar item</string>
+			<string>From sidebar item</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>

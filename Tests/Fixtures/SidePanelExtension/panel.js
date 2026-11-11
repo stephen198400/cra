@@ -4,7 +4,7 @@ document.getElementById('close').addEventListener('click', () => window.close())
 // tabs.getCurrent() gives undefined, the worker sees no sender.tab on the panel's messages and
 // ports, and runtime.getContexts() lists the panel as SIDE_PANEL with no tab. Claude in
 // Chrome's panel refuses to start, and its worker refuses the panel's bridge, unless that holds.
-// The scenario reads `answers` (cra://debug?sidePanelJS=answers).
+// The scenario reads `answers` (from://debug?sidePanelJS=answers).
 var answers = 'pending';
 (async () => {
   const current = (await chrome.tabs.getCurrent()) ? 'tab' : 'none';

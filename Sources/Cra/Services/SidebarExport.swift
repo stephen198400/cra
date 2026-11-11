@@ -11,10 +11,10 @@ enum SidebarExport {
     static func bookmarksHTML(_ store: SidebarStore, date: Date = Date()) -> String {
         var out = """
         <!DOCTYPE NETSCAPE-Bookmark-file-1>
-        <!-- Spaces and pinned tabs exported from Cra on \(date.formatted(date: .long, time: .shortened)). -->
+        <!-- Spaces and pinned tabs exported from From on \(date.formatted(date: .long, time: .shortened)). -->
         <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
-        <TITLE>Cra Spaces</TITLE>
-        <H1>Cra Spaces</H1>
+        <TITLE>From Spaces</TITLE>
+        <H1>From Spaces</H1>
         <DL><p>
 
         """
@@ -57,7 +57,7 @@ enum SidebarExport {
         let panel = NSSavePanel()
         panel.title = "Export Spaces"
         panel.message = "Spaces, favorites and pinned tabs, as a bookmarks file any browser can import."
-        panel.nameFieldStringValue = "Cra Spaces \(Date().formatted(.iso8601.year().month().day())).html"
+        panel.nameFieldStringValue = "From Spaces \(Date().formatted(.iso8601.year().month().day())).html"
         panel.allowedContentTypes = [.html]
         panel.canCreateDirectories = true
         let html = bookmarksHTML(store)

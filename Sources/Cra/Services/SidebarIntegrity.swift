@@ -4,7 +4,7 @@ extension SidebarStore {
     /// What must hold between any two mutations: a child points back at the parent that lists
     /// it, nothing is listed twice, every item hangs under a space's container, and a window's
     /// selected tab lives in the space it is selected for. Empty when the sidebar is sound.
-    /// Scenarios check it at the end of a journey (cra://debug?checkStore=1, one fault line
+    /// Scenarios check it at the end of a journey (from://debug?checkStore=1, one fault line
     /// per problem) and the store tests after each kind of change.
     func integrityProblems() -> [String] {
         let all = items.all

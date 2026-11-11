@@ -61,7 +61,7 @@ public enum MediaLibrary {
             case .sendMessage: return "Send via iMessage"
             case .airDrop: return "AirDrop"
             case .showInFinder: return "Show in Finder"
-            case .hide: return "Hide from Cra"
+            case .hide: return "Hide from From"
             }
         }
 

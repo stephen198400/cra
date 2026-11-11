@@ -5,12 +5,12 @@
 # back first in the bar, 21 pt from the card edge like the first glyph before it (#50).
 budget rss=600 stalls50=10
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": true}
-cra://debug?windowSize=1280x800
-cra://open?url=${PAGE}?n=toolbar
+from://debug?windowSize=1280x800
+from://open?url=${PAGE}?n=toolbar
 wait 3
 snapshot PaneToolbarView toolbar-host-only
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 2
 snapshot PaneToolbarView toolbar-sidebar-hidden
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 1

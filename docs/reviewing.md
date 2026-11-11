@@ -94,7 +94,7 @@ spent on six space swipes went from about 1900 ms to 440 ms. Keep it that way.
 - **Correct in the cases that aren't the demo:** light and dark, every theme and the White and
   Black folder icon styles, 1x and 2x and moving between them, row reuse (a row taking a
   different item must drop the old one's state), empty and huge inputs, a window that isn't key.
-- **Security.** Pages never reach `cra://` actions or native APIs they shouldn't
+- **Security.** Pages never reach `from://` actions or native APIs they shouldn't
   ([SECURITY.md](../SECURITY.md)); nothing new is written outside the data folder; downloaded
   or imported data is treated as untrusted.
 - **Small enough to read.** Moving code between files is fine when the PR says so, and the

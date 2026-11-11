@@ -76,7 +76,7 @@ window hides it, `display=` the refresh rate of the display it is on). A visible
 failed page loads and crashed renderers. Each launch keeps the last one's as `*.previous.log`.
 Logs name sites by host only. Help ▸ Export Diagnostics… zips both with the GPU report,
 the displays and their refresh rates, whether Stage Manager is on, the on-screen pages' state, settings, extensions and the last week's crash reports, with
-addresses cut to their host; `cra://debug?exportDiagnostics=<path>` does the same without
+addresses cut to their host; `from://debug?exportDiagnostics=<path>` does the same without
 the save panel.
 
 ## Tests
@@ -153,7 +153,7 @@ to Markdown or `docs/` alone runs nothing.
 What none of these see: compositing (the sidebar blur), fullscreen spaces, and how real sites
 behave. Check those by hand, and say how in the PR.
 
-Scenario hooks for a command file (`cra://debug?…`): `checkStore=1` logs a fault per broken
+Scenario hooks for a command file (`from://debug?…`): `checkStore=1` logs a fault per broken
 sidebar link, `pageJS=<js>` runs script in the focused page, `installExtension=<folder>` and
 `removeExtension=<id>`, `extensionAction=<id>`, `sidePanelJS=<js>` (the value in the extension side panel's
 page, to cra.log), `fullscreen=1|0`, `appActive=1|0` (the sidebar drawn as if
@@ -186,13 +186,13 @@ Compilation happens before the running dev instance stops; bundle replacement ha
 only after it has quit. Quit any separately launched CraDev before starting another dev
 script, so it cannot overwrite a framework still in use.
 
-Cra is single-instance and the installed copy receives every `cra://` URL, so test a
+Cra is single-instance and the installed copy receives every `from://` URL, so test a
 build next to your daily Cra with its own data folder and a command file:
 
-    CRA_DATA_DIR=/tmp/cra-test CRA_COMMAND_FILE=/tmp/cra-test.cmd build/Cra.app/Contents/MacOS/Cra &
-    echo "cra://action/newTab" >> /tmp/cra-test.cmd
+    CRA_DATA_DIR=/tmp/cra-test CRA_COMMAND_FILE=/tmp/cra-test.cmd build/From.app/Contents/MacOS/From &
+    echo "from://action/newTab" >> /tmp/cra-test.cmd
 
-Every line appended to `CRA_COMMAND_FILE` is handled like a `cra://` URL, including the
+Every line appended to `CRA_COMMAND_FILE` is handled like a `from://` URL, including the
 scripting hosts below.
 
 To measure smoothness, add `CRA_HITCH_LOG=/tmp/cra-hitch.log`: every main-thread stall of
@@ -204,8 +204,8 @@ script against each.
 `CRA_TEST_BACKGROUND=1` keeps a test instance behind whatever you are using: its windows
 open at the back and it ignores every request to activate (Chromium's included). Launch it
 with `open -g -n --env …` so macOS doesn't bring it forward either. Two command-file hooks
-drive the sidebar without touching the pointer: `cra://debug?swipe=-14,22` plays a space
-swipe (22 trackpad samples of 14 pt) and `cra://debug?scroll=30,30,150,700` scrolls the
+drive the sidebar without touching the pointer: `from://debug?swipe=-14,22` plays a space
+swipe (22 trackpad samples of 14 pt) and `from://debug?scroll=30,30,150,700` scrolls the
 scroll view at x 150, y 700 of the window (from its top left) 30 pt a frame for 30 frames.
 Measure them with `sample <pid> 6 1` and compare the main thread's busy time between builds.
 
@@ -221,18 +221,18 @@ Tidy Tabs needs Apple Intelligence. `CRA_TIDY_FAKE_MODEL=1` stands in a model th
 site (after a 1.6 s pause), so a test instance on any Mac shows the button, the squiggle and the
 groups, Tidy Tab Titles names a pinned tab after its title's first part and Tidy Downloads tidies a
 download's file name by hand; `CRA_TIDY_FAKE_MODEL=off` (or `preparing`, `ineligible`) shows Settings ▸ Max as a Mac
-without Apple Intelligence would. `cra://debug?tidy=1` runs Tidy on the window's space without
-hovering the divider, `cra://debug?undoTidy=1` is ⌘Z's undo and `cra://debug?settingsPane=max`
+without Apple Intelligence would. `from://debug?tidy=1` runs Tidy on the window's space without
+hovering the divider, `from://debug?undoTidy=1` is ⌘Z's undo and `from://debug?settingsPane=max`
 opens Settings on a pane.
 
-`cra://debug?dragEnd=<text>` ends a drag of the window's tab whose URL holds the text, let go
+`from://debug?dragEnd=<text>` ends a drag of the window's tab whose URL holds the text, let go
 with nothing taking it, the way a drag out of the sidebar ends: outside every Cra window it opens
 in a new Blank Window (`&at=x,y` picks the point, from the screen's top left).
-`cra://debug?blankMoveTo=<n>` picks the nth space in the Blank Window's "Move to…".
-`cra://debug?browserWindows=<label>` logs each browser window's kind (normal, blank, incognito),
+`from://debug?blankMoveTo=<n>` picks the nth space in the Blank Window's "Move to…".
+`from://debug?browserWindows=<label>` logs each browser window's kind (normal, blank, incognito),
 space, tabs, open tab and frame; cra.log gets the kinds and counts only.
 
-`cra://debug?menuAt=315,24` opens the menu a click at that window point would open (the
+`from://debug?menuAt=315,24` opens the menu a click at that window point would open (the
 developer-mode ⌄ here), and `&button=right` the context menu, a tab row's for instance.
 `&target=little` aims at the newest Little Window instead (its profile chip, for one).
 Posted mouse events don't reach Cra's views and the rows have no AX menu action, so this is
@@ -271,15 +271,15 @@ the installed Cra's ids, CraClip, a running app or anything changed in the last 
 
 ## Scripting hooks
 
-Cra registers the `cra://` scheme so it can be driven from a shell:
+Cra registers the `from://` scheme so it can be driven from a shell:
 
-    open "cra://action/newTab"              # any action id from KeyBindings.swift
-    open "cra://commandbar?query=github"    # open the command bar with text
-    open "cra://open?url=https://example.com&background=1"   # a tab behind; Cra stays where it is
-    open "cra://open?url=https://example.com&little=1"   # in a Little Window
-    open "cra://open?url=https://example.com&space=<space id>"   # in that space (its id in sidebar.json)
-    open "cra://import?source=arc&archive=1&settings=1"  # headless import
-    open "cra://dismiss"                    # close sheets, command bar, find bar
+    open "from://action/newTab"              # any action id from KeyBindings.swift
+    open "from://commandbar?query=github"    # open the command bar with text
+    open "from://open?url=https://example.com&background=1"   # a tab behind; Cra stays where it is
+    open "from://open?url=https://example.com&little=1"   # in a Little Window
+    open "from://open?url=https://example.com&space=<space id>"   # in that space (its id in sidebar.json)
+    open "from://import?source=arc&archive=1&settings=1"  # headless import
+    open "from://dismiss"                    # close sheets, command bar, find bar
 
 Links from other apps and browsers only reach `commandbar`, `dismiss` and `open` with an
 http(s) URL; pages inside Cra reach none of them. The rest (`action`, `navigate`, `key`,
@@ -289,7 +289,7 @@ http(s) URL; pages inside Cra reach none of them. The rest (`action`, `navigate`
 
 ## Rendering calibration
 
-`open "cra://debug?lift=0&liftInactive=0.75&alpha=1&material=13&state=follows&appearance=dark"`
+`open "from://debug?lift=0&liftInactive=0.75&alpha=1&material=13&state=follows&appearance=dark"`
 changes the vibrancy parameters live (see `Sources/Cra/UI/Tuning.swift`). `material` is the
 raw `NSVisualEffectView.Material` value, `alpha` scales the gradient opacity.
 

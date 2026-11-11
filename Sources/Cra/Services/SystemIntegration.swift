@@ -87,7 +87,7 @@ final class SystemIntegration {
         do {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             if on && SMAppService.mainApp.status == .requiresApproval {
-                return "Allow Cra in System Settings ▸ General ▸ Login Items."
+                return "Allow From in System Settings ▸ General ▸ Login Items."
             }
             return nil
         } catch {

@@ -191,7 +191,7 @@ final class AppleScriptTabWrapper: NSObject {
     @objc func executeJavascript(_ command: NSScriptCommand) -> Any? {
         guard store?.settings.allowAppleEventsJavaScript == true else {
             command.scriptErrorNumber = -1723  // errAEAccessorNotFound's neighbour: "access not allowed"
-            command.scriptErrorString = "Executing JavaScript through AppleScript is turned off. To turn it on, choose View ▸ Developer ▸ Allow JavaScript from Apple Events in Cra."
+            command.scriptErrorString = "Executing JavaScript through AppleScript is turned off. To turn it on, choose View ▸ Developer ▸ Allow JavaScript from Apple Events in From."
             return nil
         }
         guard let js = command.evaluatedArguments?["javascript"] as? String, let browser else {

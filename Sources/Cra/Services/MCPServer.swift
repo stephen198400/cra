@@ -224,11 +224,11 @@ final class MCPServer {
         switch MCPAgents.decision(for: id, in: agents) {
         case true?: return true
         case false?:
-            completion(MCPProtocol.content("The user didn't allow \(display) to use Cra. They can change that in Settings ▸ Advanced.", failed: true))
+            completion(MCPProtocol.content("The user didn't allow \(display) to use From. They can change that in Settings ▸ Advanced.", failed: true))
             return false
         case nil:
             ask(id: id, name: display, via: peer.via)
-            completion(MCPProtocol.content("Cra is asking the user to allow \(display). Wait for their answer, then try again.", failed: true))
+            completion(MCPProtocol.content("From is asking the user to allow \(display). Wait for their answer, then try again.", failed: true))
             return false
         }
     }
@@ -236,7 +236,7 @@ final class MCPServer {
     private func ask(id: String, name: String, via: String) {
         guard asking[id] == nil else { return }
         let from = via.isEmpty ? "" : " It's asking from \(via)."
-        let dialog = AppDialog(title: "Let \u{201C}\(name)\u{201D} use Cra?",
+        let dialog = AppDialog(title: "Let \u{201C}\(name)\u{201D} use From?",
                                message: "While it runs, it can open tabs, read your pages and act in them, signed in as you.\(from) You can take this back in Settings ▸ Advanced.",
                                actions: [DialogAction("Allow"), DialogAction("Don\u{2019}t Allow", role: .cancel)])
         asking[id] = dialog
@@ -257,7 +257,7 @@ final class MCPServer {
         dialog.present(over: window, completion: answer)
     }
 
-    /// Answers the open approval prompt as the user would (cra://debug?mcpAnswer=allow|deny, test copies).
+    /// Answers the open approval prompt as the user would (from://debug?mcpAnswer=allow|deny, test copies).
     func answerPrompt(allow: Bool) {
         asking.values.first?.select(allow ? 0 : 1)
     }
@@ -543,7 +543,7 @@ final class MCPServer {
         let now = ContinuousClock.now
         if let last = pillShown[window.windowID], now - last < .seconds(3) { return }
         pillShown[window.windowID] = now
-        let text = "\(agent) is using Cra"
+        let text = "\(agent) is using From"
         CraLog.note("mcp pill: \(text)")
         window.showToast(text, action: ShinyToast.Action(title: "Stop") { [weak self] in self?.stopFromPill() })
     }
@@ -629,7 +629,7 @@ final class MCPServer {
     private func tabMove(_ id: UUID, _ arguments: [String: Any], completion: @escaping ([String: Any]) -> Void) {
         guard let app else { return }
         let store = app.store
-        guard store.splitContaining(id) == nil else { completion(MCPProtocol.content("This tab is in a split; move the split in Cra.", failed: true)); return }
+        guard store.splitContaining(id) == nil else { completion(MCPProtocol.content("This tab is in a split; move the split in From.", failed: true)); return }
         var sid = store.spaceID(ofItem: id) ?? store.focusedSpaceID(window: nil)
         if let name = arguments["space"] as? String {
             let found = space(named: name, window: nil)

@@ -1,9 +1,9 @@
 import CraCore
 import Testing
 
-/// What a `cra://` URL brings to the front before it runs.
+/// What a `from://` URL brings to the front before it runs.
 struct InternalURLRaiseTests {
-    /// `cra://open?url=…&background=1` adds the tab without switching to it, so Cra stays behind
+    /// `from://open?url=…&background=1` adds the tab without switching to it, so Cra stays behind
     /// the app in use. It came to the front anyway, showing the tab that was already open.
     @Test(arguments: [false, true])
     func aBackgroundOpenLeavesCraWhereItIs(littleWindowIsKey: Bool) {

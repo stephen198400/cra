@@ -7,6 +7,6 @@ env CRA_SHARING_ENDPOINT=${ORIGIN}
 expect-log sharing: stats off, crash reports ask
 wait 33
 reject-log sharing: usage stats sent
-cra://debug?sharing=on
+from://debug?sharing=on
 wait 3
 expect-log sharing: usage stats sent

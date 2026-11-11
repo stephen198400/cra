@@ -42,7 +42,7 @@ struct PeekTriggerTests {
     @Test func settingsAndSchemes() {
         #expect(!Self.opens(Self.other) { $0.peekLinksToOtherSites = false })
         #expect(!Self.opens("file:///tmp/a.html", newTab: true))
-        #expect(!Self.opens("cra://settings", shift: true))
+        #expect(!Self.opens("from://settings", shift: true))
     }
 
     /// Inside the Peek (GitHub #202).
@@ -57,7 +57,7 @@ struct PeekTriggerTests {
         // Pages a tab can't take without the opener, or that a page must not open.
         #expect(!PeekTrigger.leavesPeek("about:blank", shiftClick: false, newTab: true))
         #expect(!PeekTrigger.leavesPeek("", shiftClick: false, newTab: true))
-        #expect(!PeekTrigger.leavesPeek("cra://settings", shiftClick: false, newTab: true))
+        #expect(!PeekTrigger.leavesPeek("from://settings", shiftClick: false, newTab: true))
         #expect(!PeekTrigger.leavesPeek("javascript:alert(1)", shiftClick: false, newTab: true))
     }
 }

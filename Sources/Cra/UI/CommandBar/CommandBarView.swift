@@ -9,7 +9,15 @@ import SwiftUI
 final class CommandBarView: NSView {
     static let rowHeight: CGFloat = 46
     static let fieldHeight: CGFloat = 64
-    static func height(forRows n: Int) -> CGFloat { fieldHeight + (n == 0 ? 0 : CGFloat(n) * rowHeight + CGFloat(n - 1) * 4 + 18) }
+    /// The toolbar's attached bar (Dia/Chrome's address dropdown): the field sits over the toolbar's
+    /// address, a little taller than its 28 pt, and the rows hang under it, tighter than the floating bar's.
+    static let attachedFieldHeight: CGFloat = 36
+    static let attachedRowHeight: CGFloat = 34
+    static func height(forRows n: Int, attached: Bool = false) -> CGFloat {
+        attached
+            ? attachedFieldHeight + (n == 0 ? 0 : CGFloat(n) * attachedRowHeight + CGFloat(n - 1) * 2 + 12)
+            : fieldHeight + (n == 0 ? 0 : CGFloat(n) * rowHeight + CGFloat(n - 1) * 4 + 18)
+    }
 
     private let controller: CommandBarController
     private let favicons: FaviconCache
@@ -146,8 +154,9 @@ final class CommandBarView: NSView {
         let c = controller
         let items = c.result.items
         let dark = self.dark
-        text.update()
         attached = c.attached
+        text.fontSize = attached ? 13 : 18
+        text.update()
         // Arc 1.172.1 live: a neutral dark panel, (48,48,48)–(51,50,50) over light pages; Cra's hudWindow
         // material under this tint (white ≈ 0.5 through 3 %) comes to ≈ (48,47,47).
         material.material = dark ? .hudWindow : .popover
@@ -258,14 +267,16 @@ final class CommandBarView: NSView {
         if let splash, let window { splash.setFrame(window.frame.insetBy(dx: -Self.splashMargin, dy: -Self.splashMargin), display: false) }
         material.frame = b
         tint.frame = b
-        let top: CGFloat = card?.top ?? (attached ? 10 : 12)
-        let path = Self.path(b, top: top, bottom: card?.bottom ?? 12)
+        let top: CGFloat = card?.top ?? (attached ? 8 : 12)
+        let path = Self.path(b, top: top, bottom: card?.bottom ?? (attached ? 10 : 12))
         shape.frame = b
         shape.path = path
         border.frame = b
         border.path = path
         // The magnifier and row favicons share a centre; input and result titles align.
-        let fh = Self.fieldHeight
+        let fh = attached ? Self.attachedFieldHeight : Self.fieldHeight
+        // Attached, the field's text starts where the toolbar's address text was: no leading glyph.
+        leadingIcon.isHidden = attached
         let icon = leadingIcon.frame.size
         leadingIcon.frame = NSRect(x: 21 + (22 - icon.width) / 2, y: (fh - icon.height) / 2, width: icon.width, height: icon.height)
         var right = b.width - 22
@@ -291,7 +302,7 @@ final class CommandBarView: NSView {
             hint.frame = NSRect(x: right - hw - SidebarText.inset, y: (fh - hh) / 2, width: hw + 2 * SidebarText.inset, height: hh)
             right -= hw + 14
         }
-        var x: CGFloat = 10 + 10 + 24 + 8
+        var x: CGFloat = attached ? 12 : 10 + 10 + 24 + 8
         if !pill.isHidden {
             // 23 tall, fully round, 10.5 pt around the name; the field starts 11 pt after it.
             let lw = ceil(pillLabel.attributedStringValue.size().width), lh = pillLabel.intrinsicContentSize.height
@@ -300,18 +311,20 @@ final class CommandBarView: NSView {
             pillLabel.frame = NSRect(x: 10.5 - SidebarText.inset, y: (23 - lh) / 2, width: lw + 2 * SidebarText.inset, height: lh)
             x = pill.frame.maxX + 11
         }
-        text.field.frame = NSRect(x: x - 1.5, y: (fh - 30) / 2 + 3, width: max(0, right - x), height: 30)
+        let th: CGFloat = attached ? 20 : 30
+        text.field.frame = NSRect(x: x - 1.5, y: (fh - th) / 2 + (attached ? 1 : 3), width: max(0, right - x), height: th)
         if let card {
             // A hairline: one pixel.
             let px = 1 / (window?.backingScaleFactor ?? 2)
             divider.frame = NSRect(x: card.dividerInset, y: fh - px, width: max(0, b.width - 2 * card.dividerInset), height: px)
         } else {
-            divider.frame = NSRect(x: 16, y: fh, width: max(0, b.width - 32), height: 1)
+            divider.frame = NSRect(x: attached ? 10 : 16, y: fh, width: max(0, b.width - (attached ? 20 : 32)), height: 1)
         }
-        var y: CGFloat = fh + 6
+        var y: CGFloat = fh + (attached ? 5 : 6)
+        let rh = attached ? Self.attachedRowHeight : Self.rowHeight, inset: CGFloat = attached ? 6 : 10
         for r in rows where !r.isHidden {
-            r.frame = NSRect(x: 10, y: y, width: b.width - 20, height: Self.rowHeight)
-            y += Self.rowHeight + 4
+            r.frame = NSRect(x: inset, y: y, width: b.width - 2 * inset, height: rh)
+            y += rh + (attached ? 2 : 4)
         }
         // Arc: 60 pt at the bottom, edge to edge under the outline, in the last row's place.
         let nh = CGFloat(SearchSuggestionsNotice.bannerHeight)
@@ -670,7 +683,7 @@ private final class SearchSuggestionsBannerView: NSView {
         for b in [settings, dismiss] { b.set(fill: CommandBarView.ink(tones.noticeButtonFill), outline: CommandBarView.ink(tones.noticeButtonOutline)) }
     }
 
-    private static let lead = "Learn more about your data on Cra "
+    private static let lead = "Learn more about your data on From "
 
     func debugPress(_ name: String) -> Bool {
         switch name {

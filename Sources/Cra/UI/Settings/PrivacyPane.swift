@@ -29,14 +29,14 @@ struct PrivacyPane: View {
                 SettingsCardDivider()
                 // Not in Arc: Cra's Chromium (fingerprinting-protection.patch).
                 SettingsToggleRow("Fingerprinting protection",
-                                  detail: "Sites that tell browsers apart by reading back drawings, 3D graphics or sound get faint noise in what they read, different for each site and each time Cra opens. Sites also see 8 processor cores.",
+                                  detail: "Sites that tell browsers apart by reading back drawings, 3D graphics or sound get faint noise in what they read, different for each site and each time From opens. Sites also see 8 processor cores.",
                                   isOn: $store.settings.fingerprintingProtection)
             }
 
             SettingsHeader("Connections").padding(.top, 20)
             SettingsFeatureCard {
                 SettingsToggleRow("Always use secure connections",
-                                  detail: "Pages load over HTTPS. Before opening a site that doesn’t support it, Cra warns you first.",
+                                  detail: "Pages load over HTTPS. Before opening a site that doesn’t support it, From warns you first.",
                                   isOn: $store.settings.httpsOnly)
                 SettingsCardDivider()
                 SecureDNSRows(error: $dnsError, footnote: dnsFootnote)
@@ -50,16 +50,16 @@ struct PrivacyPane: View {
                                    trailing: { Button("Clear…") { actions.openURL(BrowsingDataClear.pageURL) } })
                 SettingsCardDivider()
                 SettingsToggleRow("Share anonymous usage stats",
-                                  detail: "Once a day: your Cra and macOS versions, the kind of Mac, rough counts of spaces, tabs and extensions, and which settings you changed. Never the sites you visit, what you search or anything on a page. Each report has a new random ID, so reports can’t be tied together or to you.",
+                                  detail: "Once a day: your From and macOS versions, the kind of Mac, rough counts of spaces, tabs and extensions, and which settings you changed. Never the sites you visit, what you search or anything on a page. Each report has a new random ID, so reports can’t be tied together or to you.",
                                   isOn: $store.settings.shareUsageStats) {
                     HStack(spacing: 12) {
                         Button("Show What’s Sent") { SharingService.shared.showStats() }
-                        Link("How Cra handles your data", destination: URL(string: SiteLinks.tagged("https://crabrowser.app/privacy", from: .privacy))!)
+                        Link("How From handles your data", destination: URL(string: SiteLinks.tagged("https://crabrowser.app/privacy", from: .privacy))!)
                     }
                 }
                 SettingsCardDivider()
                 SettingsPlainRow("Crash reports",
-                                   detail: "A report shows what Cra was doing when it crashed, without your name, file paths or anything that identifies this Mac.",
+                                   detail: "A report shows what From was doing when it crashed, without your name, file paths or anything that identifies this Mac.",
                                    trailing: { EmptyView() }) {
                     Picker("Crash reports", selection: $store.settings.crashReports) {
                         Text("Ask each time").tag(CrashReportChoice.ask)
@@ -138,7 +138,7 @@ private struct SecureDNSRows: View {
                 return
             }
             editingCustom = false
-            if let prefs = SecureDNSPrefs(new), !dns.apply(prefs) { error = "Cra couldn’t change secure DNS." }
+            if let prefs = SecureDNSPrefs(new), !dns.apply(prefs) { error = "From couldn’t change secure DNS." }
         })
     }
 
@@ -152,7 +152,7 @@ private struct SecureDNSRows: View {
             editingCustom = false
             customText = prefs.templates
         } else {
-            error = "Cra couldn’t change secure DNS."
+            error = "From couldn’t change secure DNS."
         }
     }
 }

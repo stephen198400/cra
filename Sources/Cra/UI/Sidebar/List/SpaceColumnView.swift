@@ -204,7 +204,7 @@ final class SpaceHeaderView: NSView, NSTextFieldDelegate {
             blank = space.standaloneWindowID != nil
             colors = SidebarColors(space.theme.palette)
             collapsed = store.isPinnedCollapsed(spaceID)
-            hide = store.hidesSpaceHeader(spaceID)
+            hide = !SidebarStore.showsSpaceHeaderRow || store.hidesSpaceHeader(spaceID)
             _ = ui.renamingSpaceID
         } onChange: { [weak self] in
             Task { @MainActor in
@@ -1234,7 +1234,7 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
     private var hoveredCell: Int? { didSet { if hoveredCell != oldValue { ArcTooltipController.shared.mouseExited(self) } } }
     private var hovering = false { didSet { if hovering != oldValue { refresh() } } }
     private var press: NSEvent?
-    /// Scenarios (cra://debug?hover=FavoriteTileView,n): the tile as the pointer leaves it hovered (#293).
+    /// Scenarios (from://debug?hover=FavoriteTileView,n): the tile as the pointer leaves it hovered (#293).
     func debugHover() { hovering = true }
 
     init(itemID: UUID, spaceID: UUID, grid: FavoritesGridView) {

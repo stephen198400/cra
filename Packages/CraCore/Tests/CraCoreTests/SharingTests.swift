@@ -188,27 +188,28 @@ struct SharingTests {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
     @Test func theFirstLookOnlyMarksWhereToStart() {
-        let files = [CrashReports.File(name: "Cra-2026-11-01-120000.ips", modified: t0.addingTimeInterval(-60))]
+        let files = [CrashReports.File(name: "From-2026-11-01-120000.ips", modified: t0.addingTimeInterval(-60))]
         let r = CrashReports.pending(files, seenUntil: nil, now: t0)
         #expect(r.send.isEmpty)
         #expect(r.seenUntil == t0)
     }
 
     @Test func newCraReportsAreFoundNewestFirstAtMostFive() {
-        var files = (0..<7).map { CrashReports.File(name: "Cra Helper (Renderer)-\($0).ips", modified: t0.addingTimeInterval(Double($0 + 1))) }
+        var files = (0..<7).map { CrashReports.File(name: "From Helper (Renderer)-\($0).ips", modified: t0.addingTimeInterval(Double($0 + 1))) }
         files.append(.init(name: "Craft-2026-11-01.ips", modified: t0.addingTimeInterval(30)))
-        files.append(.init(name: "Cra-old.ips", modified: t0.addingTimeInterval(-1)))
-        files.append(.init(name: "Cra-main.ips", modified: t0.addingTimeInterval(20)))
-        files.append(.init(name: "Cra-notes.txt", modified: t0.addingTimeInterval(20)))
+        files.append(.init(name: "Cra-2026-11-01.ips", modified: t0.addingTimeInterval(30)))
+        files.append(.init(name: "From-old.ips", modified: t0.addingTimeInterval(-1)))
+        files.append(.init(name: "From-main.ips", modified: t0.addingTimeInterval(20)))
+        files.append(.init(name: "From-notes.txt", modified: t0.addingTimeInterval(20)))
         let r = CrashReports.pending(files, seenUntil: t0, now: t0.addingTimeInterval(100))
-        #expect(r.send == ["Cra-main.ips", "Cra Helper (Renderer)-6.ips", "Cra Helper (Renderer)-5.ips",
-                           "Cra Helper (Renderer)-4.ips", "Cra Helper (Renderer)-3.ips"])
+        #expect(r.send == ["From-main.ips", "From Helper (Renderer)-6.ips", "From Helper (Renderer)-5.ips",
+                           "From Helper (Renderer)-4.ips", "From Helper (Renderer)-3.ips"])
         #expect(r.seenUntil == t0.addingTimeInterval(100))
     }
 
     @Test func aMainProcessCrashIsCraQuitting() {
-        #expect(CrashReports.isAppQuit("Cra-2026-11-10-120000.ips"))
-        #expect(!CrashReports.isAppQuit("Cra Helper (GPU)-2026-11-10-120000.ips"))
+        #expect(CrashReports.isAppQuit("From-2026-11-10-120000.ips"))
+        #expect(!CrashReports.isAppQuit("From Helper (GPU)-2026-11-10-120000.ips"))
     }
 
     private func fixture() throws -> String {

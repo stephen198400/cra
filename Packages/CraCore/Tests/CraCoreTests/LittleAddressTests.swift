@@ -31,7 +31,7 @@ struct LittleAddressTests {
     /// (Arc shows it too), an internal page, a file.
     @Test func leavesPagesWithoutAHostToTheCaller() {
         for url in ["about:blank", "chrome://version", "file:///Users/me/notes.html", "view-source:https://example.com/",
-                    "data:text/html,hello", "cra://settings", "", "https:///path"] {
+                    "data:text/html,hello", "from://settings", "", "https:///path"] {
             #expect(LittleAddress.host(of: url) == nil, "\(url)")
         }
     }

@@ -2,10 +2,10 @@
 # Launch the built app three times on a throwaway data folder (no pages, a page opened, the page
 # restored) and quit it each time like ⌘Q, just after a settings write or resize. Fails if it dies, hangs,
 # exits with an error or leaves a crash report: the only check that sees a CHECK inside Chromium.
-#   Tests/smoke-launch.sh [path/to/Cra.app]     (default build/Cra.app)
+#   Tests/smoke-launch.sh [path/to/From.app]     (default build/From.app)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-APP="${1:-build/Cra.app}"
+APP="${1:-build/From.app}"
 EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
 TEST_DIR="$(mktemp -d /tmp/cra-smoke.XXXXXX)"
 DATA="$TEST_DIR/data"
@@ -69,10 +69,10 @@ run() {
     sleep 0.5
   done
   [ -e "$TEST_DIR/commands" ] || fail "launch $n ($what): not ready after 60 s"
-  [ "$what" = "opens a page" ] && echo "cra://open?url=file://$TEST_DIR/page.html" >> "$TEST_DIR/commands"
+  [ "$what" = "opens a page" ] && echo "from://open?url=file://$TEST_DIR/page.html" >> "$TEST_DIR/commands"
   sleep 8
   kill -0 "$PID" 2>/dev/null || fail "launch $n ($what): the app died before quitting"
-  echo "cra://debug?windows=1" >> "$TEST_DIR/commands"
+  echo "from://debug?windows=1" >> "$TEST_DIR/commands"
   for _ in $(seq 50); do
     grep -q 'Cra windows: MainWindowController' "$TEST_DIR/run-$n.log" && break
     sleep 0.1
@@ -87,7 +87,7 @@ assert match, "No browser window"
 assert numbers(match[1]) == numbers(expected), (expected, match[1])
 PY
   # A settings write just before quitting (#36 crashed on one at quit).
-  echo "cra://action/toggleToolbar" >> "$TEST_DIR/commands"
+  echo "from://action/toggleBookmarksBar" >> "$TEST_DIR/commands"
   sleep 0.3
   if [ "$n" = 2 ]; then
     # Both commands run in the same poll, before the 300 ms frame debounce.
@@ -99,7 +99,7 @@ x, y, width, height = [float(n) for n in re.findall(r"-?[0-9]+(?:\.[0-9]+)?", va
 print(f"{max(640, width - 87):g}x{max(420, height - 53):g}")
 PY
 )
-    printf '%s\n' "cra://debug?windowSize=$resized" 'cra://debug?quit=1' >> "$TEST_DIR/commands"
+    printf '%s\n' "from://debug?windowSize=$resized" 'from://debug?quit=1' >> "$TEST_DIR/commands"
   else
     "$TEST_DIR/quit" "$PID" || fail "launch $n ($what): the app did not take the quit event"
   fi

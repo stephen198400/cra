@@ -28,14 +28,14 @@ public enum UpdateNotice: Equatable, Sendable {
     public var title: String {
         switch self {
         case .ready: "An update is ready!"
-        case .available: "New Cra Version Available"
+        case .available: "New From Version Available"
         }
     }
 
     public var subtitle: String {
         switch self {
         case .ready: "Click to restart"
-        case .available(let version): "Cra \(version)"
+        case .available(let version): "From \(version)"
         }
     }
 

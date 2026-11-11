@@ -82,7 +82,7 @@ features ship and there are real examples to point at
 You need macOS 14+ on Apple silicon, Xcode 16+ and CMake (`brew install cmake`). With
 [just](https://just.systems) (`brew install just`), `just` lists every script with what it
 does, and `just build debug` runs `scripts/build.sh debug`.
-[docs/development.md](docs/development.md) has the code layout, the `cra://` scripting
+[docs/development.md](docs/development.md) has the code layout, the `from://` scripting
 hooks and how to run a test instance next to your daily Cra.
 
 ## Sending a change

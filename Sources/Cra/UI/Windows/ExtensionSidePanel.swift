@@ -206,7 +206,7 @@ final class ExtensionSidePanelController: NSObject, @preconcurrency CraBrowserDe
         pageTarget = (info?["targetInfo"] as? [String: Any])?["targetId"] as? String
     }
 
-    /// cra://debug?sidePanelJS=: the expression's value in the panel page, to cra.log.
+    /// from://debug?sidePanelJS=: the expression's value in the panel page, to cra.log.
     func debugEvaluate(_ expression: String) {
         guard let browser,
               let data = try? JSONSerialization.data(withJSONObject: ["expression": expression, "returnByValue": true]),

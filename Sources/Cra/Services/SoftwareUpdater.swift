@@ -52,7 +52,7 @@ final class SoftwareUpdater: NSObject {
     /// The first launch after an update: "Cra Updated!" with See What's New.
     private(set) var updatedTo: String?
     func debugUpdated(_ v: String?) { updatedTo = v }
-    /// Shows the "An update is ready!" banner for `version` (screenshots, cra://debug?bannerReady=).
+    /// Shows the "An update is ready!" banner for `version` (screenshots, from://debug?bannerReady=).
     func debugReady(_ version: String?) { readyRelease = version.map { Release(version: $0, build: $0) } }
     /// The close button on a banner hides it until the next launch (Arc counts these in
     /// autoUpdateBannerDismissalCount).

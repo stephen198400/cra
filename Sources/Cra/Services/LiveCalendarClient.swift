@@ -100,7 +100,7 @@ final class LiveCalendarClient {
         for run in waiting.removeValue(forKey: k) ?? [] { run() }
     }
 
-    /// Testing without a sign-in (cra://debug?calendarPreview=…): the events as if fetched.
+    /// Testing without a sign-in (from://debug?calendarPreview=…): the events as if fetched.
     func setDemo(_ events: [CalendarPreview.Event], favorite: String, profilePath: String?) {
         guard let embed = CalendarPreview.embedURL(for: favorite) else { return }
         states[Self.key(embed, profilePath)] = State(events: events, fetched: Date())

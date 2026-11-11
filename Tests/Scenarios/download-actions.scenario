@@ -5,22 +5,22 @@
 # promise: #272
 home
 budget rss=600 stalls50=5
-cra://open?url=${TRICKLE}/trickle.bin
+from://open?url=${TRICKLE}/trickle.bin
 wait 2
-cra://debug?downloadState=started
+from://debug?downloadState=started
 expect-log download state started: running=true progress=0.007 rows=\["66 KB of 10 MB
-cra://debug?download=pause
+from://debug?download=pause
 expect-log download control: pause
 wait 1
-cra://debug?downloadState=paused
+from://debug?downloadState=paused
 expect-log download state paused: running=true progress=0.007 rows=\["Paused"\]
-cra://debug?download=resume
+from://debug?download=resume
 expect-log download control: resume
 wait 1
-cra://debug?downloadState=resumed
+from://debug?downloadState=resumed
 expect-log download state resumed: running=true progress=0.007 rows=\["66 KB of 10 MB
-cra://debug?download=cancel
+from://debug?download=cancel
 expect-log download control: cancel
 wait 1
-cra://debug?downloadState=cancelled
+from://debug?downloadState=cancelled
 expect-log download state cancelled: running=false progress=none rows=\["Cancelled"\]

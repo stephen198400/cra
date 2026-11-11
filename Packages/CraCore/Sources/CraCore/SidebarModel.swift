@@ -526,15 +526,19 @@ public struct AppSettings: Codable, Equatable {
     /// this mark move it back above, where Arc has it, once.
     public var newTabButtonDefaultMigrated: Bool = true
     public var showStatusBar: Bool = true
-    /// Arc's toolbar above the page (URL, copy link, DevTools). ⇧⌘D toggles. Off by
-    /// default like Arc, which keeps the URL at the top of the sidebar.
-    public var showToolbar: Bool = false
-    /// Cra 0.1.0 saved `showToolbar` as on for everyone; settings without this mark
-    /// take the toolbar from Arc's own preference once (off without Arc).
+    /// The toolbar above the page (sidebar toggle, ← → ↻, the address, extensions). In this fork
+    /// the address bar lives there, Dia/Chrome style: always on, and settings.json files saved
+    /// with it off (Arc's sidebar address) read as on (`AppSettings.addressBarInToolbar`).
+    public var showToolbar: Bool = true
+    /// Cra 0.1.0 saved `showToolbar` as on for everyone; settings without this mark went through
+    /// a one-time migration that read Arc's preference. Kept so the files keep their shape.
     public var toolbarDefaultMigrated: Bool = true
     /// Arc's "Show Full URL" on the toolbar address's menu (toolbarShowFullURLsEnabledPreference):
     /// the normal bar shows the host and the dimmer path. Off like Arc, which shows the host only.
     public var toolbarShowsFullURL: Bool = false
+    /// Chrome's bookmarks bar (View ▸ Show Bookmarks Bar, ⇧⌘B): a row of bookmarks under the toolbar,
+    /// or at the top of the page card when the address is in the sidebar. Not in Arc; on by default.
+    public var showBookmarksBar: Bool = true
     public var hasSeenImportPrompt: Bool = false
     /// Arc's per-site Developer Mode (⌃D): the toolbar shows the full URL in
     /// monospace with the developer icons, and the nav buttons move to the sidebar.
@@ -752,13 +756,16 @@ public struct AppSettings: Codable, Equatable {
         let on = !allowsAutoPictureInPicture(url: url)
         autoPictureInPictureSites[k] = on == autoPictureInPicture ? nil : on
     }
-    /// Settings saved without `toolbarDefaultMigrated` take the toolbar from Arc's View ▸
-    /// Show Toolbar (nil without Arc: off), once. Arc's preference is read only then.
+    /// Settings saved without `toolbarDefaultMigrated` once took the toolbar from Arc's View ▸
+    /// Show Toolbar. The address bar is always in the toolbar now, so Arc's preference is never
+    /// read: the file is only marked.
     public mutating func migrateToolbarDefault(arcShowsToolbar: @autoclosure () -> Bool?) {
         guard !toolbarDefaultMigrated else { return }
-        showToolbar = arcShowsToolbar() ?? false
+        showToolbar = AppSettings.addressBarInToolbar
         toolbarDefaultMigrated = true
     }
+    /// Where the address bar lives: the toolbar, whatever an older settings.json says.
+    public static let addressBarInToolbar = true
 }
 
 /// One browser window. Each window shows its own space and remembers its own
@@ -870,12 +877,12 @@ extension AppSettings {
             newTabButtonAtTop = try c.decodeIfPresent(Bool.self, forKey: .newTabButtonAtTop) ?? true
         }
         showStatusBar = try c.decodeIfPresent(Bool.self, forKey: .showStatusBar) ?? true
-        // Without the mark, `showToolbar` waits for migrateToolbarDefault(arcShowsToolbar:).
         toolbarDefaultMigrated = try c.decodeIfPresent(Bool.self, forKey: .toolbarDefaultMigrated) == true
-        if toolbarDefaultMigrated {
-            showToolbar = try c.decodeIfPresent(Bool.self, forKey: .showToolbar) ?? false
-        }
+        // The address bar lives in the toolbar: a file saved with `showToolbar: false` (Arc's sidebar
+        // address) reads as on.
+        showToolbar = AppSettings.addressBarInToolbar
         toolbarShowsFullURL = try c.decodeIfPresent(Bool.self, forKey: .toolbarShowsFullURL) ?? false
+        showBookmarksBar = try c.decodeIfPresent(Bool.self, forKey: .showBookmarksBar) ?? true
         hasSeenImportPrompt = try c.decodeIfPresent(Bool.self, forKey: .hasSeenImportPrompt) ?? false
         developerHosts = try c.decodeIfPresent(Set<String>.self, forKey: .developerHosts) ?? []
         disabledDefaultDeveloperHosts = try c.decodeIfPresent(Set<String>.self, forKey: .disabledDefaultDeveloperHosts) ?? []

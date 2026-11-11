@@ -18,7 +18,7 @@ struct TranslateActions {
 final class TranslatePopover: NSObject, NSPopoverDelegate {
     private var popover: NSPopover?
     var isShown: Bool { popover?.isShown == true }
-    /// The shown popover's buttons, for scenarios (cra://debug?translate=…).
+    /// The shown popover's buttons, for scenarios (from://debug?translate=…).
     private(set) weak var content: TranslatePopoverView?
 
     /// When a click outside closed the popover (event time): the same click on the button leaves

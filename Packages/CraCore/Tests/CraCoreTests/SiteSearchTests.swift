@@ -108,3 +108,38 @@ struct SiteSearchTests {
         #expect(ChromiumSearchEngine(.google).searchURL("x") == "https://www.google.com/search?q=x&ie=UTF-8")
     }
 }
+
+/// The From browser's sites and short words (11 Nov 2026).
+struct FromSiteSearchTests {
+    @Test func aliasesTakeTabWhenTypedInFull() {
+        #expect(SiteSearch.match("yt", completion: nil)?.name == "YouTube")
+        #expect(SiteSearch.match("gh", completion: nil)?.name == "GitHub")
+        #expect(SiteSearch.match("mp", completion: nil)?.name == "Matterport")
+        #expect(SiteSearch.match("rf", completion: nil)?.name == "Redfin")
+        #expect(SiteSearch.match("so", completion: nil)?.name == "Stack Overflow")
+        // An alias is a whole word, not a prefix of one.
+        #expect(SiteSearch.match("m", completion: nil)?.name != "Matterport")
+    }
+
+    @Test func hostPrefixesReachTheNewSites() {
+        #expect(SiteSearch.match("matt", completion: nil)?.name == "Matterport")
+        #expect(SiteSearch.match("redf", completion: nil)?.name == "Redfin")
+        #expect(SiteSearch.match("chatg", completion: nil)?.name == "ChatGPT")
+        #expect(SiteSearch.match("perp", completion: nil)?.name == "Perplexity")
+    }
+
+    @Test func matterportSearchesTheAccountsSpaces() {
+        let mp = SiteSearch.all.first { $0.name == "Matterport" }!
+        #expect(mp.searchURL("123 Main St") == "https://my.matterport.com/search?search=123%20Main%20St")
+    }
+
+    @Test func redfinWordsRideOnTheFragmentAndOnlyThatPageGetsTheFinder() throws {
+        let rf = SiteSearch.all.first { $0.name == "Redfin" }!
+        let url = rf.searchURL("San Jose")
+        #expect(url == "https://www.redfin.com/#cra-search=San%20Jose")
+        #expect(SiteSearch.finder(for: try #require(URL(string: url))) != nil)
+        #expect(SiteSearch.finder(for: try #require(URL(string: "https://www.redfin.com/"))) == nil)
+        #expect(SiteSearch.finder(for: try #require(URL(string: "https://www.redfin.com/city/17420/CA/San-Jose#cra-search=x"))) == nil)
+        #expect(SiteSearch.finder(for: try #require(URL(string: "https://evil.example/#cra-search=x"))) == nil)
+    }
+}

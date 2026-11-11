@@ -6,11 +6,11 @@
 # promise: #185 #42
 budget rss=600 stalls50=6   # turning developer mode on or off stalls 130–650 ms (a reload)
 port 47124
-cra://debug?windowSize=1280x800
-cra://open?url=${PAGE}?n=devbar
+from://debug?windowSize=1280x800
+from://open?url=${PAGE}?n=devbar
 wait 3
-cra://action/toggleDeveloperMode
+from://action/toggleDeveloperMode
 wait 2
 snapshot PaneToolbarView developer-bar-toolbar-hidden
-cra://action/toggleDeveloperMode
+from://action/toggleDeveloperMode
 wait 2

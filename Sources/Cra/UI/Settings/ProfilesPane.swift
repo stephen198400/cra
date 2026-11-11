@@ -56,7 +56,7 @@ struct ProfilesPane: View {
                 }
             }
             .id(nav.shown)  // read again each time Settings comes up: Chromium's page may have changed them
-            SettingsFootnote("The languages websites show their pages in for each Profile, most wanted first. Change opens Chromium’s language settings for that Profile. Cra itself stays in English.")
+            SettingsFootnote("The languages websites show their pages in for each Profile, most wanted first. Change opens Chromium’s language settings for that Profile. From itself stays in English.")
             // Arc's Profiles ▸ "Your Data and Settings": Chromium's pages for the profile.
             SettingsHeader("Your Data and Settings").padding(.top, 20)
             SettingsCard {

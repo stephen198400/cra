@@ -6,12 +6,12 @@ budget rss=700 stalls50=20
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "defaultLinkDestination": {"littleWindow": {}}}
 pace 0.5
 
-cra://debug?externalURL=${PAGE}?e=link1
+from://debug?externalURL=${PAGE}?e=link1
 wait 2
-cra://debug?littleShown=loaded
+from://debug?littleShown=loaded
 expect-log little shown loaded: windows=1 .* padlock=1 address=127\.0\.0\.1$
 
-cra://debug?externalURL=${STALL}
+from://debug?externalURL=${STALL}
 wait 2
-cra://debug?littleShown=waiting
+from://debug?littleShown=waiting
 expect-log little shown waiting: windows=2 .* padlock=0 address=

@@ -8,9 +8,9 @@ struct FavoritesLayoutTests {
     /// Arc 1.170, 29 Oct: four favorites, sidebar width → columns and the tile width Arc's AX
     /// frames report (whole points; nil where it wasn't written down).
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/12"), arguments: [
-        (347, 4, 76), (300, 4, nil), (260, 4, 55), (230, 4, 47),
-        (227, 2, 101), (225, 2, 100), (220, 2, 98), (212, 2, 94), (205, 2, 90), (200, 2, 88),
-        (170, 2, 73), (140, 2, 58), (100, 1, 84),
+        (347, 4, 78), (300, 4, nil), (260, 4, 56), (230, 4, 49),
+        (227, 2, 102), (225, 2, 101), (220, 2, 99), (212, 2, 95), (205, 2, 91), (200, 2, 89),
+        (170, 2, 74), (140, 2, 59), (100, 1, 84),
     ] as [(Int, Int, Int?)])
     func fourFavoritesMatchArc(sidebarWidth: Int, columns: Int, tileWidth: Int?) {
         let grid = FavoritesLayout(count: 4, width: CGFloat(sidebarWidth - 16))
@@ -38,15 +38,15 @@ struct FavoritesLayoutTests {
     @Test func tilesSitOnHalfPoints() {
         // Arc at 347 pt: 84.75 → 85, 254.25 → 254.5. Widths are not rounded.
         let grid = FavoritesLayout(count: 4, width: 331)
-        #expect(grid.frame(at: 1).minX == 85)
-        #expect(grid.frame(at: 3).minX == 254.5)
-        #expect(grid.frame(at: 3).width == 76.75)
+        #expect(grid.frame(at: 1).minX == 84.5)
+        #expect(grid.frame(at: 3).minX == 253)
+        #expect(grid.frame(at: 3).width == 78.25)
     }
 
     @Test func shortLastRowKeepsTileWidthFromTheLeft() {
         let grid = FavoritesLayout(count: 5, width: 331)
         #expect(grid.columns == 3 && grid.rows == 2)
-        #expect(grid.frame(at: 3).minX == 0 && grid.frame(at: 3).minY == 55)
+        #expect(grid.frame(at: 3).minX == 0 && grid.frame(at: 3).minY == 49)
         #expect(grid.frame(at: 4).minX == grid.frame(at: 1).minX)
         #expect(grid.frame(at: 4).width == grid.frame(at: 0).width)
     }
@@ -54,8 +54,8 @@ struct FavoritesLayoutTests {
     @Test func heightCountsRowsAndGaps() {
         #expect(FavoritesLayout(count: 0, width: 331).gridHeight == 0)
         #expect(FavoritesLayout(count: 0, width: 331).rows == 0)
-        #expect(FavoritesLayout(count: 4, width: 331).gridHeight == 47)
-        #expect(FavoritesLayout(count: 9, width: 331).gridHeight == 157, "3 rows of 47 and 2 gaps of 8")
+        #expect(FavoritesLayout(count: 4, width: 331).gridHeight == 43)
+        #expect(FavoritesLayout(count: 9, width: 331).gridHeight == 141, "3 rows of 43 and 2 gaps of 6")
     }
 
     /// #176: the slot under the pointer, across rows, with gaps going to the nearer tile.

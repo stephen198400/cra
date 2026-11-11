@@ -7,9 +7,9 @@
 # promise: #228
 budget rss=600 stalls50=5
 extension ${FIXTURES}/ManifestV2Extension
-cra://open?url=${PAGE}?n=mv2
+from://open?url=${PAGE}?n=mv2
 expect-log loaded 127\.0\.0\.1
 wait 2
-cra://debug?cdp=Runtime.evaluate&params={"expression":"fetch('page.html?cra-mv2-probe').then(()=>'mv2:loaded',()=>'mv2:blocked')","awaitPromise":true}
+from://debug?cdp=Runtime.evaluate&params={"expression":"fetch('page.html?cra-mv2-probe').then(()=>'mv2:loaded',()=>'mv2:blocked')","awaitPromise":true}
 expect-log Cra cdp Runtime.evaluate .*"value":"mv2:blocked"
 reject-log fault:

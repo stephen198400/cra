@@ -46,6 +46,25 @@ final class DownloadHistory {
         DownloadList.library(entries: entries, live: live, query: query) { FileManager.default.fileExists(atPath: $0) }
     }
 
+    /// The card under the sidebar header's downloads button: running first, then newest (DownloadsCard).
+    var card: [Listed] {
+        DownloadsCard.rows(entries: entries, live: live) { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    /// The downloads button: its glyph, or a ring while downloads run.
+    var mark: DownloadsCard.Mark { DownloadsCard.mark(live) }
+
+    var canClear: Bool { DownloadsCard.canClear(entries: entries, live: live) }
+
+    /// The card's Clear: every finished, failed and cancelled download leaves the lists (the files
+    /// stay where they are); running ones keep going.
+    func clear() {
+        entries = []
+        file.save(entries)
+        live = DownloadsCard.afterClear(live: live)
+        CraLog.note("downloads cleared")
+    }
+
     /// Running or paused: quitting would cancel it.
     var hasRunningDownloads: Bool { live.contains(where: \.running) }
 

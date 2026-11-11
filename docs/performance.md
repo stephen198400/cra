@@ -159,7 +159,7 @@ real export. On `fifty-tabs` the 13.5 ms were: observer 6.7, process sample 5.1 
   breadcrumbs, a hang file on disk before the main thread returns, with a real `sample` stack,
   the marker after a quit and after a simulated kill, a second Cra writing nothing, recording
   off writing nothing.
-- `cra://debug?stall=<ms>` blocks the main thread; `cra://debug?perfReport=<path>` writes the
+- `from://debug?stall=<ms>` blocks the main thread; `from://debug?perfReport=<path>` writes the
   report now.
 - `CRA_PERF=0` turns recording off for a development run.
 

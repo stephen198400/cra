@@ -6,26 +6,26 @@
 home
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "shareUsageStats": true, "crashReports": "send"}
 seed sharing.json {"crashesSeenUntil": "2001-01-01T00:00:00Z"}
-crash-report ${FIXTURES}/CrashReports/Cra-2026-11-10-120000.ips
+crash-report ${FIXTURES}/CrashReports/From-2026-11-10-120000.ips
 env CRA_SHARING_ENDPOINT=${ORIGIN}
 expect-log sharing: stats on, crash reports send
 # Unforced, 30 s after launch, as a real Mac sends it (0.1.38 dropped this timer and sent nothing).
 wait 5
 expect-log sharing: usage stats sent
 expect-log sharing: crash report sent
-cra://debug?sharing=stats
+from://debug?sharing=stats
 wait 2
 expect-log sharing: usage stats sent
-cra://debug?sharing=crash
+from://debug?sharing=crash
 wait 2
 expect-log sharing: 1 new crash reports, send
 expect-log sharing: crash report sent
 # The same crash report isn't sent twice.
-cra://debug?sharing=crash
+from://debug?sharing=crash
 wait 1
 reject-log sharing: 2 new crash reports
 # Off, as the onboarding row unticked: nothing is sent.
-cra://debug?sharing=off
-cra://debug?sharing=stats
+from://debug?sharing=off
+from://debug?sharing=stats
 wait 1
 expect-log sharing: usage stats off, nothing sent

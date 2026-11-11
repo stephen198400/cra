@@ -87,7 +87,7 @@ final class SidebarStore {
         archiveChanged = false
         prefs = prefsStore.load(or: { WindowPrefs() })
         var loaded = settingsStore.load(or: { AppSettings() })
-        loaded.migrateToolbarDefault(arcShowsToolbar: ArcImporter.showsToolbar)
+        loaded.migrateToolbarDefault(arcShowsToolbar: nil)  // the toolbar is always on: Arc's View ▸ Show Toolbar isn't read
         settings = loaded
         for h in historyFile.load(or: { [] }) { history[h.url] = h }
         ranking = rankingFile.load(or: { RankingData() })
@@ -441,6 +441,11 @@ final class SidebarStore {
         let dark = settings.websiteAppearance == .dark || (settings.websiteAppearance == .automatic && systemDark)
         return ":root { " + ArcThemeData.declarations(palette: ArcThemeData.palette(theme: theme, dark: dark), gradient: theme.colors) + " }"
     }
+
+    /// This fork: the row with a space's icon and name under the favorites is never shown. The
+    /// bookmarks bar holds what that row introduced; spaces switch from the dock's icons, and
+    /// Edit Space… renames one.
+    static let showsSpaceHeaderRow = false
 
     func hidesSpaceHeader(_ id: UUID) -> Bool {
         !settings.showSpaceHeaderOnSingleSpace && spaceOrder.count == 1 && !isStandalone(space: id)

@@ -6,6 +6,6 @@ seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true,
 env CRA_SHARING_ENDPOINT=${ORIGIN}
 expect-log sharing: stats off, crash reports ask
 expect-log sharing: the sidebar card asks
-cra://debug?sharing=card-share
+from://debug?sharing=card-share
 expect-log sharing: the sidebar card was answered, share
 expect-log sharing: usage stats sent

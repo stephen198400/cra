@@ -45,7 +45,7 @@ struct MediaLibraryTests {
     /// Arc's menu on a media pick, in its order and groups.
     @Test func arcsMenu() {
         #expect(MediaLibrary.Action.allCases.map { $0.title(isVideo: false) }
-                == ["Copy Image", "Send via iMessage", "AirDrop", "Show in Finder", "Hide from Cra"])
+                == ["Copy Image", "Send via iMessage", "AirDrop", "Show in Finder", "Hide from From"])
         #expect(MediaLibrary.Action.allCases.filter(\.startsGroup) == [.sendMessage, .showInFinder, .hide])
         #expect(MediaLibrary.isVideo("/x/clip.MOV"))
     }

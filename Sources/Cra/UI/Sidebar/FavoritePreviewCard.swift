@@ -192,7 +192,7 @@ final class FavoritePreviewCard {
 
     // MARK: Testing
 
-    /// cra://debug?gmailPreview=<unread>: the card for a sample inbox where Arc's 264 pt sidebar
+    /// from://debug?gmailPreview=<unread>: the card for a sample inbox where Arc's 264 pt sidebar
     /// has its fourth favorite tile.
     func demoGmail(unread: Int, in window: NSWindow) {
         let now = Date()
@@ -205,7 +205,7 @@ final class FavoritePreviewCard {
         demo(favorite, in: window)
     }
 
-    /// cra://debug?calendarPreview=1: today's card with a meeting starting in 90 s and two
+    /// from://debug?calendarPreview=1: today's card with a meeting starting in 90 s and two
     /// overlapping events, as if fetched.
     func demoCalendar(in window: NSWindow) {
         let favorite = "https://calendar.google.com/calendar/u/0/r"

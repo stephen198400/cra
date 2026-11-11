@@ -1,0 +1,29 @@
+{
+  "bar" : {
+    "children" : [
+      {
+        "dateAdded" : "2026-11-04T09:00:00Z",
+        "id" : "C0000000-0000-0000-0000-000000000011",
+        "title" : "Kept",
+        "url" : "https://kept.example/"
+      },
+      {
+        "dateAdded" : "1970-01-01T00:00:00Z",
+        "id" : "00000000-0000-0000-0000-000000000000",
+        "title" : "No id",
+        "url" : "https://noid.example/"
+      }
+    ],
+    "dateAdded" : "1970-01-01T00:00:00Z",
+    "id" : "B0000000-0000-0000-0000-0000000000B1",
+    "title" : "Bookmarks Bar"
+  },
+  "other" : {
+    "children" : [
+
+    ],
+    "dateAdded" : "1970-01-01T00:00:00Z",
+    "id" : "B0000000-0000-0000-0000-0000000000B2",
+    "title" : "Other Bookmarks"
+  }
+}

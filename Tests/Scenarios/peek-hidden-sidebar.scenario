@@ -5,44 +5,44 @@ budget rss=900 stalls50=40
 pace 0.5
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "peekInEveryTab": true}
 
-cra://open?url=${PAGE}?n=under
+from://open?url=${PAGE}?n=under
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 wait 1
-cra://action/toggleSidebar
+from://action/toggleSidebar
 wait 0.5
-cra://debug?cdp=Runtime.evaluate&params={"expression":"String(!!window.open('${PAGE}?n=peek'))","userGesture":true}
+from://debug?cdp=Runtime.evaluate&params={"expression":"String(!!window.open('${PAGE}?n=peek'))","userGesture":true}
 expect-log peek: from
 wait 1.5
-cra://debug?peeks=open
+from://debug?peeks=open
 expect-log Cra peeks open: shown \S+n=peek$
-cra://debug?peekCatcher=closed
+from://debug?peekCatcher=closed
 expect-log Cra peek catcher closed: sidebar=hidden floating=none
 
-cra://debug?floatingSidebar=1
+from://debug?floatingSidebar=1
 wait 1
-cra://debug?peekCatcher=out
+from://debug?peekCatcher=out
 expect-log Cra peek catcher out: sidebar=hidden floating=above
 
 # A tab switch re-stacks the window's panels; the sidebar stays in front.
-cra://open?url=${PAGE}?n=other
+from://open?url=${PAGE}?n=other
 wait 1
-cra://action/previousTab
+from://action/previousTab
 wait 1
-cra://debug?floatingSidebar=1
+from://debug?floatingSidebar=1
 wait 1
-cra://debug?peeks=back
+from://debug?peeks=back
 expect-log Cra peeks back: shown \S+n=peek$
-cra://debug?peekCatcher=back
+from://debug?peekCatcher=back
 expect-log Cra peek catcher back: sidebar=hidden floating=above
 
 # A Peek that opens while the sidebar is out goes in under it.
-cra://action/closeTab
+from://action/closeTab
 wait 1
-cra://debug?cdp=Runtime.evaluate&params={"expression":"String(!!window.open('${PAGE}?n=again'))","userGesture":true}
+from://debug?cdp=Runtime.evaluate&params={"expression":"String(!!window.open('${PAGE}?n=again'))","userGesture":true}
 wait 1.5
-cra://debug?peeks=again
+from://debug?peeks=again
 expect-log Cra peeks again: shown \S+n=again$
-cra://debug?peekCatcher=again
+from://debug?peekCatcher=again
 expect-log Cra peek catcher again: sidebar=hidden floating=above
-cra://debug?floatingSidebar=0
+from://debug?floatingSidebar=0
 wait 0.5

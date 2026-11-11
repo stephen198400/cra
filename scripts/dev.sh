@@ -5,7 +5,7 @@
 #   scripts/dev.sh --once    build and launch once, logs in this terminal
 #   CRA_DATA_DIR=<dir> scripts/dev.sh    use another profile (default build/dev-data)
 # CraDev is its own app (executable name, bundle id, profile), so it runs next to the
-# installed Cra, `killall Cra` elsewhere leaves it alone, and it never claims cra:// or
+# installed Cra, `killall Cra` elsewhere leaves it alone, and it never claims from:// or
 # http links. CEF is copied and signed when its pinned source changes; ordinary rebuilds swap the Cra binaries,
 # in a separate SwiftPM scratch dir so parallel `scripts/build.sh` runs don't collide.
 set -euo pipefail
@@ -49,7 +49,7 @@ bootstrap() {
     local helper="$APP/Contents/Frameworks/$NAME Helper$ns.app"
     mkdir -p "$helper/Contents/MacOS"
     sed -e "s/__NAME_SUFFIX__/$ns/g" -e "s/__PLIST_SUFFIX__/$ps/g" -e "s/__VERSION__/0.0.0-dev/" -e "s/__BUILD__/0/" \
-        -e "s/Cra Helper/$NAME Helper/g" -e "s/dk\.kildahl\.cra\.helper/dk.kildahl.cra.dev.helper/" \
+        -e "s/From Helper/$NAME Helper/g" -e "s/dk\.kildahl\.cra\.helper/dk.kildahl.cra.dev.helper/" \
         resources/Helper-Info.plist > "$helper/Contents/Info.plist"
     echo -n "APPL????" > "$helper/Contents/PkgInfo"
   done

@@ -139,7 +139,7 @@ final class PictureInPictureChrome {
         if let other { other.makeKey() } else if NSApp.isActive { NSApp.deactivate() }
     }
 
-    /// `cra://debug?pip=<label>`: Chromium's PiP window as Cra keeps it, and the centre controls'
+    /// `from://debug?pip=<label>`: Chromium's PiP window as Cra keeps it, and the centre controls'
     /// size for its width (#262).
     func readout() -> String {
         let shown = overlays.values.compactMap { o in o.parent.map { (o, $0) } }
@@ -149,7 +149,7 @@ final class PictureInPictureChrome {
         }.joined(separator: " | ")
     }
 
-    /// `cra://debug?pipDrop=left|right|top|bottom`: the window moved half past that edge of its
+    /// `from://debug?pipDrop=left|right|top|bottom`: the window moved half past that edge of its
     /// display and let go there, as a mouse drag does (#332).
     func debugDrop(_ edge: String) {
         for o in overlays.values {
@@ -166,7 +166,7 @@ final class PictureInPictureChrome {
         }
     }
 
-    /// `cra://debug?pipKey=space|force`: Chromium's window asked to become key the ways Chromium's
+    /// `from://debug?pipKey=space|force`: Chromium's window asked to become key the ways Chromium's
     /// own code can leave it open to that. `space`: `preventKeyWindow` back to NO by a Space change,
     /// as NativeWidgetMacNSWindow does after `orderFrontKeepWindowKeyState`; `force`: cleared and
     /// made key at once, standing in for a path not known yet.

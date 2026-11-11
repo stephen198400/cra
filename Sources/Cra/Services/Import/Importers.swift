@@ -63,19 +63,37 @@ struct ImportedLinkRoute {
 struct ImportedSettings {
     var autoArchive: AutoArchiveThreshold?
     var sidebarWidth: Double?
-    var showToolbar: Bool?
     var toolbarShowsFullURL: Bool?
     var linkRoutes: [ImportedLinkRoute] = []
     var defaultLinkDestination: ImportedLinkDestination?
 
     var isEmpty: Bool {
-        autoArchive == nil && sidebarWidth == nil && showToolbar == nil && toolbarShowsFullURL == nil && linkRoutes.isEmpty && defaultLinkDestination == nil
+        autoArchive == nil && sidebarWidth == nil && toolbarShowsFullURL == nil && linkRoutes.isEmpty && defaultLinkDestination == nil
+    }
+}
+
+/// Another browser's bookmarks as they were there, for Cra's own bookmarks (BookmarkStore) beside
+/// the sidebar items the same bookmarks become: its bar onto the Bookmarks Bar, the rest into Other
+/// Bookmarks. Filled by the Chromium-family and Safari importers.
+struct ImportedBookmarks {
+    var bar: [ImportedItem] = []
+    var other: [ImportedItem] = []
+    var isEmpty: Bool { bar.isEmpty && other.isEmpty }
+
+    static func nodes(_ items: [ImportedItem]) -> [BookmarkNode] {
+        items.compactMap { it in
+            if it.isFolder { return .folder(it.customTitle ?? it.pageTitle, dateAdded: it.createdAt, children: nodes(it.children)) }
+            guard let url = it.url else { return nil }
+            return BookmarkNode(title: it.customTitle ?? it.pageTitle, url: url, dateAdded: it.createdAt)
+        }
     }
 }
 
 struct ImportPlan {
     var source: String
     var spaces: [ImportedSpace] = []
+    /// The source's bookmarks for Cra's bookmarks bar (the spaces get them as pinned tabs too).
+    var bookmarks = ImportedBookmarks()
     /// Favorites that belong to no imported space; they go to the focused space.
     var favorites: [ImportedItem] = []
     var archive: [ImportedArchiveEntry] = []
@@ -135,11 +153,6 @@ enum ArcImporter {
 
     /// Arc's Chromium profiles: Default and "Profile <n>", one per profile a space can be on.
     static var userData: URL { supportDir.appendingPathComponent("User Data", isDirectory: true) }
-
-    /// Arc's View ▸ Show Toolbar (topBarURLEnabled, off by default); nil when Arc never stored it.
-    static var showsToolbar: Bool? {
-        UserDefaults(suiteName: "company.thebrowser.Browser")?.object(forKey: "topBarURLEnabled") as? Bool
-    }
 
     /// Arc's "Show Full URL" on the toolbar address (off by default); nil when Arc never stored it.
     static var showsFullURL: Bool? {
@@ -259,7 +272,6 @@ enum ArcImporter {
         if let threshold = UserDefaults(suiteName: "company.thebrowser.Browser")?.string(forKey: "autoArchiveTimeThreshold") {
             plan.settings.autoArchive = AutoArchiveThreshold(rawValue: threshold)
         }
-        plan.settings.showToolbar = showsToolbar
         plan.settings.toolbarShowsFullURL = showsFullURL
         if let ldata = try? Data(contentsOf: supportDir.appendingPathComponent("StorableLinkRouting.json")),
            let lroot = try? JSONSerialization.jsonObject(with: ldata) as? [String: Any] {
@@ -526,6 +538,12 @@ extension SidebarStore {
             insert(it.children.filter { $0.liveItemURL != nil }, into: folder.id, skip: existingURLs(under: folder.id), pinned: pinned)
         }
 
+        // Chrome-style bookmarks, apart from the sidebar; importing again adds nothing twice.
+        if !plan.bookmarks.isEmpty {
+            BookmarkStore.shared.importBookmarks(bar: ImportedBookmarks.nodes(plan.bookmarks.bar),
+                                                 other: ImportedBookmarks.nodes(plan.bookmarks.other))
+        }
+
         let current = focusedSpace.favoritesContainerID
         insert(plan.favorites, into: current, skip: existingURLs(under: current), pinned: true)
 
@@ -577,7 +595,6 @@ extension SidebarStore {
         if includeSettings {
             if let a = plan.settings.autoArchive { settings.autoArchive = a }
             if let w = plan.settings.sidebarWidth { prefs.sidebarWidth = SidebarWidth.clamped(w) }
-            if let t = plan.settings.showToolbar { settings.showToolbar = t }
             if let f = plan.settings.toolbarShowsFullURL { settings.toolbarShowsFullURL = f }
             // Air Traffic Control, pointed at the spaces of the same name.
             func destination(_ d: ImportedLinkDestination) -> LinkDestination {

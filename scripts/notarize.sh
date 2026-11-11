@@ -1,6 +1,6 @@
 #!/bin/bash
 # Submits a file to Apple's notary service, waits, and staples the ticket.
-#   scripts/notarize.sh <file.zip|file.dmg> [path/to/Cra.app to staple]
+#   scripts/notarize.sh <file.zip|file.dmg> [path/to/From.app to staple]
 # Credentials, either:
 #   NOTARY_KEYCHAIN_PROFILE   a profile stored with `xcrun notarytool store-credentials`
 # or

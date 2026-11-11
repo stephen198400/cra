@@ -87,7 +87,7 @@ in_use() { grep -qF -- "$1" "$WORK/in-use"; }
 
 # Ids that must never be cleaned: the installed Cra's bundles, CraClip, and running apps.
 {
-  find /Applications/Cra.app -maxdepth 6 -name Info.plist 2>/dev/null |
+  find /Applications/From.app /Applications/Cra.app -maxdepth 6 -name Info.plist 2>/dev/null |
     while read -r plist; do /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist" 2>/dev/null; done
   printf '%s\n' dk.kildahl.cra dk.kildahl.cra.docktile dk.kildahl.cra.clip
   lsappinfo list 2>/dev/null | sed -n 's/.*bundleID="\([^"]*\)".*/\1/p'

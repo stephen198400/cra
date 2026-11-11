@@ -34,8 +34,10 @@ struct DiagnosticsRedactionTests {
     }
 
     @Test(arguments: [
-        ("Cra-2026-11-01-120000.ips", true),
-        ("Cra Helper (Renderer)-2026-11-01-120000.ips", true),
+        ("From-2026-11-01-120000.ips", true),
+        ("From Helper (Renderer)-2026-11-01-120000.ips", true),
+        ("Cra-2026-11-01-120000.ips", false),
+        ("Cra Helper (Renderer)-2026-11-01-120000.ips", false),
         ("Craft-2026-11-01-120000.ips", false),
         ("CraClip-2026-11-01-120000.ips", false),
         ("Safari-2026-11-01-120000.ips", false),

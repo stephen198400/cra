@@ -74,6 +74,13 @@ final class ShellView: NSView {
     var onPaneResizeBegan: (() -> Void)?
     /// Builds a pane's toolbar (the window controller owns the environment).
     var makeToolbar: ((UUID?) -> NSView)?
+    /// Builds a pane's bookmarks bar (BookmarksBarView).
+    var makeBookmarksBar: ((UUID?) -> NSView)?
+    /// Settings ▸ Show Bookmarks Bar: every card with a page carries the bar, except in content fullscreen.
+    var showBookmarksBar = false { didSet { if showBookmarksBar != oldValue { needsLayout = true } } }
+    private var cardsShowBookmarksBar: Bool { showBookmarksBar && !contentFullscreen }
+    /// Whether a page has a bar above it (toolbar or bookmarks bar), so its top corners are square.
+    func pageBelowBar(_ id: UUID) -> Bool { panesShowBars || card(for: id)?.showsBookmarksBar == true }
     /// Where the status bubble and find bar live (the content container, or an
     /// overlay panel's content view when pages are separate windows).
     private(set) var overlayParent: NSView
@@ -134,7 +141,7 @@ final class ShellView: NSView {
     private func fills(sidebarVisible: Bool) -> Bool {
         CardFill.fillsWindow(edgeToEdge: edgeToEdge, fullScreen: windowFullscreen, sidebarShown: sidebarVisible)
     }
-    /// For `cra://debug?windowState`: how far the card sits from the window's left, bottom, right and
+    /// For `from://debug?windowState`: how far the card sits from the window's left, bottom, right and
     /// top edges, its corner radius and whether it fills the window, e.g. `0,0,0,0 r0 fills=1`.
     var cardReadout: String {
         let f = contentContainer.frame
@@ -430,6 +437,8 @@ final class ShellView: NSView {
                 card.transparent = id == ShellView.noTabID
                 card.showToolbar = barsShown(panes: shownIDs.count, fullscreen: contentFullscreen)
                 card.onToolbarHeightChange = { [weak self] in self?.needsLayout = true }
+                if id != ShellView.noTabID { card.bookmarksBar = makeBookmarksBar?(id) }
+                card.showBookmarksBar = cardsShowBookmarksBar
                 contentContainer.addSubview(card, positioned: .below, relativeTo: placeholderHost)
                 cards.append(card)
             }
@@ -468,12 +477,12 @@ final class ShellView: NSView {
             guard let f = target.frames[c.tabID] else { continue }
             c.frame = horizontal ? NSRect(x: f.minX, y: f.minY, width: 0, height: f.height) : NSRect(x: f.minX, y: f.maxY, width: f.width, height: 0)
             c.alphaValue = 0
-            c.frozenWebBounds = NSRect(x: 0, y: 0, width: f.width, height: max(0, f.height - (c.showToolbar ? c.toolbarHeight : 0)))
+            c.frozenWebBounds = NSRect(x: 0, y: 0, width: f.width, height: max(0, f.height - c.topInset(toolbar: c.showToolbar)))
             c.layoutSubtreeIfNeeded()
         }
         for c in paneCards where oldFrames[c.tabID] != nil {
             guard let f = target.frames[c.tabID] else { continue }
-            c.frozenWebBounds = NSRect(x: 0, y: 0, width: f.width, height: max(0, f.height - (c.showToolbar ? c.toolbarHeight : 0)))
+            c.frozenWebBounds = NSRect(x: 0, y: 0, width: f.width, height: max(0, f.height - c.topInset(toolbar: c.showToolbar)))
         }
         animatingPanes = true
         let webTargets = paneWebFrames(target)
@@ -550,7 +559,7 @@ final class ShellView: NSView {
         var out: [UUID: NSRect] = [:]
         for c in paneCards where c.tabID != ShellView.noTabID {
             guard let f = layout.frames[c.tabID] else { continue }
-            let th: CGFloat = panesShowBars ? c.toolbarHeight : 0
+            let th: CGFloat = c.topInset(toolbar: panesShowBars)
             var web = NSRect(x: f.minX, y: f.minY, width: f.width, height: max(0, f.height - th))
             if c.tabID == focusedPaneID, devToolsVisible, !devToolsFrontendDocked, f.width > 640 {
                 web.size.width -= min(max(320, devToolsWidth), f.width * 0.7)
@@ -740,6 +749,7 @@ final class ShellView: NSView {
         let layout = paneLayout(in: cb)
         for c in paneCards {
             c.showToolbar = toolbarVisible
+            c.showBookmarksBar = cardsShowBookmarksBar
             // Arc's cards cast a soft shadow on the window; edge to edge there is no margin for it.
             c.castsShadow = !fillsWindow && !contentFullscreen
             // Several panes: every card is rounded; a single card follows the window state (square in fullscreen).
@@ -767,7 +777,7 @@ final class ShellView: NSView {
         // DevTools docks inside the focused card, right of its page.
         let focus = focusedCard
         let fb = focus?.bounds ?? .zero
-        let th: CGFloat = toolbarVisible ? focus?.toolbarHeight ?? CraMetrics.toolbarHeight : 0
+        let th: CGFloat = focus?.topInset(toolbar: toolbarVisible) ?? (toolbarVisible ? CraMetrics.toolbarHeight : 0)
         let bodyH = max(0, fb.height - th)
         let selfDock = devToolsFrontendDocked
         let showDev = devToolsVisible && hasTab && focus != nil && (selfDock || fb.width > 640)
@@ -864,7 +874,7 @@ final class ShellView: NSView {
             guard let f = targetLayout.frames[c.tabID] else { continue }
             var w = f.width
             if c.tabID == focusedPaneID, devToolsVisible, !devToolsFrontendDocked, f.width > 640 { w -= min(max(320, devToolsWidth), f.width * 0.7) }
-            let toolbarH: CGFloat = barsShown(panes: paneCards.count, fullscreen: fullscreen) ? c.toolbarHeight : 0
+            let toolbarH: CGFloat = c.topInset(toolbar: barsShown(panes: paneCards.count, fullscreen: fullscreen))
             let page = convert(NSRect(x: target.content.minX + f.minX, y: target.content.minY + f.minY, width: w, height: max(0, f.height - toolbarH)), to: nil)
             webTargets[c.tabID] = page
             c.frozenWebBounds = NSRect(x: 0, y: 0, width: w, height: page.height)

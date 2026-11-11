@@ -9,38 +9,38 @@
 requires screen
 budget rss=700 stalls50=20
 seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "defaultLinkDestination": {"littleWindow": {}}}
-cra://open?url=${PAGE}?n=main
+from://open?url=${PAGE}?n=main
 wait 3
-cra://debug?fullscreen=1
+from://debug?fullscreen=1
 wait 3
-cra://debug?windowState=full
+from://debug?windowState=full
 expect-log window state full: main0 fullscreen=1 visible=1 onSpace=1 layout=1
 
-cra://debug?externalURL=${PAGE}?n=little
+from://debug?externalURL=${PAGE}?n=little
 wait 3
-cra://debug?windowState=little
+from://debug?windowState=little
 expect-log window state little: main0 fullscreen=1 visible=1 onSpace=1 layout=1
 expect-log window state little: little0 fullscreen=0 primary=0 visible=1 onSpace=1 lights=1.0,1.0,1.0
 
-cra://action/closeLittleWindows
+from://action/closeLittleWindows
 wait 2
-cra://debug?windowState=closed
+from://debug?windowState=closed
 expect-log window state closed: main0 fullscreen=1 visible=1 onSpace=1 layout=1 sidebarUI=1 lightsHidden=0 lights=1.0,1.0,1.0
 
-cra://debug?externalURL=${PAGE}?n=video
+from://debug?externalURL=${PAGE}?n=video
 wait 3
-cra://debug?cdp=Runtime.evaluate&target=little&params={"expression":"document.documentElement.requestFullscreen().then(()=>'entered')","awaitPromise":true,"userGesture":true}
+from://debug?cdp=Runtime.evaluate&target=little&params={"expression":"document.documentElement.requestFullscreen().then(()=>'entered')","awaitPromise":true,"userGesture":true}
 wait 3
-cra://debug?windowState=video
+from://debug?windowState=video
 expect-log window state video: little0 fullscreen=1 primary=1
-cra://debug?cdp=Runtime.evaluate&target=little&params={"expression":"document.exitFullscreen().then(()=>'left')","awaitPromise":true}
+from://debug?cdp=Runtime.evaluate&target=little&params={"expression":"document.exitFullscreen().then(()=>'left')","awaitPromise":true}
 wait 3
-cra://debug?windowState=video-left
+from://debug?windowState=video-left
 expect-log window state video-left: little0 fullscreen=0 primary=0 visible=1
-cra://action/closeLittleWindows
+from://action/closeLittleWindows
 wait 2
 
-cra://debug?fullscreen=0
+from://debug?fullscreen=0
 wait 3
-cra://debug?windowState=windowed
+from://debug?windowState=windowed
 expect-log window state windowed: main0 fullscreen=0 visible=1 onSpace=1 layout=0 sidebarUI=0 lightsHidden=0 lights=1.0,1.0,1.0

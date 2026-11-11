@@ -20,7 +20,7 @@ struct LinksPane: View {
                 SettingsCardDivider()
                 // Arc's "Open Little Arc when I press ⌥⌘N" (#195): New Little Window's shortcut from any app.
                 SettingsToggleRow("\(newLittleWindow) in any app",
-                                  detail: "Press \(newLittleWindow) wherever you are to open a Little Window, even while Cra isn’t in front.",
+                                  detail: "Press \(newLittleWindow) wherever you are to open a Little Window, even while From isn’t in front.",
                                   isOn: $store.settings.littleWindowShortcutEverywhere)
                     .settingsTextColumn()
                 SettingsCardDivider()

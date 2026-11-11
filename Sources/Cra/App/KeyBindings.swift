@@ -192,7 +192,9 @@ final class KeyBindingRegistry {
             KeyAction(id: "jumpToSelection", name: "Jump to Selection", section: .edit, shortcuts: [Shortcut("j", cmd)], inCommandBar: false),
             // View
             KeyAction(id: "toggleSidebar", name: "Hide Sidebar", section: .view, shortcuts: [Shortcut("s", cmd)], triggers: ["sidebar", "hide sidebar", "show sidebar"]),
-            KeyAction(id: "toggleToolbar", name: "Hide Toolbar", section: .view, shortcuts: [Shortcut("d", cmdShift)], triggers: ["toolbar"]),
+            // Chrome's ⇧⌘B. Not in Arc.
+            KeyAction(id: "toggleBookmarksBar", name: "Hide Bookmarks Bar", section: .view, shortcuts: [Shortcut("b", cmdShift)],
+                      triggers: ["bookmarks bar", "show bookmarks", "hide bookmarks"], symbol: "book"),
             // Arc: View ▸ Appearance, what websites see (Websites, Easels, and Notes will use:).
             KeyAction(id: "appearanceAutomatic", name: "Website Appearance: Automatic", section: .none, shortcuts: [], triggers: ["website appearance", "system appearance"], symbol: "circle.lefthalf.filled"),
             KeyAction(id: "appearanceLight", name: "Website Appearance: Light", section: .none, shortcuts: [], triggers: ["light mode", "light websites"], symbol: "sun.max"),
@@ -237,7 +239,12 @@ final class KeyBindingRegistry {
             KeyAction(id: "deleteSpace", name: "Delete Space…", section: .spaces, shortcuts: [], triggers: ["delete space", "remove space"]),
             KeyAction(id: "manageSpaces", name: "Manage Spaces…", section: .spaces, shortcuts: [], triggers: ["manage spaces", "reorder spaces"]),
             // Tabs
-            KeyAction(id: "pinTab", name: "Pin/Unpin Tab", section: .tabs, shortcuts: [Shortcut("d", cmd)], triggers: ["pin", "unpin"]),
+            // Arc's ⌘D went to the bookmark (Chrome's); Pin/Unpin takes ⇧⌘D, free since the toolbar
+            // (Arc's ⇧⌘D) is always shown in this fork.
+            KeyAction(id: "pinTab", name: "Pin/Unpin Tab", section: .tabs, shortcuts: [Shortcut("d", cmdShift)], triggers: ["pin", "unpin"]),
+            // Chrome's ⌘D: the star in the toolbar's address field does the same.
+            KeyAction(id: "toggleBookmark", name: "Bookmark This Page", section: .tabs, shortcuts: [Shortcut("d", cmd)],
+                      triggers: ["bookmark", "add bookmark", "remove bookmark", "star"], symbol: "star"),
             // Arc: Next Tab ⌥⌘↓ and ⌘}, Previous Tab ⌥⌘↑ and ⌘{ (Settings ▸ Shortcuts).
             KeyAction(id: "nextTab", name: "Next Tab", section: .tabs, shortcuts: [Shortcut(Shortcut.down, cmdOpt), Shortcut("]", cmdShift)], inCommandBar: false),
             KeyAction(id: "previousTab", name: "Previous Tab", section: .tabs, shortcuts: [Shortcut(Shortcut.up, cmdOpt), Shortcut("[", cmdShift)], inCommandBar: false),
@@ -303,8 +310,8 @@ final class KeyBindingRegistry {
             KeyAction(id: "essentialShortcuts", name: "Essential Keyboard Shortcuts", section: .help, shortcuts: [],
                       triggers: ["shortcuts", "keyboard shortcuts", "hotkeys"], symbol: "keyboard"),
             // Arc: Help ▸ Troubleshooting ▸ Reveal Arc Data, Copy Arc Info.
-            KeyAction(id: "revealData", name: "Reveal Cra Data", section: .help, shortcuts: [], triggers: ["data folder", "reveal data"]),
-            KeyAction(id: "copyAppInfo", name: "Copy Cra Info", section: .help, shortcuts: [], triggers: ["version", "copy info"]),
+            KeyAction(id: "revealData", name: "Reveal From Data", section: .help, shortcuts: [], triggers: ["data folder", "reveal data"]),
+            KeyAction(id: "copyAppInfo", name: "Copy From Info", section: .help, shortcuts: [], triggers: ["version", "copy info"]),
         ]
         // Arc: Switch to Split View 1–4 (⌃⇧1…4), the panes of the open split.
         for n in 1...4 {

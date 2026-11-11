@@ -179,7 +179,7 @@ struct PerfInsightTests {
         }
         #expect(r.insights.map(\.id) == ["previous-abnormal", "freezes", "stalls", "outside-freezes", "profiler-overhead", "idle-cpu",
                                          "renderer-crashes", "unresponsive", "memory-pressure", "thermal", "low-power", "low-disk", "footprint"])
-        #expect(r.insights[1].title == "Cra froze 2 times for a second or more")
+        #expect(r.insights[1].title == "From froze 2 times for a second or more")
         #expect(r.insights[1].detail == "The longest lasted 2.6 s; 1 went past 2 s.")
         #expect(r.insights[3].title == "3 long passes in menus, drags, alerts or start-up")
         #expect(r.insights[3].detail.hasSuffix("The longest lasted 3.1 s (modal)."))
@@ -187,7 +187,7 @@ struct PerfInsightTests {
         #expect(r.insights[5].detail.hasPrefix("31 % of a core on average over 2 min"))
         #expect(r.insights[6].title == "1 page stopped (“Aw, Snap!”)")
         #expect(r.insights[11].detail.hasPrefix("1.0 GB free"))
-        #expect(r.insights[12].title == "Cra uses 9.0 GB of memory")
+        #expect(r.insights[12].title == "From uses 9.0 GB of memory")
         #expect(r.insights[12].detail.contains("Settings ▸ Tabs ▸ Tab Cleanup"))
     }
 
@@ -233,7 +233,7 @@ struct PerfInsightTests {
         #expect(text.contains("Video: 12 of 600 frames dropped"))
         #expect(text.contains("Idle: 3.0 % CPU over 0 min"))
         #expect(text.contains("renderer ×3: 12.2 % CPU, 900 MB"))
-        #expect(text.contains("Previous session: ended without quitting (Cra 0.1.26)"))
+        #expect(text.contains("Previous session: ended without quitting (From 0.1.26)"))
         #expect(text.contains("Tabs: 40, 6 loaded, 3 asleep, 1 window"))
         #expect(text.contains("tab switch: median 8 ms, p95 40 ms (2)"))
         #expect(text.contains("loadError: -105 ×1"))

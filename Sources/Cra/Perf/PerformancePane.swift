@@ -44,7 +44,7 @@ struct PerformancePane: View {
     @ViewBuilder private func overview(_ recording: Binding<Bool>) -> some View {
         SettingsFeatureCard {
             SettingsToggleRow("Record performance",
-                              detail: "Cra measures itself on this Mac: freezes, CPU and memory per process, tab timings.",
+                              detail: "From measures itself on this Mac: freezes, CPU and memory per process, tab timings.",
                               isOn: recording)
         }
         SettingsFootnote("Nothing leaves the Mac unless you export it with Help ▸ Export Diagnostics.")
@@ -186,7 +186,7 @@ struct PerformancePane: View {
                 Toggle("Hide site names", isOn: hideSites).toggleStyle(.switch).labelsHidden()
             }
         }
-        SettingsFootnote("Sites in the exported files become site-1, site-2… in every file, logs included. Without it they keep their host name (never the full address), as Cra's logs always have.")
+        SettingsFootnote("Sites in the exported files become site-1, site-2… in every file, logs included. Without it they keep their host name (never the full address), as From's logs always have.")
         HStack(spacing: 8) {
             Button("Export Diagnostics…") { actions.exportDiagnostics() }
             Button(copied ? "Copied" : "Copy Summary") {
@@ -217,7 +217,7 @@ struct PerformancePane: View {
 private extension PerfProcessKind {
     var label: String {
         switch self {
-        case .browser: return "Cra"
+        case .browser: return "From"
         case .renderer: return "Pages"
         case .gpu: return "GPU"
         case .utility: return "Network, storage, audio"

@@ -126,7 +126,7 @@ def launch(enabled):
 
 def quit_browser():
     if process is not None and process.poll() is None:
-        command("cra://debug?quit=1")
+        command("from://debug?quit=1")
         try:
             process.wait(timeout=20)
         except subprocess.TimeoutExpired:
@@ -196,7 +196,7 @@ def terminal(client, tab, identifier):
 
 def live_count():
     offset=(folder/'browser.log').stat().st_size
-    command('cra://debug?windows=1')
+    command('from://debug?windows=1')
     def count():
         entries=re.findall(r'Cra windows: liveBrowsers=(\d+)',(folder/'browser.log').read_text(errors='replace')[offset:])
         return int(entries[-1]) if entries else None
@@ -216,7 +216,7 @@ try:
     launch(True)
     check('restart removes orphan uploads but keeps completed exports',not orphan.exists() and (retained/'download').read_text()=='keep')
     client=Client()
-    command('cra://open?url='+quote(url+'/normal',safe=''))
+    command('from://open?url='+quote(url+'/normal',safe=''))
     normal=eventually(lambda: next((t['id'] for t in tabs(client) if t['url']==url+'/normal'),None))
     ready(client,normal)
     baseline=live_count()
