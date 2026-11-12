@@ -16,13 +16,15 @@ struct ShippedPlatformTests {
         #expect(SecureDNSProvider.all.allSatisfy { SecureDNSPrefs.validTemplates($0.template) == $0.template })
     }
 
-    /// Settings ▸ Performance (#91) records from the first launch, with site names kept until
-    /// "Hide site names" is ticked, and a settings file without the keys reads the same way.
+    /// Settings ▸ Performance (#91) is off until it is switched on: in From, the fork, recording
+    /// cost a 2 Hz watchdog thread, a page script every 5 s and a disk write a minute for a report
+    /// only a developer reads. Site names stay until "Hide site names" is ticked, and a settings
+    /// file without the keys reads the same way.
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/91"))
-    func performanceRecordingIsOnByDefault() throws {
+    func performanceRecordingIsOffByDefault() throws {
         let s = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
-        #expect(s.perfRecording && !s.perfHidesSiteNames)
-        #expect(AppSettings().perfRecording && !AppSettings().perfHidesSiteNames)
+        #expect(!s.perfRecording && !s.perfHidesSiteNames)
+        #expect(!AppSettings().perfRecording && !AppSettings().perfHidesSiteNames)
     }
 
     /// The permission sheet (#137) names MIDI and the clipboard in Chrome's words, not as "a

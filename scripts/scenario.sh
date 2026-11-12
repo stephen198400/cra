@@ -208,7 +208,7 @@ while read -r _ f; do mkdir -p "$DATA/Extensions" && cp -R "$(expand "$f")" "$DA
 while read -r _ f; do mkdir -p "$DATA/home/Library/Logs/DiagnosticReports" && cp "$(expand "$f")" "$DATA/home/Library/Logs/DiagnosticReports/"; done < <(grep '^crash-report ' "$FILE")
 for i in "${!app_env[@]}"; do app_env[$i]="$(expand "${app_env[$i]}")"; done
 
-CRA_DATA_DIR="$DATA" CRA_COMMAND_FILE="$CMD" CRA_HITCH_LOG="$HITCH" CRA_TEST_BACKGROUND=1 CRA_WEBKIT_HOSTS=localhost \
+CRA_DATA_DIR="$DATA" CRA_COMMAND_FILE="$CMD" CRA_HITCH_LOG="$HITCH" CRA_TEST_BACKGROUND=1 CRA_PERF=1 CRA_WEBKIT_HOSTS=localhost \
   CRA_ARC_DIR="$FIXTURES/Arc" CRA_FLAGS="${CRA_FLAGS:-}" \
   "${app_env[@]}" "$APP/Contents/MacOS/From" ${app_args[@]+"${app_args[@]}"} >"$OUT/stdout.log" 2>&1 &
 PID=$!

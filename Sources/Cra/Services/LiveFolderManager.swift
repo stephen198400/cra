@@ -38,6 +38,8 @@ final class LiveFolderManager {
     /// A folder that failed or waits for a sign-in tries again this often (a Mac waking up has no
     /// network for a moment; an SSO session renews as soon as a GitHub page is opened).
     nonisolated static let retryInterval: TimeInterval = 30
+    /// How long the plugins wait to load at launch when no live folder needs them.
+    nonisolated static let idleLoadDelay: TimeInterval = 5
 
     func start(store: SidebarStore) {
         self.store = store
@@ -54,6 +56,10 @@ final class LiveFolderManager {
             Task { @MainActor in self?.refreshStale() }
         }
         Task {
+            // Loading runs each bundled plugin in a CraPluginHost process and then rebuilds the menus
+            // (their New Folder commands). With no live folder to refresh, that waits until launch
+            // and the first pages are done instead of competing with them.
+            if store.liveFolders.isEmpty { try? await Task.sleep(for: .seconds(Self.idleLoadDelay)) }
             await LiveFolderPluginStore.shared.reload()
             await migrateFolders()
             refreshStale()

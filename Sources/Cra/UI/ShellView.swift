@@ -946,8 +946,12 @@ final class ShellView: NSView {
     /// Logged as "sidebar slide: page moved N pt" for the sidebar-slide scenario.
     private var slidingPage: SidebarSlidePage?
     private var slideSampler: Timer?
+    /// The 240 Hz sampler only runs under the scenario runner (which sets CRA_COMMAND_FILE): it
+    /// woke the main thread 240 times a second through every slide for a readout nobody reads.
+    private static let slideReadoutEnabled = !(ProcessInfo.processInfo.environment["CRA_COMMAND_FILE"] ?? "").isEmpty
 
     private func startSlideReadout() {
+        guard Self.slideReadoutEnabled else { return }
         slideSampler?.invalidate()
         slidingPage = SidebarSlidePage()
         let timer = Timer(timeInterval: 1.0 / 240, repeats: true) { [weak self] _ in

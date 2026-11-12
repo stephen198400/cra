@@ -43,9 +43,13 @@ public struct PerfPreviousSession: Codable, Equatable, Sendable {
 /// When Cra records and when it writes (GitHub #91).
 public enum PerfSessionRules {
     /// Settings ▸ Performance ▸ "Record performance", unless `CRA_PERF=0` turns it off for a
-    /// development run.
+    /// development run or `CRA_PERF=1` turns it on (the scenario runner, now that it is off by default).
     public static func recording(setting: Bool, environment: [String: String]) -> Bool {
-        environment["CRA_PERF"] != "0" && setting
+        switch environment["CRA_PERF"] {
+        case "0": false
+        case "1": true
+        default: setting
+        }
     }
 
     /// Only the Cra that owns the data folder writes, like CraLog's rotation: a second launch

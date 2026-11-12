@@ -24,7 +24,7 @@ final class FloatingSidebarController {
     /// Called after the panel is attached so the overlay panel can be re-ordered above it.
     var didAttachPanel: (() -> Void)?
 
-    private(set) var isShown = false
+    private(set) var isShown = false { didSet { updatePolling() } }
     /// A completed hide must not take the panel away from a newer reveal or anchor.
     private var transitionGeneration: UInt64 = 0
     private var panel: FloatingSidebarPanel?
@@ -93,23 +93,37 @@ final class FloatingSidebarController {
 
     /// No window of ours reliably receives mouse-moved events here: the key window
     /// is usually a Chromium page window, and the shell's tracking areas only run in
-    /// the key window. So the pointer is sampled on a timer while the app is active,
-    /// and the timer stops while it is not: at 30 Hz it was most of the run loop's
-    /// wake-ups in a Cra left in the background (#136).
+    /// the key window. So the pointer is sampled on a timer while the app is active
+    /// and the sidebar is hidden or floating, and the timer stops otherwise: at 30 Hz it
+    /// was most of the run loop's wake-ups in a Cra left in the background (#136), and a
+    /// shown sidebar has nothing to reveal. The window calls `updatePolling()` when the
+    /// sidebar's visibility changes.
     func install() {
         guard activation.isEmpty else { return }
         let center = NotificationCenter.default
         activation = [(NSApplication.didBecomeActiveNotification, true), (NSApplication.didResignActiveNotification, false)].map { name, on in
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.setPolling(on) }
+                MainActor.assumeIsolated {
+                    self?.appActive = on
+                    self?.updatePolling()
+                }
             }
         }
-        setPolling(NSApp.isActive)
+        appActive = NSApp.isActive
+        updatePolling()
         displayOptions = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshBackdrop() }
         }
+    }
+
+    private var appActive = false
+
+    /// Starts or stops the pointer timer: it runs only while the app is active and the sidebar is
+    /// hidden (it may reveal) or floating (it may leave).
+    func updatePolling() {
+        setPolling(appActive && !activation.isEmpty && (isShown || sidebarHidden()))
     }
 
     private func setPolling(_ on: Bool) {

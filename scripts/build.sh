@@ -8,6 +8,8 @@
 #                               adds the passkey entitlements the profile grants
 #   CRA_INSTALL_DIR=<dir> scripts/build.sh
 #                               also copies the app to <dir>/From.app
+#   CRA_ALL_LOCALES=1           keeps all of Chromium's languages (default: English and Chinese)
+#   CRA_KEEP_SYMBOLS=1          leaves the release binary unstripped
 #   CRA_ARCH=x86_64 scripts/build.sh
 #                               builds for the other CPU (arm64 or x86_64) into
 #                               build/<arch>/From.app, with that CPU's CEF in
@@ -55,6 +57,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 
 # The SwiftPM product stays Cra; the bundle (and so CEF's helper names) is From.
 cp "$BIN/Cra" "$APP/Contents/MacOS/From"
+# Release builds drop the local symbols (~10 MB of the binary); the dSYM SwiftPM writes next to
+# $BIN keeps them for symbolication. CRA_KEEP_SYMBOLS=1 leaves the binary as built.
+[ "$CONFIG" = release ] && [ -z "${CRA_KEEP_SYMBOLS:-}" ] && strip -x "$APP/Contents/MacOS/From"
 cp "$BIN/CraPluginHost" "$APP/Contents/MacOS/CraPluginHost"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" resources/Info.plist > "$APP/Contents/Info.plist"
 # CRA_BUNDLE_ID builds under another identifier: a test build signed with one's own team and
@@ -83,6 +88,12 @@ cp -R resources/live-folder-plugins "$APP/Contents/Resources/live-folder-plugins
 
 FRAMEWORK_SRC="$ROOT/$CEF_DIR/Release/Chromium Embedded Framework.framework"
 cp -R "$FRAMEWORK_SRC" "$APP/Contents/Frameworks/"
+# Chromium's UI strings come in 220 .lproj folders (~50 MB); From only needs English and Chinese,
+# and CEF falls back to en-US for any other system language. CRA_ALL_LOCALES=1 keeps them all.
+if [ -z "${CRA_ALL_LOCALES:-}" ]; then
+  find "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Resources" -maxdepth 1 -name '*.lproj' \
+    ! -name 'en.lproj' ! -name 'en_*.lproj' ! -name 'zh_*.lproj' -exec rm -rf {} +
+fi
 # Sparkle's XPC services are only for sandboxed apps; Cra uses Autoupdate and Updater.app.
 ditto "$ROOT/vendor/sparkle/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"

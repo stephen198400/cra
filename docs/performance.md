@@ -3,7 +3,7 @@
 Cra records its own performance on the Mac it runs on (GitHub #91): main-thread stalls with
 what Cra did just before, CPU and memory per process, tab timings, and how the last session
 ended. Settings ▸ Performance shows it; Help ▸ Export Diagnostics adds `perf.json` and the
-hang files to the zip. It is on by default in early releases, off with one switch, and nothing
+hang files to the zip. It is off by default in From (Settings ▸ Performance switches it on), and nothing
 leaves the Mac unless the user exports it.
 
 ## Layers
@@ -161,7 +161,7 @@ real export. On `fifty-tabs` the 13.5 ms were: observer 6.7, process sample 5.1 
   off writing nothing.
 - `from://debug?stall=<ms>` blocks the main thread; `from://debug?perfReport=<path>` writes the
   report now.
-- `CRA_PERF=0` turns recording off for a development run.
+- `CRA_PERF=0` turns recording off for a development run, `CRA_PERF=1` on (scripts/scenario.sh sets it).
 
 ## Removing it
 

@@ -580,6 +580,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             if lastSidebarVisible { floatingSidebar?.prepareForAnchoring() }
             shell.animateSidebar(visible: lastSidebarVisible, floating: false, fullscreen: shell.contentFullscreen, width: shell.sidebarWidth)
         }
+        floatingSidebar?.updatePolling()
         if CGFloat(store.prefs.sidebarWidth) != lastSidebarWidth {
             lastSidebarWidth = CGFloat(store.prefs.sidebarWidth)
             shell.sidebarWidth = sidebarUI.libraryPage.map { libraryWidth($0) } ?? lastSidebarWidth
@@ -913,6 +914,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         if !fullscreen, sidebarVisible { floatingSidebar?.hide(animated: false) }
         shell.contentFullscreen = fullscreen
         contentFullscreenTab = fullscreen ? tabID : nil
+        floatingSidebar?.updatePolling()
         if fullscreen, !window.styleMask.contains(.fullScreen) {
             enteredFullscreenForContent = true
             window.toggleFullScreen(nil)

@@ -40,7 +40,7 @@
   "peekLinksToOtherSites" : true,
   "peekOnShiftClick" : true,
   "perfHidesSiteNames" : false,
-  "perfRecording" : true,
+  "perfRecording" : false,
   "searchEngine" : "duckduckgo",
   "searchSuggestions" : true,
   "showSpaceHeaderOnSingleSpace" : true,

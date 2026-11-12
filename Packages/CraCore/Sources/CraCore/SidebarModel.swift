@@ -670,7 +670,7 @@ public struct AppSettings: Codable, Equatable {
     /// CPU and memory per process, tab timings) for Help ▸ Export Diagnostics. On by default in
     /// early releases; nothing leaves the Mac. Changing the default needs no migration.
     public var perfRecording: Bool = AppSettings.perfRecordingDefault
-    public static let perfRecordingDefault = true
+    public static let perfRecordingDefault = false
     /// Settings ▸ Performance ▸ "Hide site names": every site in the diagnostics zip becomes site-N.
     public var perfHidesSiteNames: Bool = false
     /// Arc Max's Tidy Tabs (tidyTabsEnabled), done by the Mac's Apple Intelligence model: the Today

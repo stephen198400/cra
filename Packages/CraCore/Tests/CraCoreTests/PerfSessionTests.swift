@@ -6,9 +6,9 @@ import Testing
 struct PerfSessionTests {
     let start = Date(timeIntervalSince1970: 1_793_000_000)
 
-    @Test(.bug("https://github.com/VictorKildahl/cra/issues/91"), arguments: [(true, [:], true), (false, [:], false), (true, ["CRA_PERF": "0"], false), (true, ["CRA_PERF": "1"], true)]
+    @Test(.bug("https://github.com/VictorKildahl/cra/issues/91"), arguments: [(true, [:], true), (false, [:], false), (true, ["CRA_PERF": "0"], false), (true, ["CRA_PERF": "1"], true), (false, ["CRA_PERF": "1"], true)]
           as [(Bool, [String: String], Bool)])
-    func recordingFollowsTheSettingUnlessTheEnvironmentTurnsItOff(setting: Bool, env: [String: String], on: Bool) {
+    func recordingFollowsTheSettingUnlessTheEnvironmentDecides(setting: Bool, env: [String: String], on: Bool) {
         #expect(PerfSessionRules.recording(setting: setting, environment: env) == on)
     }
 

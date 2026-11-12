@@ -41,7 +41,7 @@
   "peekLinksToOtherSites" : true,
   "peekOnShiftClick" : true,
   "perfHidesSiteNames" : false,
-  "perfRecording" : true,
+  "perfRecording" : false,
   "searchEngine" : "bing",
   "searchSuggestions" : true,
   "showSpaceHeaderOnSingleSpace" : true,

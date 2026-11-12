@@ -31,7 +31,7 @@
   "peekLinksToOtherSites" : true,
   "peekOnShiftClick" : true,
   "perfHidesSiteNames" : false,
-  "perfRecording" : true,
+  "perfRecording" : false,
   "searchEngine" : "google",
   "searchSuggestions" : true,
   "showSpaceHeaderOnSingleSpace" : true,

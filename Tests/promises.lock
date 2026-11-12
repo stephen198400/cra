@@ -94,10 +94,10 @@
 #90    Packages/CraCore/Tests/CraCoreTests/ConnectionSecurityTests.swift::withoutAStatusTheSchemeDecides  33fb05d91a90
 #91    Packages/CraCore/Tests/CraCoreTests/PerfSessionTests.swift::aMarkerLeftBehindIsAnAbnormalEnd  ad8fa40df992
 #91    Packages/CraCore/Tests/CraCoreTests/PerfSessionTests.swift::onlyTheOwnerWritesAndOnlyWhileRecording  41c0e8787da8
-#91    Packages/CraCore/Tests/CraCoreTests/PerfSessionTests.swift::recordingFollowsTheSettingUnlessTheEnvironmentTurnsItOff  ea1ec88d4757
+#91    Packages/CraCore/Tests/CraCoreTests/PerfSessionTests.swift::recordingFollowsTheSettingUnlessTheEnvironmentDecides  36988f6ebdee
 #91    Packages/CraCore/Tests/CraCoreTests/PerfStateTests.swift::reportMatchesTheGoldenFile  de1fcab25a26
 #91    Packages/CraCore/Tests/CraCoreTests/PerfStateTests.swift::stallsAreCountedByKindAndHeldMenusAreNotFreezes  128d23a62afd
-#91    Packages/CraCore/Tests/CraCoreTests/ShippedPlatformTests.swift::performanceRecordingIsOnByDefault  259e604ae88e
+#91    Packages/CraCore/Tests/CraCoreTests/ShippedPlatformTests.swift::performanceRecordingIsOffByDefault  de3f4296d00a
 #91    Packages/CraCore/Tests/CraCoreTests/SiteNamesTests.swift::everyHostOfTheSessionBecomesASiteNumber  af4a0eac908c
 #91    Packages/CraCore/Tests/CraCoreTests/SiteNamesTests.swift::theSameSiteKeepsItsNameAcrossFiles  c407e12b2fe9
 #91    Tests/PerfTests.swift::aHangIsWrittenWhileItLastsWithItsStack  37bfa3d1acf6
