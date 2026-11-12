@@ -3,11 +3,10 @@ import CraCEF
 import Observation
 import QuickLookThumbnailing
 
-/// Finished downloads, newest last, for the list Arc shows when you hover the Library
-/// button (its downloads tray) and on Library ▸ Downloads. Kept in downloads.json; files deleted
-/// since drop out. Downloads still running, and ones that failed or were cancelled, are listed
-/// in both too (`live`, not saved): Arc shows progress and failures there, not in a toast. Which
-/// rows each list shows is `DownloadList` (CraCore).
+/// Finished downloads, newest last, for the sidebar header's downloads card. Kept in
+/// downloads.json; files deleted since drop out. Downloads still running, and ones that failed or
+/// were cancelled, are listed too (`live`, not saved): progress and failures show there, not in a
+/// toast. Which rows the card shows is `DownloadsCard` (CraCore).
 @MainActor
 @Observable
 final class DownloadHistory {
@@ -16,10 +15,6 @@ final class DownloadHistory {
     typealias Entry = DownloadList.Entry
     typealias Live = DownloadList.Live
     typealias Listed = DownloadList.Listed
-
-    /// Arc 1.170 listed every recent download it still had on disk (four, oldest at the
-    /// top); how many it shows at most was not observed.
-    static let listLimit = 5
 
     private(set) var entries: [Entry]
     /// Quick Look thumbnails by path, made on demand.
@@ -34,17 +29,6 @@ final class DownloadHistory {
     private(set) var live: [Live] = []
     /// When a download last stopped running (finished, failed or cancelled), for the bin.
     @ObservationIgnored private(set) var lastEnded: Date?
-
-    /// The hover list: newest downloads, oldest first: files still on disk, and running, failed
-    /// or cancelled ones.
-    var recent: [Listed] {
-        DownloadList.tray(entries: entries, live: live, limit: Self.listLimit) { FileManager.default.fileExists(atPath: $0) }
-    }
-
-    /// Library ▸ Downloads: every download, newest first, running ones included (#245).
-    func library(query: String) -> [Listed] {
-        DownloadList.library(entries: entries, live: live, query: query) { FileManager.default.fileExists(atPath: $0) }
-    }
 
     /// The card under the sidebar header's downloads button: running first, then newest (DownloadsCard).
     var card: [Listed] {

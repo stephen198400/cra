@@ -2,7 +2,7 @@ import CraCore
 import Foundation
 import Testing
 
-/// Arc's Filter chips on Archived Tabs and Downloads.
+/// Arc's Filter chips on Archived Tabs.
 struct LibraryFilterTests {
     static let space = UUID(), other = UUID()
 
@@ -33,13 +33,5 @@ struct LibraryFilterTests {
         #expect(!f.shows(Self.entry(.manual, space: Self.other)))
         f.closed = [.auto]
         #expect(!f.shows(Self.entry(.manual, space: Self.space)))
-    }
-
-    @Test func downloadsByProfile() {
-        var f = DownloadFilter()
-        #expect(f.shows(profile: "Profile 2"))
-        f.profiles = [""]
-        #expect(f.shows(profile: nil))
-        #expect(!f.shows(profile: "Profile 2"))
     }
 }

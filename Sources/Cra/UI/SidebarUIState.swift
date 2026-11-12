@@ -41,27 +41,19 @@ final class SidebarUIState {
     var appActive = true
     /// Page theme colour of the visible tab ("#RRGGBB" or "").
     var pageThemeColor = ""
-    /// The latest download, drawn over the Library button the way Arc does (its
-    /// DownloadToLibrary "bin": the file's thumbnail that the download glyph flies into).
-    var recentDownload: RecentDownload?
-    /// The Library button's view, where download flights land.
-    @ObservationIgnored weak var libraryAnchor: NSView?
-    /// Arc's downloads list over the bottom of the sidebar, open while the Library
-    /// button (or the list) is hovered.
-    var downloadsListOpen = false
-    @ObservationIgnored var libraryHovered = false
-    @ObservationIgnored var downloadsListHovered = false
-    @ObservationIgnored var downloadsListWork: DispatchWorkItem?
+    /// The sidebar header's downloads button: download flights land on it and Tidy Downloads'
+    /// card points at it.
+    @ObservationIgnored weak var downloadsAnchor: NSView?
     /// The Library page this window's sidebar shows, nil while it shows the tabs (Arc keeps the
     /// Library per window and reopens it on the page last shown).
     var libraryPage: LibraryPage?
-    @ObservationIgnored var lastLibraryPage: LibraryPage = .downloads
+    @ObservationIgnored var lastLibraryPage: LibraryPage = .media
     /// A two-finger swipe pulling the Library in from the left of the first space, or back out
     /// (Arc 1.171): how much of it shows, 0 the space, 1 the Library, past 1 while it
     /// rubber-bands. nil when no such swipe is tracking or settling.
     @ObservationIgnored var libraryReveal: CGFloat? { didSet { for f in libraryRevealObservers { f() } } }
     /// The page the swipe brings in, the Library's width on it and the sidebar's own width.
-    @ObservationIgnored var libraryRevealPage: LibraryPage = .downloads
+    @ObservationIgnored var libraryRevealPage: LibraryPage = .media
     @ObservationIgnored var libraryRevealWidth: CGFloat = 0
     @ObservationIgnored var libraryRevealBase: CGFloat = 0
     @ObservationIgnored private var libraryRevealObservers: [() -> Void] = []
@@ -164,13 +156,6 @@ final class SidebarUIState {
         if !multiSelection.isEmpty { multiSelection = [] }
         selectionAnchor = anchor
     }
-}
-
-struct RecentDownload: Equatable {
-    let id: UInt32
-    var path: String
-    /// The file type's icon until the download finishes, then its Quick Look thumbnail.
-    var image: NSImage
 }
 
 struct TabNavState: Equatable {

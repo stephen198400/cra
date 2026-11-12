@@ -26,13 +26,14 @@ final class SidebarView: NSView {
     var debugURLFieldState: String { topBar.debugURLFieldState }
     /// The URL field edited in place puts the address back (#344).
     func endAddressEditing() { topBar.endAddressEditing() }
+    /// View ▸ Downloads (⇧⌘J): the header's downloads card, as a click on its button opens it.
+    func toggleDownloadsCard() { topBar.toggleDownloadsCard() }
     /// `from://debug?downloadsPanel=1|0|state`: opens or closes the header's downloads card, then its state.
     func debugDownloadsCard(_ op: String) -> String { topBar.debugDownloadsCard(op) }
     func debugURLFieldType(_ text: String, commit: Bool) -> Bool { topBar.debugURLFieldType(text, commit: commit) }
     private let pager: SpacePagerView
-    private let trayHost: DownloadsTrayView
     private let player: NowPlayingTrayView
-    private let trayMask = CAGradientLayer()
+    private let pagerMask = CALayer()
     private let bannerHost = UpdateBannerView()
     private let dock: SpaceDockView
     private var libraryHost: LibraryView?
@@ -50,15 +51,13 @@ final class SidebarView: NSView {
         palette = store.focusedSpace(window: ui.windowID).theme.palette
         topBar = SidebarTopBarView(store: store, ui: ui, actions: actions)
         pager = SpacePagerView(store: store, ui: ui, actions: actions, favicons: favicons)
-        trayHost = DownloadsTrayView(ui: ui)
         player = NowPlayingTrayView(store: store, ui: ui, favicons: favicons)
         dock = SpaceDockView(store: store, ui: ui, actions: actions)
         super.init(frame: .zero)
         wantsLayer = true
         pager.wantsLayer = true
-        trayMask.startPoint = CGPoint(x: 0.5, y: 0)
-        trayMask.endPoint = CGPoint(x: 0.5, y: 1)
-        for v in [topBar, pager, player, trayHost, bannerHost, dock] as [NSView] { tabs.addSubview(v) }
+        pagerMask.backgroundColor = NSColor.black.cgColor
+        for v in [topBar, pager, player, bannerHost, dock] as [NSView] { tabs.addSubview(v) }
         addSubview(tabs)
         player.onCountChange = { [weak self] in self?.needsLayout = true }
         ui.observeLibraryReveal { [weak self] in self?.applyLibraryReveal() }
@@ -88,32 +87,28 @@ final class SidebarView: NSView {
         let v = DownloadRenameCard(rename: r, colors: SidebarColors(palette))
         let service = TidyDownloadsService.shared
         let toast = actions.showToast
-        let ui = self.ui
         v.onClose = { service.dismiss() }
         v.onHover = { service.hold($0) }
         v.onOpen = { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: r.newPath)]) }
         v.onRevert = {
-            let ok = service.revert(r) { _, back in
-                if var recent = ui.recentDownload, recent.id == r.download {
-                    recent.path = back
-                    ui.recentDownload = recent
-                }
-            }
+            let ok = service.revert(r) { _, _ in }
             if ok { toast("Download name reverted!") }
         }
+        // The downloads card would cover it: the rename points at the button instead.
+        topBar.closeDownloadsCard()
         tabs.addSubview(v)
         renameCard = v
         layoutRenameCard()
         v.appear()
     }
 
+    /// Under the sidebar header's downloads button, the tail pointing up at it.
     private func layoutRenameCard() {
-        guard let v = renameCard, let anchor = ui.libraryAnchor as? LibraryButtonView else { return }
-        let bin = anchor.convert(anchor.binFrame, to: tabs)
-        // Arc: the tail's tip ends 1 pt above the bin's 38 pt box, ~4 pt above its 32 pt thumbnail.
+        guard let v = renameCard, let anchor = ui.downloadsAnchor, anchor.isDescendant(of: tabs) else { return }
+        let button = anchor.convert(anchor.bounds, to: tabs)
         let w = tabs.bounds.width - 16
-        v.frame = NSRect(x: 8, y: bin.minY - 4 - DownloadRenameCard.height, width: w, height: DownloadRenameCard.height)
-        v.tailX = bin.midX - 8
+        v.frame = NSRect(x: 8, y: button.maxY + 2, width: w, height: DownloadRenameCard.height)
+        v.tailX = button.midX - 8
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -122,11 +117,11 @@ final class SidebarView: NSView {
 
     private func observe() {
         var bannerHeight: CGFloat = 0
-        let (space, library, trayOpen, recentCount) = withObservationTracking {
+        let (space, library) = withObservationTracking {
             let space = store.focusedSpace(window: ui.windowID)
             _ = SystemAppearance.shared.isDark
             bannerHeight = UpdateBannerView.preferredHeight
-            return (space, ui.libraryPage, ui.downloadsListOpen, DownloadHistory.shared.recent.count)
+            return (space, ui.libraryPage)
         } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
         }
@@ -140,7 +135,6 @@ final class SidebarView: NSView {
         if paletteChanged || palette.isDark != space.theme.palette.isDark {
             palette = space.theme.palette
             let colors = SidebarColors(palette)
-            trayHost.colors = colors
             bannerHost.colors = colors
             let shown = space.theme.shown
             bannerHost.themeColor = shown.accent ?? shown.colors.first
@@ -148,31 +142,22 @@ final class SidebarView: NSView {
             libraryHost?.palette = palette
         }
         self.bannerHeight = bannerHeight
-        updateTrayMask(open: trayOpen, rows: recentCount)
+        updatePagerMask()
         showLibrary(library)
         needsLayout = true
     }
 
     private var bannerHeight: CGFloat = 0
 
-    /// DownloadsTrayMask: the tab list is hidden from 3 pt above the downloads list's first row
-    /// and fades back in over the 170 pt above that. This mask also clips the pager, leaving
-    /// `MusicNotes.overhang` above the top favorites for notes to rise under the URL field.
-    private func updateTrayMask(open: Bool, rows: Int) {
-        let h = max(pager.bounds.height, 1)
-        let clearTop = max(0, h - DownloadsTrayMetrics.listHeight(rows: rows) - 1)
-        let fadeTop = max(0, clearTop - DownloadsTrayMetrics.fade)
+    /// Clips the pager, leaving `MusicNotes.overhang` above the top favorites for notes to rise
+    /// under the URL field.
+    private func updatePagerMask() {
         let over = MusicNotes.overhang
         CATransaction.begin()
-        CATransaction.setAnimationDuration(open ? 0.18 : 0.13)
-        if !open { CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeOut)) }
-        trayMask.frame = NSRect(x: 0, y: -over, width: pager.bounds.width, height: pager.bounds.height + over)
-        trayMask.locations = [0, NSNumber(value: Double((fadeTop + over) / (h + over))), NSNumber(value: Double((clearTop + over) / (h + over))), 1]
-        let opaque = NSColor.black.cgColor, clear = NSColor.clear.cgColor
-        trayMask.colors = open ? [opaque, opaque, clear, clear] : [opaque, opaque, opaque, opaque]
+        CATransaction.setDisableActions(true)
+        pagerMask.frame = NSRect(x: 0, y: -over, width: pager.bounds.width, height: pager.bounds.height + over)
         CATransaction.commit()
-        if pager.layer?.mask !== trayMask { pager.layer?.mask = trayMask }
-        trayHost.isHidden = rows == 0
+        if pager.layer?.mask !== pagerMask { pager.layer?.mask = pagerMask }
     }
 
     /// The Library takes over the column: in from a little to the left, out to the left past its
@@ -298,10 +283,7 @@ final class SidebarView: NSView {
         player.frame = NSRect(x: 0, y: th, width: b.width, height: max(0, bannerTop - th))
         let listBottom = bannerTop - NowPlayingMetrics.restHeight(cards: player.shownCount)
         pager.frame = NSRect(x: 0, y: th, width: b.width, height: max(0, listBottom - th))
-        let rows = DownloadHistory.shared.recent.count
-        let trayH = DownloadsTrayMetrics.listHeight(rows: rows) + 4
-        trayHost.frame = NSRect(x: 0, y: pager.frame.maxY - trayH, width: b.width, height: trayH)
-        updateTrayMask(open: ui.downloadsListOpen, rows: rows)
+        updatePagerMask()
         if renameCard?.layer?.animationKeys()?.isEmpty ?? true { layoutRenameCard() }
     }
 }
@@ -359,6 +341,11 @@ final class SidebarTopBarView: NSView {
     }
     func debugURLFieldType(_ text: String, commit: Bool) -> Bool { !pill.isHidden && pill.debugType(text, commit: commit) }
     func endAddressEditing() { pill.endEditing(commit: false) }
+    func toggleDownloadsCard() {
+        layoutSubtreeIfNeeded()
+        downloads.toggleCard()
+    }
+    func closeDownloadsCard() { downloads.closeCard() }
     func debugDownloadsCard(_ op: String) -> String {
         layoutSubtreeIfNeeded()
         if op == "1" { downloads.openCard() } else if op == "0" { downloads.closeCard() }
@@ -385,12 +372,17 @@ final class SidebarTopBarView: NSView {
         pill.actions = actions
         pill.onCommit = { [weak actions] in actions?.commitAddress($0) }
         addSubview(pill)
-        downloads.showAll = { [weak actions] in actions?.showLibrary(.downloads) }
+        // Downloads live in this card, not in the Library: "View all downloads" opens the folder.
+        downloads.showAll = { [weak self] in
+            let profile = (self?.window?.windowController as? MainWindowController)?.profileDirectoryName
+            NSWorkspace.shared.open(DownloadDestinations.folder(profileID: DownloadDestinations.profileID(profilePath: profile)))
+        }
         downloads.sidebarShown = { [weak store, weak ui] in
             guard let store, let ui else { return false }
             return store.window(ui.windowID).sidebarVisible
         }
         addSubview(downloads)
+        ui.downloadsAnchor = downloads
         sync()
     }
 
@@ -1358,35 +1350,20 @@ final class SpaceCellView: NSView, ArcTooltipTarget {
     var hostWindow: NSWindow? { window }
 }
 
-/// The Library button (this fork: the `tray.full` symbol) and, over it, the
-/// latest download's "bin" (DownloadsUI.DownloadToLibrary): the file's thumbnail, 32 pt with
-/// 8 pt corners, up and to the right of the glyph. It drops in from 6 pt above, overshoots 12 pt
-/// below and settles (Arc 1.170 at 60 fps), and is faint while the window is in the background.
+/// The Library button (this fork: the `tray.full` symbol). Downloads show in the sidebar header's
+/// card, not over this button.
 final class LibraryButtonView: NSView {
-    private let ui: SidebarUIState
     private let actions: SidebarActions
     private let glyph = NSImageView()
     private let tip: ArcTooltipAnchorView
-    private let bin = NSView()
-    private let binImage = CALayer()
-    private let binTip: ArcTooltipAnchorView
-    /// The ring on the bin's corner while downloads run (#272).
-    private let badge = DownloadProgressBadgeView()
-    private var shownDownload: UInt32?
     private var hovering = false { didSet { if hovering != oldValue { refresh() } } }
-    var colors = SidebarColors() { didSet { if colors != oldValue { badge.colors = colors; refresh() } } }
-    static let binOffset = CGSize(width: 9, height: -12)
-    /// The download bin's frame, for Tidy Downloads' card to point at.
-    var binFrame: NSRect { bin.frame }
+    var colors = SidebarColors() { didSet { if colors != oldValue { refresh() } } }
 
     init(ui: SidebarUIState, actions: SidebarActions) {
-        self.ui = ui
         self.actions = actions
         tip = ArcTooltipAnchorView(frame: .zero)
-        binTip = ArcTooltipAnchorView(frame: .zero)
         super.init(frame: .zero)
         wantsLayer = true
-        // Round the glyph's hover fill. Rounding the button itself clips the overhanging thumbnail.
         glyph.wantsLayer = true
         glyph.layer?.cornerRadius = 7
         glyph.layer?.cornerCurve = .continuous
@@ -1398,71 +1375,12 @@ final class LibraryButtonView: NSView {
         (tip.text, tip.keys) = ArcTooltipLabel.split("View Library (⇧⌘L)")
         tip.placement = .trailing
         addSubview(tip)
-        bin.wantsLayer = true
-        binImage.cornerRadius = 8
-        binImage.cornerCurve = .continuous
-        binImage.masksToBounds = true
-        binImage.contentsGravity = .resizeAspectFill
-        bin.layer?.addSublayer(binImage)
-        bin.addSubview(binTip)
-        bin.addSubview(badge)
-        bin.isHidden = true
-        addSubview(bin)
-        ui.libraryAnchor = self
-        observe()
-        observeProgress()
-    }
-
-    private struct Progress: Equatable {
-        var running: Double?
-        var bin: UInt32?
-    }
-
-    /// The badge follows every running download together; when the last one ends, a check if the
-    /// bin's download finished with a file, else it just goes.
-    private func observeProgress() {
-        observeChanges(of: { [ui] in Progress(running: DownloadHistory.shared.progress, bin: ui.recentDownload?.id) }) { [weak self] p in
-            guard let self else { return }
-            let finished = p.bin.map { id in !DownloadHistory.shared.live.contains { $0.id == id } } ?? false
-            self.badge.show(progress: p.bin == nil ? nil : p.running, finished: finished)
-        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
-
-    private func observe() {
-        let (download, active) = withObservationTracking { (ui.recentDownload, ui.appActive) } onChange: { [weak self] in
-            Task { @MainActor in self?.observe() }
-        }
-        guard let download else { bin.isHidden = true; shownDownload = nil; return }
-        bin.isHidden = false
-        binImage.contents = download.image
-        bin.alphaValue = active ? 1 : 0.4
-        binTip.text = (download.path as NSString).lastPathComponent
-        if shownDownload != download.id {
-            shownDownload = download.id
-            drop()
-        }
-    }
-
-    private func drop() {
-        let y = CAKeyframeAnimation(keyPath: "transform.translation.y")
-        // Flipped view: positive y is down on screen.
-        y.values = [-6, 12, 12, -2, 0].map { NSNumber(value: Double($0) * (bin.layer?.isGeometryFlipped == true ? 1 : -1)) }
-        y.keyTimes = [0, 0.15, 0.2, 0.33, 0.4].map { NSNumber(value: $0 / 0.4) }
-        y.timingFunctions = [CAMediaTimingFunction(name: .easeInEaseOut), CAMediaTimingFunction(name: .linear),
-                             CAMediaTimingFunction(name: .easeInEaseOut), CAMediaTimingFunction(name: .easeInEaseOut)]
-        y.duration = 0.4
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 0
-        fade.toValue = 1
-        fade.duration = 0.05
-        bin.layer?.add(y, forKey: "drop")
-        bin.layer?.add(fade, forKey: "fade")
-    }
 
     private func refresh() {
         glyph.layer?.backgroundColor = (hovering ? colors.hoverFill : .clear).cgColor
@@ -1473,19 +1391,6 @@ final class LibraryButtonView: NSView {
         super.layout()
         glyph.frame = bounds
         tip.frame = bounds
-        let c = NSPoint(x: bounds.midX + Self.binOffset.width, y: bounds.midY + Self.binOffset.height)
-        bin.frame = NSRect(x: c.x - 16, y: c.y - 16, width: 32, height: 32)
-        binImage.frame = bin.bounds
-        binTip.frame = bin.bounds
-        // Over the bin's bottom right corner, 4 pt out (the bin isn't flipped).
-        let b = DownloadProgressBadgeView.size
-        badge.frame = NSRect(x: bin.bounds.maxX - b + 4, y: -4, width: b, height: b)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let p = convert(point, from: superview)
-        if !bin.isHidden, bin.frame.contains(p) { return self }
-        return bounds.contains(p) ? self : nil
     }
 
     override func updateTrackingAreas() {
@@ -1493,15 +1398,10 @@ final class LibraryButtonView: NSView {
         for t in trackingAreas where t.owner === self { removeTrackingArea(t) }
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
     }
-    override func mouseEntered(with event: NSEvent) { hovering = true; ui.libraryHovered = true; ui.downloadsHoverChanged() }
-    override func mouseExited(with event: NSEvent) { hovering = false; ui.libraryHovered = false; ui.downloadsHoverChanged() }
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        if !bin.isHidden, bin.frame.contains(p), let path = ui.recentDownload?.path {
-            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
-        } else if bounds.contains(p) {
-            actions.toggleLibrary()
-        }
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { actions.toggleLibrary() }
     }
 }

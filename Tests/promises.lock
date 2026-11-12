@@ -386,7 +386,6 @@
 #242   Tests/Scenarios/peek-per-tab.scenario  09e9900bb28e
 #243   Packages/CraCore/Tests/CraCoreTests/TabRowTrailingTests.swift::hoveredNameRunsToTheCloseButton  0a8658ede567
 #243   Packages/CraCore/Tests/CraCoreTests/TabRowTrailingTests.swift::restingTailIsUnchanged  f479053f4258
-#245   Packages/CraCore/Tests/CraCoreTests/DownloadListTests.swift::libraryListsRunningDownloads  fec003db07c1
 #246   Packages/CraCore/Tests/CraCoreTests/PictureInPictureLayoutTests.swift::sizeStaysInArcsLimits  f3363f2b0bcf
 #246   Packages/CraCore/Tests/CraCoreTests/PictureInPictureLayoutTests.swift::topBarIsArcs  ac06153d1f62
 #246   Tests/Scenarios/pip-title-strip.scenario  3bbac14b264c
@@ -504,8 +503,8 @@
 #302   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::libraryIsArcsWidth  a95bc15fcc1b
 #302   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::narrowWindowKeepsThePage  075b072d8630
 #302   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::spacesPageFitsItsCards  7da5934c4e79
-#302   Tests/Scenarios/library-narrow-window.scenario  e0f8e583fb0e
-#302   Tests/Scenarios/library-width.scenario  a494123238a7
+#302   Tests/Scenarios/library-narrow-window.scenario  e160f9a98a51
+#302   Tests/Scenarios/library-width.scenario  c180cf7d5292
 #303   Packages/CraCore/Tests/CraCoreTests/MusicNotesTests.swift::arcsMusicSites  7073b0e92e72
 #303   Packages/CraCore/Tests/CraCoreTests/MusicNotesTests.swift::fieldIsCentredOnTheIconsTopEdge  ed1fe24fdf19
 #303   Packages/CraCore/Tests/CraCoreTests/MusicNotesTests.swift::otherSites  b58aede4c1c0
@@ -576,7 +575,7 @@
 #340   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::hiddenSidebarKeepsTheWholeCard  df2c85e32e74
 #340   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::narrowerLibraryLeavesNoGap  1c2dda02d1ed
 #340   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::pageKeepsItsWidth  6683626032be
-#340   Tests/Scenarios/library-keeps-page.scenario  d5c9368b4c52
+#340   Tests/Scenarios/library-keeps-page.scenario  550153e70e41
 #341   Tests/FloatingSidebarTests.swift::staysInsideTheWindowsCorners  47752aeeee63
 #344   Packages/CraCore/Tests/CraCoreTests/SidebarAddressEditTests.swift::aPinnedTabSendsAnotherHostToANewTab  52bb16a0739c
 #344   Packages/CraCore/Tests/CraCoreTests/SidebarAddressEditTests.swift::clickEditsInPlaceOnlyWhenTurnedOnAndATabIsSelected  dbb45b4d979e

@@ -5,7 +5,6 @@ importer-without-fixture	Services/Import/ZenImporter.swift:Zen	1
 raw-observation-tracking	UI/CommandBar/CommandBarView.swift	1
 raw-observation-tracking	UI/Overlays.swift	3
 raw-observation-tracking	UI/PaneToolbarView.swift	1
-raw-observation-tracking	UI/Sidebar/DownloadsTray.swift	1
 raw-observation-tracking	UI/Sidebar/LibraryView.swift	1
 raw-observation-tracking	UI/Sidebar/List/SidebarView.swift	4
 raw-observation-tracking	UI/Sidebar/List/SpaceColumnView.swift	2

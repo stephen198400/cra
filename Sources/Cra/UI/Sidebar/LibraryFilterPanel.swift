@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Arc's Filter panel on Library ▸ Archived Tabs and Downloads (Arc 1.172.1, 8 Nov 2026, 2x stills):
+/// Arc's Filter panel on Library ▸ Archived Tabs (Arc 1.172.1, 8 Nov 2026, 2x stills):
 /// it takes the search row's place: the title ("Filter Archived Tabs", 15 pt semibold, 12 pt in) and
 /// a Done pill (59 × 36 pt); then each question (12.5 pt semibold, faded) over a wrapping row of
 /// 33 pt chips, 6 pt apart, light until picked, dark with white text once picked.

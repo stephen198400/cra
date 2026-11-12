@@ -846,17 +846,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
                                       total: download.totalBytes, percent: download.percent, complete: download.state == .complete,
                                       cancelled: download.state == .cancelled, failed: download.state == .interrupted,
                                       paused: download.paused)
-        updateRecentDownload(download)
         if download.state == .complete, !download.fullPath.isEmpty, finishedDownloads.insert(download.identifier).inserted {
             DownloadHistory.shared.add(path: download.fullPath, profile: browsers.downloadSourceTab.map(store.profileDirectoryName(item:)) ?? profileDirectoryName)
             // The address's scheme only, never the file: scenarios wait for this line.
             CraLog.note("Download finished from a \(URL(string: download.url)?.scheme ?? "unknown"): address")
             let id = download.identifier
-            TidyDownloadsService.shared.finished(id, path: download.fullPath, downloadURL: download.url, window: windowID, store: store) { [weak self] path in
-                guard let self, var recent = self.sidebarUI.recentDownload, recent.id == id else { return }
-                recent.path = path
-                self.sidebarUI.recentDownload = recent
-            }
+            TidyDownloadsService.shared.finished(id, path: download.fullPath, downloadURL: download.url, window: windowID, store: store) { _ in }
         }
         if download.state == .inProgress, downloadWatchdog == nil {
             downloadWatchdog = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -899,67 +894,18 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         }
     }
 
-    /// Arc's download animation: the file drops onto the Library button and a download
-    /// glyph is thrown at it from the pointer (DownloadFlight). Measured on Arc 1.170: the
-    /// file stays 30 s after the glyph lands, then fades out over 0.15 s.
+    /// Arc's download animation, aimed at the sidebar header's downloads button: a download glyph
+    /// is thrown at it from the pointer (DownloadFlight); the card under it lists the download.
     private func showDownloadInSidebar(_ download: CraDownloadInfo, name: String) {
-        let type = UTType(filenameExtension: (name as NSString).pathExtension) ?? .data
-        sidebarUI.recentDownload = RecentDownload(id: download.identifier, path: download.fullPath,
-                                                  image: NSWorkspace.shared.icon(for: type))
-        var flight: TimeInterval = 0
-        if let window, window.isVisible, let anchor = sidebarUI.libraryAnchor, let host = anchor.window,
-           host.isVisible, !anchor.isHiddenOrHasHiddenAncestor {
-            // Aim at the bin's centre (screen coordinates are y-up, the offset is SwiftUI's y-down).
-            let glyph = host.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-            let bin = NSPoint(x: glyph.midX + LibraryButtonView.binOffset.width, y: glyph.midY - LibraryButtonView.binOffset.height)
-            flight = DownloadFlight.launch(over: window, from: NSEvent.mouseLocation, to: bin)
-        }
-        putAwayBin(download.identifier, after: flight + 30)
-    }
-
-    /// The bin leaves 30 s after it lands, but not while a download runs: its badge is how a
-    /// running download shows without hovering (#272). It goes 30 s after the last one ends.
-    private func putAwayBin(_ id: UInt32, after delay: TimeInterval) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self, self.sidebarUI.recentDownload?.id == id else { return }
-            if DownloadHistory.shared.hasRunningDownloads { self.putAwayBin(id, after: 5); return }
-            if let ended = DownloadHistory.shared.lastEnded, Date().timeIntervalSince(ended) < 30 {
-                self.putAwayBin(id, after: 30 - Date().timeIntervalSince(ended))
-                return
-            }
-            withAnimation(.easeOut(duration: 0.15)) { self.sidebarUI.recentDownload = nil }
-        }
+        guard let window, window.isVisible, let anchor = sidebarUI.downloadsAnchor, let host = anchor.window,
+              host.isVisible, !anchor.isHiddenOrHasHiddenAncestor else { return }
+        let button = host.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+        _ = DownloadFlight.launch(over: window, from: NSEvent.mouseLocation, to: NSPoint(x: button.midX, y: button.midY))
     }
 
     private var finishedDownloads: Set<UInt32> = []
     /// Downloads this window's pages started (its flight and stall checks).
     private var windowDownloads: Set<UInt32> = []
-
-    /// Keeps the Library button's file current: its path once known, its Quick Look
-    /// thumbnail once the download is complete (Arc showed a text file's page).
-    private func updateRecentDownload(_ download: CraDownloadInfo) {
-        // Only the first complete update counts; Chromium sends more after it.
-        guard var recent = sidebarUI.recentDownload, recent.id == download.identifier,
-              !finishedDownloads.contains(download.identifier) else { return }
-        if !download.fullPath.isEmpty, recent.path != download.fullPath {
-            recent.path = download.fullPath
-            sidebarUI.recentDownload = recent
-        }
-        guard download.state == .complete, !download.fullPath.isEmpty else { return }
-        let request = QLThumbnailGenerator.Request(fileAt: URL(fileURLWithPath: download.fullPath), size: CGSize(width: 32, height: 32),
-                                                   scale: window?.backingScaleFactor ?? 2, representationTypes: .thumbnail)
-        let id = download.identifier
-        QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { [weak self] thumbnail, _ in
-            let image = thumbnail?.nsImage
-            DispatchQueue.main.async {
-                guard let self, var recent = self.sidebarUI.recentDownload, recent.id == id else { return }
-                // The first progress update can lack a filename. Use the finished file's Finder
-                // icon if Quick Look has no preview, including after Tidy Downloads renamed it.
-                recent.image = image ?? NSWorkspace.shared.icon(forFile: recent.path)
-                self.sidebarUI.recentDownload = recent
-            }
-        }
-    }
 
     func browserManager(fullscreen: Bool, tabID: UUID) {
         guard let window else { return }
@@ -2318,7 +2264,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             shell.animateSidebar(visible: true, floating: false, fullscreen: shell.contentFullscreen, width: shell.sidebarWidth, duration: 0.1)
         }
         guard opening else { return }
-        sidebarUI.downloadsListOpen = false
         commandBar.close()
         shell.sidebarResizable = false
         let width = libraryWidth(page)
@@ -2717,7 +2662,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             let page = sidebarUI.libraryPage ?? sidebarUI.libraryRevealPage
             if sidebarUI.libraryPage == nil {
                 sidebarUI.lastLibraryPage = page
-                sidebarUI.downloadsListOpen = false
                 commandBar.close()
                 shell.sidebarResizable = false
                 withTransaction(instant) { sidebarUI.libraryPage = page }
@@ -3170,6 +3114,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             NSLog("Cra toolbar %@ pressed=%d %@", step, pressed ? 1 : 0, bar.debugState)
         }
+    }
+
+    /// View ▸ Downloads and ⇧⌘J: the sidebar header's downloads card, the way its button opens it.
+    func toggleDownloadsCard() {
+        (shell.sidebarHost as? SidebarView)?.toggleDownloadsCard()
     }
 
     /// `from://debug?downloadsPanel=1|0|state`: the sidebar header's downloads card opened, closed or

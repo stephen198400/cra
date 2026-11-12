@@ -1,0 +1,17 @@
+# Downloads moved to the sidebar header's card, so the Library has no Downloads page: View
+# Downloads… (⇧⌘J) opens that card over the tab list instead of the Library, and opens and
+# closes it like its button.
+budget rss=700 stalls50=10
+from://open?url=${PAGE}?n=one
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+# The window settles before the shortcut: the card has nowhere to open from mid-launch.
+wait 2
+from://action/viewDownloads
+wait 1
+from://debug?downloadsPanel=state
+expect-log downloads card: .* open=1 
+reject-log library opens \d+ pt wide
+from://action/viewDownloads
+wait 1
+from://debug?downloadsPanel=state
+expect-log downloads card: .* open=0 

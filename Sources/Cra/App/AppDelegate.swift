@@ -1408,8 +1408,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 sweepForMemoryPressure(level)
                 return
             }
-            // Opens what normally needs a pointer or a held key, for screenshots.
-            if let v = dict["downloads"] { main.sidebarUI.downloadsListOpen = v == "1"; return }
             // What a running download's menu does (pause, resume, cancel), to the newest one in
             // progress; `downloadState` logs how the rows read (#272).
             if let v = dict["download"] {
@@ -2069,10 +2067,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case "jsConsole": main.browsers.runDevTools(.console)
         case "networkPanel": main.browsers.runDevTools(.network)
         case "inspectElement": main.browsers.runDevTools(.inspect)
-        // Arc's Library is a mode of the window's sidebar; ⇧⌘J opens it on Downloads.
+        // Arc's Library is a mode of the window's sidebar. Downloads are the sidebar header's
+        // card, not a Library page: ⇧⌘J opens that.
         case "openLibrary": main.toggleLibrary()
         case "viewArchive": main.showLibrary(.archive)
-        case "viewDownloads": main.showLibrary(.downloads)
+        case "viewDownloads": main.toggleDownloadsCard()
         case "viewMedia": main.showLibrary(.media)
         case "viewEasels": main.showLibrary(.easels)
         case "viewBoosts": main.showLibrary(.boosts)

@@ -1,15 +1,13 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// The Library's pages Cra has, in the order of Arc's rail (which also lists Easels and Boosts).
 enum LibraryPage: String, CaseIterable {
-    case media, downloads, easels, spaces, boosts, archive
+    case media, easels, spaces, boosts, archive
 
     var title: String {
         switch self {
         case .media: "Media"
-        case .downloads: "Downloads"
         case .easels: "Easels"
         case .spaces: "Spaces"
         case .boosts: "Boosts"
@@ -19,7 +17,6 @@ enum LibraryPage: String, CaseIterable {
     var symbol: String {
         switch self {
         case .media: "photo.on.rectangle"
-        case .downloads: "arrow.down.circle"
         case .easels: "pencil.and.scribble"
         case .spaces: "square.on.square"
         case .boosts: "paintbrush.pointed"
@@ -37,7 +34,6 @@ enum LibraryPage: String, CaseIterable {
     var searchPrompt: String {
         switch self {
         case .media: "Search Media…"
-        case .downloads: "Search Downloads…"
         case .easels: "Search Easels…"
         case .boosts: "Search Boosts…"
         default: "Search Archive…"
@@ -168,7 +164,7 @@ private final class LibraryRailView: NSView {
     private let hairline = CALayer()
     private var buttons: [LibraryRailButton] = []
     private var back: SidebarGlyphButton?
-    private var page: LibraryPage = .downloads
+    private var page: LibraryPage = .media
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -308,14 +304,13 @@ private final class LibraryRailButton: NSView {
     }
 }
 
-/// The page's list column: search, then the downloads or the archived tabs by day.
+/// The page's list column: search, then the media, easels, boosts or the archived tabs by day.
 private final class LibraryListView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTableViewDelegate {
     enum Row {
         case header(String)
         case media([MediaLibrary.File])
         case easels([EaselEntry])
         case boost(Boost)
-        case download(DownloadHistory.Listed)
         case archived(ArchivedItem)
     }
 
@@ -419,9 +414,6 @@ private final class LibraryListView: NSView, NSTextFieldDelegate, NSTableViewDat
     private func observe() {
         withObservationTracking {
             _ = store.archive
-            _ = DownloadHistory.shared.entries
-            _ = DownloadHistory.shared.live
-            _ = DownloadHistory.shared.thumbnails.count
             _ = MediaScanner.shared.files
             _ = BoostStore.shared.boosts
             _ = store.settings.mediaLibraryEnabled
@@ -457,20 +449,6 @@ private final class LibraryListView: NSView, NSTextFieldDelegate, NSTableViewDat
             out = MediaLibrary.rows(shown).map { .media($0) }
             empty.show(symbol: "photo.on.rectangle", title: all.isEmpty ? "Nothing here yet!" : "No matches",
                        detail: all.isEmpty ? "Screenshots, pictures and videos in the folders you show appear here." : nil)
-        case .downloads:
-            // Running, failed and cancelled downloads too, as in the tray (#245).
-            let all = DownloadHistory.shared.library(query: "")
-            let shown = (needle.isEmpty ? all : DownloadHistory.shared.library(query: query)).filter {
-                guard case .finished(let e) = $0 else { return downloadFilter.isEmpty }
-                return downloadFilter.shows(profile: e.profile ?? "Default")
-            }
-            for (label, entries) in Self.grouped(shown, date: \.date) {
-                out.append(.header(label))
-                out += entries.map { .download($0) }
-            }
-            // Arc's words.
-            empty.show(symbol: "arrow.down.circle", title: all.isEmpty ? "Nothing here yet!" : "No matches",
-                       detail: all.isEmpty ? "Come back after you’ve found some cool stuff to save." : nil)
         case .easels:
             let all = EaselFiles.all()
             let shown = needle.isEmpty ? all : all.filter { $0.title.lowercased().contains(needle) }
@@ -629,16 +607,10 @@ private final class LibraryListView: NSView, NSTextFieldDelegate, NSTableViewDat
     }
 
     /// A rail button's right-click: Media's folders (Arc's Library button menu), and what Cra's ⋯
-    /// held before Arc's Filter took its place (Open Downloads Folder, Clear Archive).
+    /// held before Arc's Filter took its place (Clear Archive).
     static func pageMenu(_ page: LibraryPage, store: SidebarStore, profile: String?) -> NSMenu? {
         switch page {
         case .media: return mediaFoldersMenu(store)
-        case .downloads:
-            let m = NSMenu()
-            MenuItems.add(m, "Open Downloads Folder") {
-                NSWorkspace.shared.open(DownloadDestinations.folder(profileID: DownloadDestinations.profileID(profilePath: profile)))
-            }
-            return m
         case .archive:
             let m = NSMenu()
             m.autoenablesItems = false
@@ -648,53 +620,42 @@ private final class LibraryListView: NSView, NSTextFieldDelegate, NSTableViewDat
         }
     }
 
-    // MARK: Filter (Arc's, on Archived Tabs and Downloads)
+    // MARK: Filter (Arc's, on Archived Tabs)
 
     private var archiveFilter = ArchiveFilter()
-    private var downloadFilter = DownloadFilter()
     private var filtering = false { didSet { showFilterPanel() } }
     private var filterHost: NSHostingView<LibraryFilterPanel>?
 
-    private var hasFilter: Bool { page == .archive || page == .downloads }
-    private var filterActive: Bool { page == .archive ? !archiveFilter.isEmpty : page == .downloads ? !downloadFilter.isEmpty : false }
+    private var hasFilter: Bool { page == .archive }
+    private var filterActive: Bool { page == .archive && !archiveFilter.isEmpty }
 
     private func filterPanel() -> LibraryFilterPanel {
         typealias Chip = LibraryFilterPanel.Chip
         var sections: [LibraryFilterPanel.Section] = []
-        if page == .archive {
-            let f = archiveFilter
-            sections.append(.init(title: "How was the tab closed?", chips: [
-                Chip(id: "auto", label: "Auto-Closed", on: f.closed.contains(.auto)),
-                Chip(id: "manual", label: "Manually Closed", on: f.closed.contains(.manual)),
-            ]))
-            var places = [Chip(id: "little", label: "Little Window", on: f.places.contains(.littleWindow))]
-            for id in store.spaceOrder {
-                guard let sp = store.space(id) else { continue }
-                places.append(Chip(id: "space:" + id.uuidString, label: sp.title, icon: sp.emoji.isEmpty ? nil : sp.emoji,
-                                   on: f.places.contains(.space(id))))
-            }
-            sections.append(.init(title: "Where was the tab?", chips: places))
-        } else {
-            var chips = [Chip(id: "Default", label: "Default", on: downloadFilter.profiles.contains("Default"))]
-            for p in store.profiles { chips.append(Chip(id: p.directoryName, label: p.name, on: downloadFilter.profiles.contains(p.directoryName))) }
-            sections.append(.init(title: "Profiles", chips: chips))
+        let f = archiveFilter
+        sections.append(.init(title: "How was the tab closed?", chips: [
+            Chip(id: "auto", label: "Auto-Closed", on: f.closed.contains(.auto)),
+            Chip(id: "manual", label: "Manually Closed", on: f.closed.contains(.manual)),
+        ]))
+        var places = [Chip(id: "little", label: "Little Window", on: f.places.contains(.littleWindow))]
+        for id in store.spaceOrder {
+            guard let sp = store.space(id) else { continue }
+            places.append(Chip(id: "space:" + id.uuidString, label: sp.title, icon: sp.emoji.isEmpty ? nil : sp.emoji,
+                               on: f.places.contains(.space(id))))
         }
-        return LibraryFilterPanel(title: page == .archive ? "Filter Archived Tabs" : "Filter Downloads…", sections: sections, width: max(200, bounds.width),
+        sections.append(.init(title: "Where was the tab?", chips: places))
+        return LibraryFilterPanel(title: "Filter Archived Tabs", sections: sections, width: max(200, bounds.width),
                                   dark: colors.isDark, toggle: { [weak self] id in self?.toggleChip(id) },
                                   done: { [weak self] in self?.filtering = false })
     }
 
     private func toggleChip(_ id: String) {
         func flip<T: Hashable>(_ set: inout Set<T>, _ v: T) { if set.contains(v) { set.remove(v) } else { set.insert(v) } }
-        if page == .archive {
-            switch id {
-            case "auto": flip(&archiveFilter.closed, .auto)
-            case "manual": flip(&archiveFilter.closed, .manual)
-            case "little": flip(&archiveFilter.places, .littleWindow)
-            default: if let u = UUID(uuidString: String(id.dropFirst(6))) { flip(&archiveFilter.places, .space(u)) }
-            }
-        } else {
-            flip(&downloadFilter.profiles, id)
+        switch id {
+        case "auto": flip(&archiveFilter.closed, .auto)
+        case "manual": flip(&archiveFilter.closed, .manual)
+        case "little": flip(&archiveFilter.places, .littleWindow)
+        default: if let u = UUID(uuidString: String(id.dropFirst(6))) { flip(&archiveFilter.places, .space(u)) }
         }
         filterHost?.rootView = filterPanel()
         reload()
@@ -779,11 +740,6 @@ private final class LibraryListView: NSView, NSTextFieldDelegate, NSTableViewDat
             v.fileMenu = { [weak self, store] file in MediaMenu.make(for: file, store: store) { if $0 == .hide { self?.reload() } } }
             v.show(files, ink: colors.isDark ? .white : .black)
             return v
-        case .download(let e):
-            let v = tableView.makeView(withIdentifier: .init("item"), owner: nil) as? LibraryItemCell ?? LibraryItemCell()
-            v.identifier = .init("item")
-            v.showDownload(e, colors: colors)
-            return v
         case .archived(let e):
             let v = tableView.makeView(withIdentifier: .init("item"), owner: nil) as? LibraryItemCell ?? LibraryItemCell()
             v.identifier = .init("item")
@@ -847,9 +803,6 @@ extension LibraryListView: NSMenuDelegate {
             }
             menu.addItem(.separator())
             MenuItems.add(menu, "Remove from Archive") { store.removeFromArchive(e.id) }
-        case .download(let d):
-            // Arc's Download Context Menu, the tray's too (#272).
-            DownloadRowMenu.fill(menu, for: d)
         }
     }
 }
@@ -890,9 +843,9 @@ private final class LibraryHeaderCell: NSView {
     }
 }
 
-/// An archived tab (24 pt icon tile, title over URL) or a download (32 pt thumbnail, name over
-/// age): 52 pt tall inside 4 × 2 pt of padding, the space's hover fill under the pointer.
-private final class LibraryItemCell: NSView, NSDraggingSource {
+/// An archived tab (24 pt icon tile, title over URL): 52 pt tall inside 4 × 2 pt of padding,
+/// the space's hover fill under the pointer.
+private final class LibraryItemCell: NSView {
     private let card = FlippedView()
     private let tile = NSView()
     private let icon = NSImageView()
@@ -900,9 +853,6 @@ private final class LibraryItemCell: NSView, NSDraggingSource {
     private let detail = NSTextField.sidebarLabel(size: 12)
     private var tip: ArcTooltipAnchorView?
     private var colors = SidebarColors()
-    /// A finished download's file: opened by a click, dragged out.
-    private var download: DownloadHistory.Entry?
-    private var isDownloadRow = false
     private var restore: (() -> Void)?
     /// An archived tab's hover buttons (Arc 1.172.1): the bin removes it from the archive, the
     /// curved arrow brings it back.
@@ -911,12 +861,6 @@ private final class LibraryItemCell: NSView, NSDraggingSource {
     private let restoreButton = NSImageView()
     private var downAt: NSPoint?
     private var hovering = false { didSet { if hovering != oldValue { refreshHover(); needsLayout = true } } }
-
-    private static let age: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .full
-        return f
-    }()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -951,8 +895,6 @@ private final class LibraryItemCell: NSView, NSDraggingSource {
 
     func showArchived(_ e: ArchivedItem, icon image: NSImage?, colors: SidebarColors, restore: @escaping () -> Void, remove: @escaping () -> Void) {
         self.colors = colors
-        download = nil
-        isDownloadRow = false
         self.restore = restore
         self.remove = remove
         let ink: NSColor = colors.isDark ? .white : .black
@@ -966,42 +908,6 @@ private final class LibraryItemCell: NSView, NSDraggingSource {
         let url = e.item.tab?.url ?? ""
         if let tip { (tip.text, tip.keys) = (url, []) } else if !url.isEmpty { tip = ArcTooltipAnchorView.attach(to: self, help: url) }
         tip?.text = url
-        apply(ink: ink)
-    }
-
-    /// A download on Library ▸ Downloads: a finished file (thumbnail, name, age) or one still
-    /// running, failed or cancelled (its type's icon, name, progress or what went wrong; #245).
-    func showDownload(_ listed: DownloadHistory.Listed, colors: SidebarColors) {
-        self.colors = colors
-        isDownloadRow = true
-        restore = nil
-        remove = nil
-        let ink: NSColor = colors.isDark ? .white : .black
-        icon.isHidden = true
-        let image: NSImage?
-        switch listed {
-        case .finished(let e):
-            download = e
-            image = DownloadHistory.shared.thumbnail(for: e.path)
-            detail.stringValue = Self.age.localizedString(for: min(e.date, Date()), relativeTo: Date())
-        case .live(let l):
-            download = nil
-            image = NSWorkspace.shared.icon(for: UTType(filenameExtension: (l.name as NSString).pathExtension) ?? .data)
-            detail.stringValue = DownloadRow.subtitle(l.row, now: Date())
-        }
-        if let image {
-            var rect = NSRect(x: 0, y: 0, width: 32, height: 32)
-            let scale = window?.backingScaleFactor ?? 2
-            tile.layer?.contents = image.cgImage(forProposedRect: &rect, context: nil, hints: [.ctm: AffineTransform(scale: scale)])
-            tile.layer?.contentsScale = scale
-            tile.layer?.backgroundColor = nil
-        } else {
-            tile.layer?.contents = nil
-            tile.layer?.backgroundColor = ink.withAlphaComponent(0.04).cgColor
-        }
-        title.stringValue = listed.name
-        title.lineBreakMode = .byTruncatingMiddle
-        tip?.text = ""
         apply(ink: ink)
     }
 
@@ -1020,14 +926,13 @@ private final class LibraryItemCell: NSView, NSDraggingSource {
         super.layout()
         card.frame = bounds.insetBy(dx: 4, dy: 2)
         let h = card.bounds.height
-        // Archived: 24 pt tile 9 pt in; download: 32 pt thumbnail 5 pt in; the text 10 pt after.
-        let isDownload = isDownloadRow
-        let t: CGFloat = isDownload ? 32 : 24
-        let x: CGFloat = isDownload ? 5 : 9
+        // Archived: a 24 pt tile 9 pt in, the text 10 pt after.
+        let t: CGFloat = 24
+        let x: CGFloat = 9
         tile.frame = NSRect(x: x, y: (h - t) / 2, width: t, height: t)
         icon.frame = NSRect(x: (t - 16) / 2, y: (t - 16) / 2, width: 16, height: 16)
         // Arc's archived row on hover: the bin and the restore arrow 34 pt apart, 14 pt from the right.
-        let showsButtons = hovering && remove != nil && !isDownloadRow
+        let showsButtons = hovering && remove != nil
         binButton.isHidden = !showsButtons
         restoreButton.isHidden = !showsButtons
         let ink: NSColor = colors.isDark ? .white : .black
@@ -1056,26 +961,12 @@ private final class LibraryItemCell: NSView, NSDraggingSource {
 
     override func mouseDown(with event: NSEvent) { downAt = event.locationInWindow }
 
-    override func mouseDragged(with event: NSEvent) {
-        guard let start = downAt, let download else { return }
-        let p = event.locationInWindow
-        guard hypot(p.x - start.x, p.y - start.y) > 3 else { return }
-        downAt = nil
-        let item = NSDraggingItem(pasteboardWriter: URL(fileURLWithPath: download.path) as NSURL)
-        item.setDraggingFrame(convert(tile.frame, from: card), contents: DownloadHistory.shared.thumbnail(for: download.path) ?? NSWorkspace.shared.icon(forFile: download.path))
-        beginDraggingSession(with: [item], event: event, source: self)
-    }
-
     override func mouseUp(with event: NSEvent) {
         defer { downAt = nil }
         guard downAt != nil, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         let p = card.convert(event.locationInWindow, from: nil)
         if !binButton.isHidden, binButton.frame.insetBy(dx: -4, dy: -4).contains(p) { remove?(); return }
-        if let download { NSWorkspace.shared.open(URL(fileURLWithPath: download.path)) } else if !isDownloadRow { restore?() }
-    }
-
-    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        context == .outsideApplication ? [.copy, .generic] : .copy
+        restore?()
     }
 }
 

@@ -1,8 +1,7 @@
 import AppKit
 import UniformTypeIdentifiers
 
-/// A download row's context menu, in the tray over the Library button and on Library ▸ Downloads
-/// alike (#272). Which items show is CraCore's `DownloadMenu`; this performs them.
+/// A download row's context menu, on the sidebar header's downloads card (#272). Which items show is CraCore's `DownloadMenu`; this performs them.
 @MainActor
 enum DownloadRowMenu {
     static func fill(_ menu: NSMenu, for row: DownloadHistory.Listed) {

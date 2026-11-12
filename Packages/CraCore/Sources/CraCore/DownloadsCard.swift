@@ -1,10 +1,10 @@
 import Foundation
 
 /// The downloads button at the far right of the sidebar header and the card it opens (after the
-/// From browser's downloads door): what is coming in, the last few files, Clear, and the whole list
-/// on Library ▸ Downloads. The button is always there; while downloads run it turns into a ring.
+/// From browser's downloads door): what is coming in, the last few files, Clear, and the Downloads
+/// folder in the Finder. The button is always there; while downloads run it turns into a ring.
 public enum DownloadsCard {
-    /// As many rows as fit at a glance; the rest are on Library ▸ Downloads.
+    /// As many rows as fit at a glance; the rest are in the Downloads folder.
     public static let limit = 6
     public static let width: Double = 300
     public static let rowHeight: Double = 44

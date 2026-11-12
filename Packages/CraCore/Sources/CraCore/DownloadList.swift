@@ -1,16 +1,15 @@
 import Foundation
 
 /// The downloads Cra lists: finished files (kept in downloads.json) and downloads Chromium is still
-/// reporting on, or that ended without a file (this session only). Two places show them: the tray
-/// over the Library button and Library ▸ Downloads.
+/// reporting on, or that ended without a file (this session only). The sidebar header's downloads
+/// card shows them (DownloadsCard).
 public enum DownloadList {
     /// A finished download, as saved in downloads.json.
     public struct Entry: Codable, Identifiable, Equatable, Sendable {
         public let id: UUID
         public var path: String
         public var date: Date
-        /// The profile folder it was downloaded in ("Default", "Profile 2"; nil before 8 Nov 2026),
-        /// for Arc's Filter ▸ Profiles on Library ▸ Downloads.
+        /// The profile folder it was downloaded in ("Default", "Profile 2"; nil before 8 Nov 2026).
         public var profile: String?
 
         public init(id: UUID, path: String, date: Date, profile: String? = nil) {
@@ -73,7 +72,7 @@ public enum DownloadList {
         return min(1, Double(received) / Double(total))
     }
 
-    /// A row in either list.
+    /// A row in the list.
     public enum Listed: Identifiable, Equatable, Sendable {
         case finished(Entry)
         case live(Live)
@@ -98,21 +97,4 @@ public enum DownloadList {
         }
     }
 
-    /// The tray: the newest `limit` downloads, oldest first: files still on disk, and running,
-    /// failed or cancelled ones.
-    public static func tray(entries: [Entry], live: [Live], limit: Int, fileExists: (String) -> Bool) -> [Listed] {
-        let finished = entries.filter { fileExists($0.path) }.map(Listed.finished)
-        return Array((finished + live.map(Listed.live)).sorted { $0.date < $1.date }.suffix(limit))
-    }
-
-    /// Library ▸ Downloads, newest first, narrowed to names containing `query`: the same rows as the
-    /// tray, without its limit. A running download is listed too, with its progress (#245); before,
-    /// the page showed only finished files, so the one being downloaded was missing exactly where
-    /// people go to look for it.
-    public static func library(entries: [Entry], live: [Live], query: String, fileExists: (String) -> Bool) -> [Listed] {
-        let needle = query.lowercased().trimmingCharacters(in: .whitespaces)
-        let finished = entries.filter { fileExists($0.path) }.map(Listed.finished)
-        let all = (finished + live.map(Listed.live)).sorted { $0.date > $1.date }
-        return needle.isEmpty ? all : all.filter { $0.name.lowercased().contains(needle) }
-    }
 }

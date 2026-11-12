@@ -6,7 +6,7 @@ budget rss=700 stalls50=10
 from://debug?windowSize=640x800
 from://open?url=${PAGE}?n=one
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
-from://action/viewDownloads
+from://action/viewMedia
 expect-log library opens 320 pt wide beside a \d+ pt tab sidebar
 from://debug?windowSize=900x800
 expect-log library is 391 pt wide in a 900 pt window

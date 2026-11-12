@@ -1,8 +1,8 @@
 import Foundation
 
-/// Arc's Filter on Library ▸ Archived Tabs and Downloads (Arc 1.172.1, 8 Nov 2026): a panel in place
-/// of the search with chips. Archived Tabs: "How was the tab closed?" Auto-Closed / Manually Closed,
-/// "Where was the tab?" Little Arc and each space. Downloads: "Profiles". Chips in one group widen
+/// Arc's Filter on Library ▸ Archived Tabs (Arc 1.172.1, 8 Nov 2026): a panel in place of the
+/// search with chips: "How was the tab closed?" Auto-Closed / Manually Closed, "Where was the
+/// tab?" Little Arc and each space. Chips in one group widen
 /// the match within it (either picked passes); groups narrow each other; nothing picked shows all.
 public struct ArchiveFilter: Equatable, Sendable {
     public enum Closed: Hashable, Sendable { case auto, manual }
@@ -26,12 +26,4 @@ public struct ArchiveFilter: Equatable, Sendable {
         }
         return true
     }
-}
-
-public struct DownloadFilter: Equatable, Sendable {
-    /// Picked profile ids ("" is the default profile).
-    public var profiles: Set<String> = []
-    public init() {}
-    public var isEmpty: Bool { profiles.isEmpty }
-    public func shows(profile: String?) -> Bool { profiles.isEmpty || profiles.contains(profile ?? "") }
 }

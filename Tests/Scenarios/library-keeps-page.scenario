@@ -14,7 +14,7 @@ from://debug?windowState=tabs
 expect-log window state tabs: main0 .* card=218,10,10,10 
 
 # A 1052 pt page beside the 218 pt tab sidebar stays 1052 pt beside the 417 pt Library.
-from://action/viewDownloads
+from://action/viewMedia
 expect-log library opens 417 pt wide beside a 218 pt tab sidebar
 wait 1
 from://debug?windowState=library
@@ -37,7 +37,7 @@ expect-log window state closed: main0 .* card=218,10,10,10
 # With the sidebar hidden the page keeps the whole card's width (1500 − 20 = 1480).
 from://action/toggleSidebar
 wait 1
-from://action/viewDownloads
+from://action/viewMedia
 expect-log library opens 417 pt wide
 wait 1
 from://debug?windowState=hidden

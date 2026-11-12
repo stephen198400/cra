@@ -1,7 +1,6 @@
 import Foundation
 
-/// The context menu of a download row, the same in the tray over the Library button and on
-/// Library ▸ Downloads (#272). Arc 1.172's "Download Context Menu" (ContextMenus, read from its
+/// The context menu of a download row on the sidebar header's downloads card (#272). Arc 1.172's "Download Context Menu" (ContextMenus, read from its
 /// binary on 9 Nov 2026): Open %@, Copy %@, Show in Finder, a separator, Cancel Download, a
 /// separator, Hide from Arc, Move to Trash. %@ is the file's kind (`Kind`), or else its extension
 /// as it is ("Open txt"). Pause Download and Resume Download are Cra's: Arc has a paused row

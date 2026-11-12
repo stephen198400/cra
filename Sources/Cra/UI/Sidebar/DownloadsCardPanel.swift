@@ -235,7 +235,7 @@ struct DownloadsCardStyle {
 }
 
 /// The card: RECENT DOWNLOADS and Clear, the rows (running first, then newest), "Nothing downloaded
-/// yet" when there are none, and View all downloads (Library ▸ Downloads). A piece of the sidebar's
+/// yet" when there are none, and View all downloads (the Downloads folder). A piece of the sidebar's
 /// surface (DownloadsCardStyle) with a hairline border, a soft shadow and an arrow up to the button. A click on a
 /// finished row opens the file, its magnifier shows it in the Finder, a running row's ✕ cancels it,
 /// and a right-click has the downloads list's menu (pause, resume, hide, move to Trash…). A click
@@ -778,7 +778,7 @@ private final class DownloadsCardTextButton: NSView {
     }
 }
 
-/// "View all downloads ↗": Library ▸ Downloads, with the hover fill of a row.
+/// "View all downloads ↗": the Downloads folder in the Finder, with the hover fill of a row.
 @MainActor
 private final class DownloadsCardFooter: NSView {
     var action: () -> Void = {}

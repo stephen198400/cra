@@ -1,7 +1,8 @@
 import AppKit
 
-/// Arc's Tidy Downloads card (SidebarBanner, "Download renamed to:"), over the sidebar's foot with
-/// its tail on the download bin. Measured on Arc 1.171, 4 Nov 2026 (60 fps, a dark space, 347 pt
+/// Arc's Tidy Downloads card (SidebarBanner, "Download renamed to:"). This fork hangs it under the
+/// sidebar header's downloads button, its tail pointing up at it (Arc: over the sidebar's foot, the
+/// tail on the download bin). Measured on Arc 1.171, 4 Nov 2026 (60 fps, a dark space, 347 pt
 /// sidebar): 8 pt from either side, 65 pt tall plus a 9 pt tail (Cra: 71, so the old name's baseline sits as
 /// far from the bottom as the label's cap top from the top; Victor, 5 Nov 2026); "Download renamed to:" 12 pt in
 /// blue, the new name 14 pt semibold, the old name 12 pt in blue, struck through; revert ↶ and close
@@ -19,7 +20,7 @@ final class DownloadRenameCard: NSView {
     var onOpen: () -> Void = {}
     /// The pointer came onto the card or left it: it stays while hovered.
     var onHover: (Bool) -> Void = { _ in }
-    /// Where the tail points, in the card's coordinates (the bin's top centre).
+    /// Where the tail points, in the card's coordinates (the downloads button's centre).
     var tailX: CGFloat = 33 { didSet { needsLayout = true } }
 
     private let shape = CAShapeLayer()
@@ -83,13 +84,14 @@ final class DownloadRenameCard: NSView {
 
     override func layout() {
         super.layout()
-        let w = bounds.width, body = Self.bodyHeight
+        // The body sits under the tail: everything in it is `oy` down.
+        let w = bounds.width, body = Self.bodyHeight, oy = Self.tail
         let p = CGMutablePath()
-        p.addRoundedRect(in: CGRect(x: 0, y: 0, width: w, height: body), cornerWidth: 12, cornerHeight: 12)
+        p.addRoundedRect(in: CGRect(x: 0, y: oy, width: w, height: body), cornerWidth: 12, cornerHeight: 12)
         let tx = min(max(tailX, 16), w - 16)
-        p.move(to: CGPoint(x: tx - 7, y: body - 0.5))
-        p.addLine(to: CGPoint(x: tx, y: body + Self.tail))
-        p.addLine(to: CGPoint(x: tx + 7, y: body - 0.5))
+        p.move(to: CGPoint(x: tx - 7, y: oy + 0.5))
+        p.addLine(to: CGPoint(x: tx, y: 0))
+        p.addLine(to: CGPoint(x: tx + 7, y: oy + 0.5))
         p.closeSubpath()
         shape.path = p
         shape.frame = bounds
@@ -97,7 +99,7 @@ final class DownloadRenameCard: NSView {
         // The label stops short of ↶; the names may run to the card's right padding.
         func place(_ l: NSTextField, capTop: CGFloat, right: CGFloat) {
             let f = l.font ?? .systemFont(ofSize: 12)
-            let top = capTop - (f.ascender - f.capHeight) - 1
+            let top = oy + capTop - (f.ascender - f.capHeight) - 1
             l.frame = NSRect(x: 13 - SidebarText.inset, y: top, width: max(0, w - 13 - right) + 2 * SidebarText.inset,
                              height: l.intrinsicContentSize.height)
         }
@@ -105,19 +107,19 @@ final class DownloadRenameCard: NSView {
         place(newName, capTop: 31, right: 13)
         place(oldName, capTop: 50, right: 13)
         // ↶ and ✕ centred 47 and 21 pt in from the right, 17 pt down.
-        close.frame = NSRect(x: w - 21 - 13, y: 17 - 13, width: 26, height: 26)
-        revert.frame = NSRect(x: w - 47 - 13, y: 17 - 13, width: 26, height: 26)
+        close.frame = NSRect(x: w - 21 - 13, y: oy + 17 - 13, width: 26, height: 26)
+        revert.frame = NSRect(x: w - 47 - 13, y: oy + 17 - 13, width: 26, height: 26)
         // The text field truncates long names. Keep the animated strike inside its text area too.
         let f = oldName.font ?? .systemFont(ofSize: 12)
         let ink = (oldName.stringValue as NSString).size(withAttributes: [.font: f]).width
         let textFrame = oldName.frame.insetBy(dx: SidebarText.inset, dy: 0)
-        let midY = 50 + f.capHeight - f.xHeight / 2
+        let midY = oy + 50 + f.capHeight - f.xHeight / 2
         let line = CGMutablePath()
         line.move(to: CGPoint(x: textFrame.minX, y: midY))
         line.addLine(to: CGPoint(x: textFrame.minX + min(ink, textFrame.width), y: midY))
         strike.path = line
         strike.frame = bounds
-        sparkles.frame = bounds
+        sparkles.frame = CGRect(x: 0, y: oy, width: w, height: body)
         if sparkles.sublayers == nil { addSparkles() }
     }
 
@@ -160,14 +162,17 @@ final class DownloadRenameCard: NSView {
     }
 
     /// The tail's tip, where the card grows from and goes back to. The sidebar's layers run top
-    /// down (flipped superview), so the tip is the layer's bottom edge at y 1.
+    /// down (flipped superview), so the tip is the layer's top edge at y 0.
     private func anchorOnTail() {
         guard let layer else { return }
         let f = frame
         let ax = tailX / max(1, f.width)
-        layer.anchorPoint = CGPoint(x: ax, y: 1)
-        layer.position = CGPoint(x: f.minX + ax * f.width, y: f.maxY)
+        layer.anchorPoint = CGPoint(x: ax, y: 0)
+        layer.position = CGPoint(x: f.minX + ax * f.width, y: f.minY)
     }
+
+    /// The body, under the tail.
+    private var body: NSRect { NSRect(x: 0, y: Self.tail, width: bounds.width, height: Self.bodyHeight) }
 
     func appear() {
         layoutSubtreeIfNeeded()
@@ -175,7 +180,7 @@ final class DownloadRenameCard: NSView {
         // Under a resting pointer no mouseEntered comes: hold it from the start.
         if let w = window {
             let p = convert(w.mouseLocationOutsideOfEventStream, from: nil)
-            if p.y >= 0, p.y <= Self.bodyHeight, p.x >= 0, p.x <= bounds.width { onHover(true) }
+            if body.contains(p) { onHover(true) }
         }
         let spring = CASpringAnimation(keyPath: "transform.scale")
         spring.fromValue = 0.55
@@ -222,7 +227,7 @@ final class DownloadRenameCard: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         for t in trackingAreas where t.owner === self { removeTrackingArea(t) }
-        addTrackingArea(NSTrackingArea(rect: NSRect(x: 0, y: 0, width: bounds.width, height: Self.bodyHeight),
+        addTrackingArea(NSTrackingArea(rect: body,
                                        options: [.mouseEnteredAndExited, .activeAlways], owner: self, userInfo: nil))
     }
     override func mouseEntered(with event: NSEvent) { onHover(true) }
@@ -232,11 +237,11 @@ final class DownloadRenameCard: NSView {
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        if p.y <= Self.bodyHeight, bounds.contains(p) { onOpen() }
+        if body.contains(p) { onOpen() }
     }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let p = convert(point, from: superview)
-        guard p.y >= 0, p.y <= Self.bodyHeight, p.x >= 0, p.x <= bounds.width else { return nil }
+        guard body.contains(p) else { return nil }
         return super.hitTest(point) ?? self
     }
 }
