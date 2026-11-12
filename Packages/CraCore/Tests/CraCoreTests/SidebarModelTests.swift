@@ -147,6 +147,10 @@ struct SidebarModelTests {
         #expect(settings.isDeveloperMode(url: "http://example.dev:8080/other"))
         #expect(!settings.isDeveloperMode(url: "https://example.com"))
         #expect(!settings.isDeveloperMode(url: "notes"))
+        // The sidebar asks by site key it keeps per address: the same answers.
+        for url in ["http://example.dev:8080/other", "https://example.com", "notes", "http://localhost:3000", "http://app.localhost/"] {
+            #expect(settings.isDeveloperMode(siteKey: AppSettings.siteKey(for: url)) == settings.isDeveloperMode(url: url))
+        }
         settings.toggleDeveloperMode(url: "http://example.dev/")
         #expect(settings.developerHosts.isEmpty)
         settings.toggleDeveloperMode(url: "notes")

@@ -138,3 +138,8 @@ final class WebKitBrowser: CraBrowser {
         savedInteractionState = interactionState
     }
 }
+
+/// CraCore's SiteSearch needs the whole sidebar model; the manager only asks for a finder script.
+enum SiteSearch {
+    static func finder(for page: URL) -> String? { nil }
+}

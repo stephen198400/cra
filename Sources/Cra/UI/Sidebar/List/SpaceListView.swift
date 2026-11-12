@@ -208,6 +208,37 @@ final class SpaceListView: NSView, NSDraggingSource {
         var line: SidebarListDrop.Line?
     }
 
+    /// Per-address work a rebuild would otherwise redo for every tab: the site key Developer Mode
+    /// looks up and Arc's tidied title. A rebuild runs on any change in the space (a title, a tab
+    /// switch), and parsing each tab's URL twice per rebuild added up to milliseconds in a large one.
+    private var siteKeys: [String: String?] = [:]
+    private var tidyTitles: [String: String] = [:]
+
+    private func siteKey(_ url: String) -> String? {
+        if let k = siteKeys[url] { return k }
+        if siteKeys.count > 4096 { siteKeys = [:] }
+        let k = AppSettings.siteKey(for: url)
+        siteKeys[url] = .some(k)
+        return k
+    }
+
+    private func tidyTitle(_ title: String, url: String) -> String {
+        let key = url + "\u{0}" + title
+        if let t = tidyTitles[key] { return t }
+        if tidyTitles.count > 4096 { tidyTitles = [:] }
+        let t = TidyTitleRules.arc.tidy(title, url: url)
+        tidyTitles[key] = t
+        return t
+    }
+
+    /// Each child's place in its parent, looked up once per list instead of a scan per row.
+    private static func positions(_ ids: [UUID]) -> [UUID: Int] {
+        var out: [UUID: Int] = [:]
+        out.reserveCapacity(ids.count)
+        for (i, id) in ids.enumerated() where out[id] == nil { out[id] = i }
+        return out
+    }
+
     private func build() -> Built? {
         guard let space = store.space(spaceID) else { return nil }
         let palette = space.theme.palette
@@ -220,6 +251,7 @@ final class SpaceListView: NSView, NSDraggingSource {
         let audible = ui.audibleTabIDs
         let refreshing = LiveFolderManager.shared.refreshing
         let tidyEffects = TidyTitlesService.shared.effects
+        let settings = store.settings
         // The ⌘T bar's New Tab row takes the selection's fill while it is open.
         let placeholder = showsNewTab && ui.newTabPlaceholderActive && store.focusedSpaceID(window: window) == spaceID
         var out: [Row] = []
@@ -251,9 +283,9 @@ final class SpaceListView: NSView, NSDraggingSource {
                 // Arc lists a group's tabs under its header without an indent.
                 row.content = .groupHeader(GroupHeaderRowModel(id: item.id, title: item.title ?? "Untitled"))
                 out.append(row)
-                let kids = item.children
+                let kids = Self.positions(item.children)
                 for c in store.children(of: item.id) {
-                    add(c, depth: depth, pinned: pinned, parent: item.id, index: kids.firstIndex(of: c.id) ?? 0)
+                    add(c, depth: depth, pinned: pinned, parent: item.id, index: kids[c.id] ?? 0)
                 }
             } else if item.isFolder {
                 let expanded = store.isExpanded(item.id)
@@ -277,9 +309,9 @@ final class SpaceListView: NSView, NSDraggingSource {
                     }
                     return
                 }
-                let kids = item.children
+                let kids = Self.positions(item.children)
                 for c in store.children(of: item.id) {
-                    add(c, depth: depth + 1, pinned: pinned, parent: item.id, index: kids.firstIndex(of: c.id) ?? 0)
+                    add(c, depth: depth + 1, pinned: pinned, parent: item.id, index: kids[c.id] ?? 0)
                 }
                 if item.isLiveFolder, let m = Self.liveStatus(item, hasTabs: !store.tabs(under: item.id).isEmpty) {
                     out.append(Row(key: .liveStatus(item.id), content: .liveStatus(LiveStatusModel(text: m.text, url: m.url, depth: depth + 1))))
@@ -291,12 +323,12 @@ final class SpaceListView: NSView, NSDraggingSource {
                 let (img, flip) = Easel.id(fromURL: tab.url) != nil && tab.customIconKey == nil
                     ? (NSImage(systemSymbolName: "pencil.and.scribble", accessibilityDescription: "Easel"), false) : icon(tab.iconKey)
                 let (homeImg, homeFlip) = navigatedAway ? icon(tab.customIconKey ?? FaviconKey.key(for: tab.savedURL)) : (img, flip)
-                let developerMode = store.settings.isDeveloperMode(url: tab.url)
+                let developerMode = settings.isDeveloperMode(siteKey: siteKey(tab.url))
                 // Tidy Tab Titles' rename: "Double-click to rename" under the new name for a few seconds.
                 let tidyRename = tidyEffects[item.id]
                 let subtitle = tidyRename != nil ? TidyTitlesService.subtitle : tab.sidebarSubtitle(developerMode: developerMode)
                 // Arc's tidy titles: a known site's page shows a shorter title unless the tab has a name.
-                let title = item.title == nil ? TidyTitleRules.arc.tidy(item.displayTitle, url: tab.url) : item.displayTitle
+                let title = item.title == nil ? tidyTitle(item.displayTitle, url: tab.url) : item.displayTitle
                 let liveIcon = tab.liveItemURL != nil && tab.customIconKey == nil
                     ? store.liveFolder(containing: parent)?.liveFolder.flatMap { LiveFolderPluginStore.shared.entry(for: $0)?.icon } : nil
                 row.content = .tab(TabRowModel(
@@ -316,7 +348,7 @@ final class SpaceListView: NSView, NSDraggingSource {
                 let children = store.children(of: item.id).filter(\.isTab)
                 let cells = children.map { c -> SplitRowModel.Cell in
                     let (img, flip) = icon(c.tab?.iconKey)
-                    let title = c.title == nil ? c.tab.map { TidyTitleRules.arc.tidy(c.displayTitle, url: $0.url) } ?? c.displayTitle : c.displayTitle
+                    let title = c.title == nil ? c.tab.map { tidyTitle(c.displayTitle, url: $0.url) } ?? c.displayTitle : c.displayTitle
                     return .init(id: c.id, title: title, icon: img, flipIcon: flip)
                 }
                 let selected = children.contains { store.isSelected($0.id, window: window) }
@@ -335,8 +367,9 @@ final class SpaceListView: NSView, NSDraggingSource {
         let blank = store.isBlank(space: spaceID)
         let pinnedKids = blank ? [] : store.item(space.pinnedContainerID)?.children ?? []
         let pinnedItems = blank ? [] : store.listedPinnedItems(in: space, window: window)
+        let pinnedPositions = Self.positions(pinnedKids)
         for item in pinnedItems {
-            add(item, depth: 0, pinned: true, parent: space.pinnedContainerID, index: pinnedKids.firstIndex(of: item.id) ?? 0)
+            add(item, depth: 0, pinned: true, parent: space.pinnedContainerID, index: pinnedPositions[item.id] ?? 0)
         }
         let section = dropSection(drop)
         // With nothing pinned the list takes no room; a drag opens a real target. Not when
@@ -352,8 +385,9 @@ final class SpaceListView: NSView, NSDraggingSource {
         out.append(Row(key: .divider, content: .divider(hasToday: !todayKids.isEmpty && !blank, tidy: tidy)))
         let atTop = store.settings.newTabButtonAtTop
         if atTop && showsNewTab { out.append(Row(key: .newTab, content: .newTab(active: placeholder))) }
+        let todayPositions = Self.positions(todayKids)
         for item in store.children(of: space.todayContainerID) {
-            add(item, depth: 0, pinned: false, parent: space.todayContainerID, index: todayKids.firstIndex(of: item.id) ?? 0)
+            add(item, depth: 0, pinned: false, parent: space.todayContainerID, index: todayPositions[item.id] ?? 0)
         }
         if !atTop && showsNewTab { out.append(Row(key: .newTab, content: .newTab(active: placeholder))) }
         return Built(rows: out, pinnedCount: pinnedCount, palette: palette,

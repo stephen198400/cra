@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 import CraCEF
 import JavaScriptCore
 
@@ -29,6 +30,7 @@ enum BrowserManagerLifecycleTests {
     @MainActor
     static func main() async {
         await tabFaviconsCase()
+        faviconObservationCase()
         let store = SidebarStore()
         let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
         let observer = Observer()
@@ -160,6 +162,36 @@ enum BrowserManagerLifecycleTests {
         pageHistoryCase()
         await permissionWaitsForItsTabCase()
         print("Browser manager lifecycle: \(checks) checks passed")
+    }
+
+    /// A view that read one favicon re-renders when that favicon changes, not when another page
+    /// reports its own, and reading the derived glyph tone or colors invalidates nothing.
+    @MainActor
+    private static func faviconObservationCase() {
+        let cache = FaviconCache()
+        let orange = NSImage(contentsOfFile: "Tests/Fixtures/Pages/icon-orange.png")!
+        let blue = NSImage(contentsOfFile: "Tests/Fixtures/Pages/icon-blue.png")!
+        cache.store(orange, forKey: "a.test", persist: false)
+        var changed = 0
+        func track() {
+            withObservationTracking {
+                _ = cache.image(forKey: "a.test")
+                _ = cache.glyphIsDark(forKey: "a.test")
+                _ = cache.dominantColor(forKey: "a.test")
+                _ = cache.selectionColors(forKey: "a.test")
+            } onChange: { changed += 1 }
+        }
+        track()
+        cache.store(blue, forKey: "b.test", persist: false)
+        expect(changed == 0, "another site's favicon leaves a view of this one alone")
+        _ = cache.glyphIsDark(forKey: "a.test")
+        _ = cache.dominantColor(forKey: "a.test")
+        expect(changed == 0, "computing derived colors invalidates nothing")
+        cache.store(blue, forKey: "a.test", persist: false)
+        expect(changed == 1, "this site's new favicon re-renders the view")
+        track()
+        cache.reset()
+        expect(changed == 2, "a reset re-renders every view of a favicon")
     }
 
     @MainActor

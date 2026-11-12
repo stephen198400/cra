@@ -727,7 +727,12 @@ public struct AppSettings: Codable, Equatable {
         host == "localhost" || host == "127.0.0.1" || host.hasSuffix(".localhost")
     }
     public func isDeveloperMode(url: String) -> Bool {
-        guard let k = AppSettings.siteKey(for: url) else { return false }
+        isDeveloperMode(siteKey: AppSettings.siteKey(for: url))
+    }
+    /// `isDeveloperMode(url:)` for a site key already worked out (`siteKey(for:)`): the sidebar
+    /// keeps them per address instead of parsing every tab's URL on every rebuild.
+    public func isDeveloperMode(siteKey k: String?) -> Bool {
+        guard let k else { return false }
         return developerHosts.contains(k)
             || (Self.isDefaultDeveloperHost(k) && !disabledDefaultDeveloperHosts.contains(k))
     }

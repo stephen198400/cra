@@ -43,6 +43,8 @@ enum StoreTests {
         stampsUseTheClock()
         persistenceFaults()
         incognitoStaysOffDisk()
+        sidebarSaveWaitsForQuiet()
+        sidebarSaveHasAMaxWait()
         mcpExcludesPrivateTabs()
         pinnedURL()
         tabFavicons()
@@ -781,11 +783,72 @@ enum StoreTests {
                "MCP refuses containers")
     }
 
+    /// Waits for every write queued on the persistence queue (it is serial).
+    private static func drainWrites() { JSONStore<[String]>("drain.json").saveNow([]) }
+
+    /// The saved sidebar.json's title for a tab, nil when the file doesn't have the tab.
+    private static func savedTitle(_ id: UUID, file: String = "sidebar.json") -> String? {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        let doc = try? d.decode(SidebarDocument.self, from: Data(contentsOf: AppPaths.file(file)))
+        return doc?.items.first { $0.id == id }?.tab?.savedTitle
+    }
+
+    /// A page's title and address churn: the store builds sidebar.json's document once, when the
+    /// 2 s quiet debounce fires, not on every change (each build walked every item on the main thread).
+    @MainActor
+    private static func sidebarSaveWaitsForQuiet() {
+        let clock = ManualScheduler()
+        let store = AppComposition(clock: clock).store
+        let tab = store.createTab(url: "https://example.com/quiet", select: false)
+        clock.advance(by: 5)
+        drainWrites()
+        let before = store.sidebarSnapshots
+        for i in 1...50 { store.updateTab(tab.id, url: "https://example.com/quiet?\(i)", title: "Quiet \(i)") }
+        store.setFaviconKey(tab.id, "quiet-icon")
+        expect(store.sidebarSnapshots == before, "a burst of title and address changes builds no document yet")
+        clock.advance(by: 1.9)
+        drainWrites()
+        expect(store.sidebarSnapshots == before && savedTitle(tab.id) != "Quiet 50", "nor writes before 2 s of quiet")
+        clock.advance(by: 0.2)
+        drainWrites()
+        expect(store.sidebarSnapshots == before + 1, "the burst builds one document when the debounce fires")
+        expect(savedTitle(tab.id) == "Quiet 50", "and that one write has the last title")
+        clock.advance(by: 30)
+        expect(store.sidebarSnapshots == before + 1, "nothing more is written while nothing changes")
+    }
+
+    /// A title that changes every second (a ticking clock, an unread count) used to postpone the
+    /// trailing 2 s debounce forever, so a crash lost everything since it started. The write now
+    /// comes at least every 10 s, and the .bak isn't re-copied by every one of them.
+    @MainActor
+    private static func sidebarSaveHasAMaxWait() {
+        let clock = ManualScheduler()
+        let store = AppComposition(clock: clock).store
+        let tab = store.createTab(url: "https://example.com/ticking", select: false)
+        clock.advance(by: 5)
+        drainWrites()
+        let bak = AppPaths.file("sidebar.json.bak")
+        let firstBak = try? Data(contentsOf: bak)
+        var stalest = 0
+        for second in 1...30 {
+            store.updateTab(tab.id, title: "Tick \(second)")
+            clock.advance(by: 1)
+            drainWrites()
+            let saved = savedTitle(tab.id).flatMap { Int($0.replacingOccurrences(of: "Tick ", with: "")) } ?? 0
+            stalest = max(stalest, second - saved)
+        }
+        expect(stalest <= 10, "a title changing every second still reaches disk within 10 s (was \(stalest) s behind)")
+        expect(firstBak != nil && (try? Data(contentsOf: bak)) == firstBak,
+               "the .bak keeps the copy from the first write instead of being re-copied every save")
+    }
+
     /// Incognito tabs never reach sidebar.json (#46's review: updateTab saved every item), and
     /// what older versions left there goes on load instead of turning into a normal tab.
     @MainActor
     private static func incognitoStaysOffDisk() {
-        let store = AppComposition(clock: ManualScheduler()).store
+        let clock = ManualScheduler()
+        let store = AppComposition(clock: clock).store
         let normal = store.createTab(url: "https://example.com/normal")
         let window = store.addIncognitoWindow(frame: nil)
         let secret = store.createTab(url: "https://example.com/secret", in: window.focusedSpaceID, select: false)
@@ -794,8 +857,9 @@ enum StoreTests {
         expect(store.item(secret.id)?.tab?.themeColor == nil, "an incognito tab keeps no toolbar colour")
         store.setThemeColor(normal.id, "#203040")
         store.updateTab(normal.id, title: "Normal")
-        // Both save on a 2 s debounce on the persistence queue, not on the clock.
-        Thread.sleep(forTimeInterval: 2.5)
+        // Both save on a 2 s debounce on the clock, then write on the persistence queue.
+        clock.advance(by: 2.5)
+        drainWrites()
         // JSONEncoder writes "/" as "\/".
         let saved = ((try? String(contentsOf: AppPaths.file("sidebar.json"), encoding: .utf8)) ?? "").replacingOccurrences(of: "\\/", with: "/")
         expect(saved.contains("https://example.com/normal") && saved.contains("#203040"), "a normal tab and its toolbar colour are saved")
@@ -985,12 +1049,14 @@ enum StoreTests {
     /// commits; Escape or Cancel puts the stored theme back, and a save in between keeps it off disk.
     @MainActor
     private static func themePreview() {
-        let store = AppComposition(clock: ManualScheduler()).store
+        let clock = ManualScheduler()
+        let store = AppComposition(clock: clock).store
         let id = store.focusedSpace.id, stored = store.focusedSpace.theme
         let red = SpaceThemeVariants.theme(key: ["#F25E6B"], intensity: 0.8, noise: 0, appearance: "light")
         func savedTheme() -> SpaceTheme? {
             store.save()
-            Thread.sleep(forTimeInterval: 2.5)
+            clock.advance(by: 2.5)
+            drainWrites()
             let d = JSONDecoder()
             d.dateDecodingStrategy = .iso8601
             let doc = try? d.decode(SidebarDocument.self, from: Data(contentsOf: AppPaths.file("sidebar.json")))

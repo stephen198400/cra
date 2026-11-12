@@ -81,47 +81,15 @@ final class SuggestionEngine {
             return result
         }
 
-        var items: [Suggestion] = []
-        let typed = typedRow(query: query)
-        items.append(contentsOf: tabSuggestions(q, excluding: currentTabID))
-        // Incognito: the window's own tabs, search and commands; nothing from the normal profile.
-        if !incognito {
-            items.append(contentsOf: archiveSuggestions(q))
-            items.append(contentsOf: historySuggestions(q, openURLs: searchIndex.openURLs))
-            items.append(contentsOf: topDomainSuggestions(q))
-        }
-        items.append(contentsOf: commandSuggestions(q, currentTabID: currentTabID, spaceShown: spaceShown))
-
-        // Learned: the user picked this URL for this query before.
-        if let learned = store.ranking.queriesToSelected[q] {
-            for i in items.indices where items[i].url == learned { items[i].score += 150 }
-        }
-
-        items = dedupe(items)
-        // Stable: equal scores keep their order (tabs, archive, history, domains, then commands
-        // in menu order), so "clear" lists Clear Cache before Clear Cookies, as Arc does.
-        items = items.enumerated().sorted { a, b in
-            a.element.score != b.element.score ? a.element.score > b.element.score : a.offset < b.offset
-        }.map(\.element)
-
-        // Arc's order: the row that supplies the inline completion comes first,
-        // then what you typed, then everything else.
-        let completion = inlineCompletion(q, candidates: items)
-        if let completion, let idx = items.firstIndex(where: { $0.id == completion.candidateID }) {
-            let c = items.remove(at: idx)
-            items.insert(c, at: 0)
-            items.insert(typed, at: 1)
-        } else if let top = items.first, case .command = top.kind, top.score >= 68 {
-            // Arc 1.171 lists a command the text names above it too: "sett" → Settings,
-            // "clear" → Clear Cache and Refresh, "clear cook" → Clear Cookies and Refresh.
-            items.insert(typed, at: 1)
-        } else {
-            items.insert(typed, at: 0)
-        }
+        // The search engine's answer lists again with the same text: the local rows stay ranked.
+        let key = LocalKey(query: query, currentTabID: currentTabID, spaceShown: spaceShown, incognito: incognito)
+        let local = localRanking.value(for: key) { rankLocally(query: query, q: q, currentTabID: currentTabID, spaceShown: spaceShown) }
+        let completion = local.completion
+        var items = local.items
         if store.settings.searchSuggestions {
             let at = items.firstIndex(where: \.loose) ?? items.count
             if at < Self.maxRows {
-                items.insert(contentsOf: searchSuggestions(query, after: items).prefix(Self.maxRows - at), at: at)
+                items.insert(contentsOf: searchSuggestions(query, listed: { self.listed(key, local) }).prefix(Self.maxRows - at), at: at)
             }
         }
         result.items = Array(items.prefix(Self.maxRows))
@@ -177,6 +145,158 @@ final class SuggestionEngine {
         return result
     }
 
+    // MARK: Local ranking
+
+    /// What the local rows depend on besides the index, which holds until the bar closes.
+    private struct LocalKey: Equatable {
+        let query: String
+        let currentTabID: UUID?
+        let spaceShown: UUID?
+        let incognito: Bool
+    }
+
+    /// The tabs, archive, history, domains and commands for a text, ranked: the rows that can list
+    /// (what was typed among them), the inline completion, and every page matched, which the
+    /// search engine's answers are checked against.
+    private struct LocalRanking {
+        var items: [Suggestion]
+        var completion: (text: String, candidateID: String)?
+        var pages: [Candidate]
+        var listed: (titles: Set<String>, urls: Set<String>)?
+    }
+
+    /// A match before it becomes a row: what ranking, dedupe and the inline completion need.
+    /// History and archive rows are built only for the few that list.
+    private struct Candidate {
+        enum Source {
+            case archive(Int)
+            case history(Int)
+            case row(Suggestion)
+        }
+        let source: Source
+        var score: Double
+        let loose: Bool
+        let url: String?
+        let isOpenTab: Bool
+        let isTopDomain: Bool
+        let keys: [String]
+    }
+
+    private var localRanking = CommandBarRanking.Memo<LocalKey, LocalRanking>()
+
+    /// Rows ranked past these can't list: five rows, one of them maybe the inline completion's,
+    /// which is looked for among all of them.
+    private static let rankedRows = maxRows + 1
+
+    private func rankLocally(query: String, q: String, currentTabID: UUID?, spaceShown: UUID?) -> LocalRanking {
+        let typed = typedRow(query: query)
+        var candidates = tabSuggestions(q, excluding: currentTabID).map(candidate)
+        // Incognito: the window's own tabs, search and commands; nothing from the normal profile.
+        if !incognito {
+            let now = Date()
+            archiveCandidates(q, now: now, into: &candidates)
+            historyCandidates(q, now: now, into: &candidates)
+            candidates.append(contentsOf: topDomainSuggestions(q).map(candidate))
+        }
+        candidates.append(contentsOf: commandSuggestions(q, currentTabID: currentTabID, spaceShown: spaceShown).map(candidate))
+
+        // Learned: the user picked this URL for this query before.
+        if let learned = store.ranking.queriesToSelected[q] {
+            for i in candidates.indices where candidates[i].url == learned { candidates[i].score += 150 }
+        }
+
+        // One row per page; equal scores keep their order (tabs, archive, history, domains, then
+        // commands in menu order), so "clear" lists Clear Cache before Clear Cookies, as Arc does.
+        let pages = CommandBarDedupe.pages(candidates.map { CommandBarDedupe.Row(keys: $0.keys, score: $0.score, isOpenTab: $0.isOpenTab) })
+            .map { kept -> Candidate in
+                var c = candidates[kept.index]
+                c.score = kept.score
+                return c
+            }
+        let scores = pages.map(\.score)
+        var ranked = CommandBarRanking.top(Self.rankedRows, of: scores)
+
+        // Arc's order: the row that supplies the inline completion comes first,
+        // then what you typed, then everything else.
+        let completion = inlineCompletion(q, pages: pages, scores: scores)
+        var items: [Suggestion]
+        if let completion {
+            ranked.removeAll { $0 == completion.page }
+            items = [row(pages[completion.page]), typed] + ranked.map { row(pages[$0]) }
+        } else {
+            items = ranked.map { row(pages[$0]) }
+            if let top = items.first, case .command = top.kind, top.score >= 68 {
+                // Arc 1.171 lists a command the text names above it too: "sett" → Settings,
+                // "clear" → Clear Cache and Refresh, "clear cook" → Clear Cookies and Refresh.
+                items.insert(typed, at: 1)
+            } else {
+                items.insert(typed, at: 0)
+            }
+        }
+        return LocalRanking(items: items, completion: completion.map { ($0.text, $0.candidateID) }, pages: pages)
+    }
+
+    private func candidate(_ s: Suggestion) -> Candidate {
+        let isCommand: Bool
+        if case .command = s.kind { isCommand = true } else { isCommand = false }
+        return Candidate(source: .row(s), score: s.score, loose: s.loose, url: s.url, isOpenTab: s.tabID != nil,
+                         isTopDomain: s.kind == .topDomain,
+                         keys: CommandBarDedupe.keys(id: s.id, url: isCommand ? nil : s.url, title: s.title))
+    }
+
+    /// The `id` of the row a page lists as.
+    private func id(of c: Candidate) -> String {
+        switch c.source {
+        case .row(let s): return s.id
+        case .archive(let i): return "arch:\(searchIndex.archive[i].0.id)"
+        case .history(let i): return "hist:\(searchIndex.history[i].0.url)"
+        }
+    }
+
+    /// The row a ranked page lists as, at its page's score.
+    private func row(_ c: Candidate) -> Suggestion {
+        var s: Suggestion
+        switch c.source {
+        case .row(let r):
+            s = r
+        case .archive(let i):
+            let (entry, _) = searchIndex.archive[i]
+            let url = c.url ?? ""
+            let spaceName = entry.sourceSpaceID.flatMap { store.space($0)?.title } ?? ""
+            s = Suggestion(id: "arch:\(entry.id)", kind: .archived(entry.id), title: entry.item.displayTitle,
+                           subtitle: ["Archived \(Self.relative(entry.archivedAt))", spaceName, Self.humanURL(url)].filter { !$0.isEmpty }.joined(separator: " · "),
+                           url: url, faviconKey: entry.item.tab?.faviconKey, symbol: nil, trailing: "Restore", score: c.score,
+                           loose: c.loose)
+        case .history(let i):
+            let h = searchIndex.history[i].0
+            s = Suggestion(id: "hist:\(h.url)", kind: .history, title: h.title.isEmpty ? Self.humanURL(h.url) : h.title,
+                           subtitle: Self.humanURL(h.url), url: h.url, faviconKey: FaviconKey.key(for: h.url),
+                           symbol: "clock", trailing: nil, score: c.score, loose: c.loose)
+        }
+        s.score = c.score
+        return s
+    }
+
+    /// Lowercased: what a page lists as, for the search engine's answers to leave out.
+    private func listed(_ key: LocalKey, _ local: LocalRanking) -> (titles: Set<String>, urls: Set<String>) {
+        if let listed = local.listed { return listed }
+        var titles = Set(local.items.map { $0.title.lowercased() })
+        var urls = Set(local.items.compactMap(\.url))
+        for page in local.pages {
+            if let url = page.url { urls.insert(url) }
+            switch page.source {
+            case .row(let s): titles.insert(s.title.lowercased())
+            case .archive(let i): titles.insert(searchIndex.archive[i].1.title)
+            case .history(let i):
+                // An untitled entry lists as its address (`Searchable.url` is that, lowercased).
+                let key = searchIndex.history[i].1
+                titles.insert(key.title.isEmpty ? key.url : key.title)
+            }
+        }
+        localRanking.update(for: key) { $0.listed = (titles, urls) }
+        return (titles, urls)
+    }
+
     // MARK: Search index
 
     /// What scoring needs from a title and a URL. Worked out per keystroke for every tab,
@@ -200,9 +320,13 @@ final class SuggestionEngine {
     private struct SearchIndex {
         var tabs: [(SidebarItem, Searchable)] = []
         var archive: [(ArchivedItem, Searchable)] = []
+        /// Without the pages open in a tab, whose tab lists instead.
         var history: [(HistoryEntry, Searchable)] = []
-        var openURLs: Set<String> = []
     }
+
+    /// Dedupe keys of archive and history entries, worked out the first time each matches.
+    private var archiveKeys: [[String]?] = []
+    private var historyKeys: [[String]?] = []
 
     private var index: SearchIndex?
 
@@ -212,9 +336,11 @@ final class SuggestionEngine {
         var i = SearchIndex()
         let tabs = commandBarTabs()
         i.tabs = tabs.compactMap { tab in tab.tab.map { (tab, Searchable(title: tab.displayTitle, url: $0.url)) } }
-        i.openURLs = Set(tabs.compactMap { $0.tab?.url })
+        let openURLs = Set(tabs.compactMap { $0.tab?.url })
         i.archive = store.archive.prefix(400).compactMap { e in e.item.tab.map { (e, Searchable(title: e.item.displayTitle, url: $0.url)) } }
-        i.history = store.history.values.map { ($0, Searchable(title: $0.title, url: $0.url)) }
+        i.history = store.history.values.filter { !openURLs.contains($0.url) }.map { ($0, Searchable(title: $0.title, url: $0.url)) }
+        archiveKeys = Array(repeating: nil, count: i.archive.count)
+        historyKeys = Array(repeating: nil, count: i.history.count)
         index = i
         return i
     }
@@ -222,6 +348,7 @@ final class SuggestionEngine {
     /// The command bar opened or closed: what it searches may have changed since.
     func resetIndex() {
         index = nil
+        localRanking.reset()
         enginesRead = nil
         remote.reset()
     }
@@ -255,12 +382,14 @@ final class SuggestionEngine {
         remote.fetch(query, engine: searchEngine, done: done)
     }
 
-    /// The engine's suggestions not already listed, as search rows (or site rows).
-    private func searchSuggestions(_ query: String, after items: [Suggestion]) -> [Suggestion] {
+    /// The engine's suggestions not already listed, as search rows (or site rows). `listed`: the
+    /// titles (lowercased) and addresses of every local row, not only those that show.
+    private func searchSuggestions(_ query: String, listed: () -> (titles: Set<String>, urls: Set<String>)) -> [Suggestion] {
         let engine = searchEngine
-        let titles = Set(items.map { $0.title.lowercased() })
-        let urls = Set(items.compactMap(\.url))
-        return remote.items(for: query, engine: engine).compactMap { r in
+        let answers = remote.items(for: query, engine: engine)
+        guard !answers.isEmpty else { return [] }
+        let (titles, urls) = listed()
+        return answers.compactMap { r in
             let t = r.text.lowercased()
             guard t != query.lowercased(), !titles.contains(t) else { return nil }
             guard let url = r.url else {
@@ -319,35 +448,33 @@ final class SuggestionEngine {
     /// Below this a text score means only scattered letters matched (`fuzzy`).
     private static let looseBelow = 50.0
 
-    private func archiveSuggestions(_ q: String) -> [Suggestion] {
-        var out: [Suggestion] = []
-        for (entry, key) in searchIndex.archive {
+    private func archiveCandidates(_ q: String, now: Date, into out: inout [Candidate]) {
+        let tokens = Self.tokens(q)
+        for (i, (entry, key)) in searchIndex.archive.enumerated() {
             guard let t = entry.item.tab else { continue }
-            let text = Self.score(q, key)
+            let text = Self.score(q, tokens: tokens, key)
             var score = text * 0.85
             if score < 30 { continue }
-            score += recencyBoost(entry.archivedAt) * 0.5
-            let spaceName = entry.sourceSpaceID.flatMap { store.space($0)?.title } ?? ""
-            out.append(Suggestion(id: "arch:\(entry.id)", kind: .archived(entry.id), title: entry.item.displayTitle,
-                                  subtitle: ["Archived \(Self.relative(entry.archivedAt))", spaceName, Self.humanURL(t.url)].filter { !$0.isEmpty }.joined(separator: " · "),
-                                  url: t.url, faviconKey: t.faviconKey, symbol: nil, trailing: "Restore", score: score,
-                                  loose: text < Self.looseBelow))
+            score += Self.recencyBoost(entry.archivedAt, now: now) * 0.5
+            let keys = archiveKeys[i] ?? CommandBarDedupe.keys(id: "arch:\(entry.id)", url: t.url, title: entry.item.displayTitle)
+            archiveKeys[i] = keys
+            out.append(Candidate(source: .archive(i), score: score, loose: text < Self.looseBelow, url: t.url,
+                                 isOpenTab: false, isTopDomain: false, keys: keys))
         }
-        return out
     }
 
-    private func historySuggestions(_ q: String, openURLs: Set<String>) -> [Suggestion] {
-        var out: [Suggestion] = []
-        for (h, key) in searchIndex.history where !openURLs.contains(h.url) {
-            let text = Self.score(q, key)
+    private func historyCandidates(_ q: String, now: Date, into out: inout [Candidate]) {
+        let tokens = Self.tokens(q)
+        for (i, (h, key)) in searchIndex.history.enumerated() {
+            let text = Self.score(q, tokens: tokens, key)
             var score = text * 0.8
             if score < 30 { continue }
-            score += min(Double(h.visitCount), 20) * 1.5 + recencyBoost(h.lastVisit) * 0.6
-            out.append(Suggestion(id: "hist:\(h.url)", kind: .history, title: h.title.isEmpty ? Self.humanURL(h.url) : h.title,
-                                  subtitle: Self.humanURL(h.url), url: h.url, faviconKey: FaviconKey.key(for: h.url),
-                                  symbol: "clock", trailing: nil, score: score, loose: text < Self.looseBelow))
+            score += min(Double(h.visitCount), 20) * 1.5 + Self.recencyBoost(h.lastVisit, now: now) * 0.6
+            let keys = historyKeys[i] ?? CommandBarDedupe.keys(id: "hist:\(h.url)", url: h.url, title: h.title.isEmpty ? Self.humanURL(h.url) : h.title)
+            historyKeys[i] = keys
+            out.append(Candidate(source: .history(i), score: score, loose: text < Self.looseBelow, url: h.url,
+                                 isOpenTab: false, isTopDomain: false, keys: keys))
         }
-        return out
     }
 
     private func topDomainSuggestions(_ q: String) -> [Suggestion] {
@@ -454,9 +581,15 @@ final class SuggestionEngine {
     }
 
     private static func score(_ q: String, _ key: Searchable) -> Double {
+        score(q, tokens: tokens(q), key)
+    }
+
+    private static func tokens(_ q: String) -> [String] { q.split(separator: " ").map(String.init) }
+
+    /// `tokens`: the query's words, split once per keystroke rather than once per entry.
+    private static func score(_ q: String, tokens: [String], _ key: Searchable) -> Double {
         let t = key.title, u = key.url, host = key.host, bareHost = key.bareHost
         var score = 0.0
-        let tokens = q.split(separator: " ").map(String.init)
         if tokens.count > 1 {
             let hay = t + " " + u
             let hits = tokens.filter { hay.contains($0) }.count
@@ -495,8 +628,12 @@ final class SuggestionEngine {
     }
 
     private func recencyBoost(_ date: Date?) -> Double {
+        Self.recencyBoost(date, now: Date())
+    }
+
+    private static func recencyBoost(_ date: Date?, now: Date) -> Double {
         guard let date else { return 0 }
-        let age = Date().timeIntervalSince(date)
+        let age = now.timeIntervalSince(date)
         if age < 600 { return 30 }
         if age < 3600 { return 22 }
         if age < 86400 { return 14 }
@@ -504,38 +641,34 @@ final class SuggestionEngine {
         return 0
     }
 
-    private func dedupe(_ items: [Suggestion]) -> [Suggestion] {
-        let rows = items.map { s -> CommandBarDedupe.Row in
-            let isCommand: Bool
-            if case .command = s.kind { isCommand = true } else { isCommand = false }
-            return CommandBarDedupe.Row(keys: CommandBarDedupe.keys(id: s.id, url: isCommand ? nil : s.url, title: s.title),
-                                        score: s.score, isOpenTab: s.tabID != nil)
-        }
-        return CommandBarDedupe.kept(rows).map { kept in
-            var s = items[kept.index]
-            s.score = kept.score
-            return s
-        }
-    }
-
-    private func inlineCompletion(_ q: String, candidates: [Suggestion]) -> (text: String, candidateID: String)? {
+    /// The first page in ranked order (`scores`) that completes the text; `page` is its position.
+    private func inlineCompletion(_ q: String, pages: [Candidate], scores: [Double]) -> (text: String, candidateID: String, page: Int)? {
         guard !q.contains(" "), q.count >= 2, !Self.looksLikeURL(q) || !q.contains("/") else { return nil }
-        func completion(_ c: Suggestion) -> String? {
-            guard let url = c.url, c.score >= 90 || c.kind == .topDomain, let host = URL(string: url)?.host?.lowercased() else { return nil }
+        func completion(_ c: Candidate) -> String? {
+            guard let url = c.url, c.score >= 90 || c.isTopDomain else { return nil }
+            let host: String
+            switch c.source {
+            // The index parsed these addresses already; "" where it had no host.
+            case .archive(let i): host = searchIndex.archive[i].1.host
+            case .history(let i): host = searchIndex.history[i].1.host
+            case .row: host = URL(string: url)?.host?.lowercased() ?? ""
+            }
             let bare = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
             if bare.hasPrefix(q) && bare != q { return bare }
             if host.hasPrefix(q) && host != q { return host }
             return nil
         }
-        guard let best = candidates.lazy.compactMap({ c in completion(c).map { (text: $0, candidateID: c.id) } }).first else { return nil }
+        guard let first = CommandBarRanking.first(of: scores, where: { completion(pages[$0]) != nil }),
+              let text = completion(pages[first]) else { return nil }
         // An open tab on the completed host leads, so Return switches to it rather than opening the
         // site again from history, and completes to its whole address (Arc 1.171: "semrush" →
         // semrush.com/projects for a tab on www.semrush.com/projects/).
-        if let tab = candidates.first(where: { $0.tabID != nil && completion($0) == best.text }), let url = tab.url {
+        if let t = CommandBarRanking.first(of: scores, where: { pages[$0].isOpenTab && completion(pages[$0]) == text }),
+           let url = pages[t].url {
             let address = CommandBarDedupe.completionAddress(url)
-            return (address.lowercased().hasPrefix(q) && address.count > q.count ? address : best.text, tab.id)
+            return (address.lowercased().hasPrefix(q) && address.count > q.count ? address : text, id(of: pages[t]), t)
         }
-        return best
+        return (text, id(of: pages[first]), first)
     }
 
     // MARK: Formatting

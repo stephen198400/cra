@@ -63,14 +63,32 @@ final class SidebarStore {
 
     // MARK: Persistence
 
-    private let sidebarFile = JSONStore<SidebarDocument>("sidebar.json")
+    /// sidebar.json and history.json are rewritten whole, often (a background tab's title), so
+    /// their .bak is re-copied at most every 5 minutes, not on every write.
+    private let sidebarFile = JSONStore<SidebarDocument>("sidebar.json", backupEvery: 300)
     private let archiveFile = JSONStore<[ArchivedItem]>("archive.json")
     private let prefsStore = JSONStore<WindowPrefs>("windows.json")
     private let settingsStore = JSONStore<AppSettings>("settings.json")
-    private let historyFile = JSONStore<[HistoryEntry]>("history.json")
+    private let historyFile = JSONStore<[HistoryEntry]>("history.json", backupEvery: 300)
     private let rankingFile = JSONStore<RankingData>("commandbar.json")
     /// Every date the store stamps or compares (AppComposition passes the app's clock).
     @ObservationIgnored let clock: Scheduler
+    /// sidebar.json's document is built (every item, on the main thread) when the save fires,
+    /// not on each change: a page's title and address change many times while it loads.
+    @ObservationIgnored private lazy var sidebarSave = CoalescedSave(clock: clock, maxWait: Self.saveMaxWait) { [weak self] in
+        guard let self else { return }
+        sidebarSnapshots &+= 1
+        sidebarFile.save(document, delay: 0)
+    }
+    @ObservationIgnored private lazy var historySave = CoalescedSave(clock: clock, maxWait: 30) { [weak self] in
+        guard let self else { return }
+        historyFile.save(Array(history.values), delay: 0)
+    }
+    /// How many times sidebar.json's document was built for a save (tests read it).
+    @ObservationIgnored private(set) var sidebarSnapshots = 0
+    /// Changes that never pause still reach disk this often: what a crash can lose at most.
+    /// Writing the sidebar more often than every 10 s buys little, and costs a full encode.
+    static let saveMaxWait: TimeInterval = 10
 
     init(clock: Scheduler? = nil) {
         self.clock = clock ?? LiveScheduler.shared
@@ -203,7 +221,7 @@ final class SidebarStore {
     }
 
     func save() {
-        sidebarFile.save(document)
+        sidebarSave.schedule(after: 0.4)
         if archiveChanged {
             archiveChanged = false
             archiveFile.save(archive)
@@ -211,6 +229,8 @@ final class SidebarStore {
     }
 
     func saveAll() {
+        sidebarSave.cancel()
+        historySave.cancel()
         sidebarFile.saveNow(document)
         archiveFile.saveNow(archive)
         prefsStore.saveNow(prefs.withoutIncognito)
@@ -691,7 +711,7 @@ final class SidebarStore {
         // empty pane; the rows and the toolbar observe the tab themselves.
         if it.isEmptyTab != wasEmpty { revision &+= 1 }
         // The document leaves incognito windows' tabs out.
-        sidebarFile.save(document, delay: 2)
+        sidebarSave.schedule(after: 2)
     }
 
     /// The tab's page loaded its own icon, cached under `key` (#211).
@@ -701,7 +721,7 @@ final class SidebarStore {
         it.data = .tab(t)
         items[id] = it
         // Rows and the toolbar observe the tab; the window's layout doesn't change.
-        sidebarFile.save(document, delay: 2)
+        sidebarSave.schedule(after: 2)
     }
 
     /// Only saved: nothing on screen reads it back until the tab's page is made again. Incognito
@@ -711,7 +731,7 @@ final class SidebarStore {
         t.themeColor = hex
         it.data = .tab(t)
         items[id] = it
-        sidebarFile.save(document, delay: 2)
+        sidebarSave.schedule(after: 2)
     }
 
     func markUnread(_ id: UUID, _ unread: Bool = true) {
@@ -2461,7 +2481,7 @@ final class SidebarStore {
             let drop = history.values.sorted { $0.lastVisit < $1.lastVisit }.prefix(history.count - 5000)
             for d in drop { history[d.url] = nil }
         }
-        historyFile.save(Array(history.values), delay: 5)
+        historySave.schedule(after: 5)
     }
 
     func recordQuerySelection(query: String, url: String) {
@@ -2479,6 +2499,7 @@ final class SidebarStore {
     func clearHistory(_ range: BrowsingDataClear.Range) {
         (history, ranking) = BrowsingDataClear.clearing(range, history: history, ranking: ranking)
         archive = BrowsingDataClear.keptArchive(archive, clearing: range)
+        historySave.cancel()
         historyFile.saveNow(Array(history.values))
         rankingFile.saveNow(ranking)
         archiveFile.saveNow(archive)
@@ -2489,5 +2510,43 @@ final class SidebarStore {
     func recordCommandUse(_ id: String) {
         ranking.commandUsage[id, default: 0] += 1
         rankingFile.save(ranking)
+    }
+}
+
+/// A file's save on the store's clock: it fires once `quiet` seconds pass without another
+/// change, and no later than `maxWait` after the first unsaved one, so changes that never
+/// pause still reach disk.
+@MainActor
+final class CoalescedSave {
+    private let clock: Scheduler
+    private let maxWait: TimeInterval
+    private let flush: @MainActor () -> Void
+    private var work: ScheduledWork?
+    private var dirtySince: Date?
+
+    init(clock: Scheduler, maxWait: TimeInterval, flush: @escaping @MainActor () -> Void) {
+        self.clock = clock
+        self.maxWait = maxWait
+        self.flush = flush
+    }
+
+    func schedule(after quiet: TimeInterval) {
+        let now = clock.now
+        let since = dirtySince ?? now
+        dirtySince = since
+        let wait = max(0, min(quiet, maxWait - now.timeIntervalSince(since)))
+        work?.cancel()
+        work = clock.after(wait) { [weak self] in
+            guard let self else { return }
+            cancel()
+            flush()
+        }
+    }
+
+    /// Drops the pending save (the caller writes now instead).
+    func cancel() {
+        work?.cancel()
+        work = nil
+        dirtySince = nil
     }
 }

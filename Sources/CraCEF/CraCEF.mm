@@ -1201,10 +1201,13 @@ static const char kBackgroundProbe[] =
 // new renderer's first page transparent (chromiumembedded/cef#3891), so the view's canvas showed
 // through a page with no background of its own until its load ended: black text on black while
 // a slow image loaded. Frames wait for render-blocking stylesheets, so the first answer already
-// has the page's styles; the probe above takes over once the document is parsed.
+// has the page's styles; the probe above takes over once the document is parsed. It looks at
+// most every 100 ms after the first frame: each look reads computed styles (and on a page with
+// no background of its own adds and removes an element), which on every frame forced a style
+// recalculation 60–120 times a second through the busiest part of the load.
 static const char kLoadingBackgroundProbe[] =
-    "(function(send){var color=" CRA_PAGE_BACKGROUND_FN ",last='',n=0;"
-    "function tick(){try{var c=color();if(c&&c!==last){last=c;send('bg:'+c);}}catch(e){}"
+    "(function(send){var color=" CRA_PAGE_BACKGROUND_FN ",last='',n=0,at=-1e9;"
+    "function tick(ts){if(ts-at>=100){at=ts;try{var c=color();if(c&&c!==last){last=c;send('bg:'+c);}}catch(e){}}"
     "if(document.readyState==='loading'&&++n<600)requestAnimationFrame(tick);}"
     "requestAnimationFrame(tick);})";
 

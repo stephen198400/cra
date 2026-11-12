@@ -263,7 +263,7 @@
 #170   Packages/CraCore/Tests/CraCoreTests/SpaceColorPresetsTests.swift::catalogColours  3739d0009dc7
 #170   Packages/CraCore/Tests/CraCoreTests/SpaceColorPresetsTests.swift::pageOfAKey  1030ea02929f
 #170   Packages/CraCore/Tests/CraCoreTests/SpaceColorPresetsTests.swift::pages  c20880c3012c
-#170   Tests/StoreTests.swift::themePreview  d10606ab1689
+#170   Tests/StoreTests.swift::themePreview  d12d431de568
 #171   Packages/CraCore/Tests/CraCoreTests/ArcThemeImportTests.swift::appearanceBasedWithOneHalfKeepsIt  8c8e340cb468
 #171   Packages/CraCore/Tests/CraCoreTests/ArcThemeImportTests.swift::autoThemeWithOneHalfKeepsItsLook  6162547ce294
 #171   Packages/CraCore/Tests/CraCoreTests/ArcThemeImportTests.swift::singleWithoutAppearanceKeepsItsSide  90d071ca989c

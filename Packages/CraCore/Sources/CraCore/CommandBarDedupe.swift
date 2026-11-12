@@ -54,6 +54,14 @@ public enum CommandBarDedupe {
     /// The rows kept, as indices into `rows` with the score each lists with, best first (rows
     /// with equal scores in the order given). Rows sharing any key are one page.
     public static func kept(_ rows: [Row]) -> [(index: Int, score: Double)] {
+        pages(rows).enumerated().map { (offset: $0.offset, kept: $0.element) }
+            .sorted { a, b in a.kept.score != b.kept.score ? a.kept.score > b.kept.score : a.offset < b.offset }
+            .map(\.kept)
+    }
+
+    /// `kept` before its sort: one per page, in the order pages first appear. The command bar
+    /// picks the few it lists with `CommandBarRanking.top` instead of sorting them all.
+    public static func pages(_ rows: [Row]) -> [(index: Int, score: Double)] {
         // Union rows that share a key; the group's root is its first row.
         var parent = Array(rows.indices)
         func root(_ i: Int) -> Int {
@@ -85,8 +93,6 @@ public enum CommandBarDedupe {
             let wins = row.isOpenTab != current.isOpenTab ? row.isOpenTab : row.score > current.score
             best[g] = (wins ? i : held.index, max(held.score, row.score))
         }
-        return order.enumerated().map { (offset: $0.offset, kept: best[$0.element]!) }
-            .sorted { a, b in a.kept.score != b.kept.score ? a.kept.score > b.kept.score : a.offset < b.offset }
-            .map(\.kept)
+        return order.map { best[$0]! }
     }
 }

@@ -4,18 +4,42 @@ import Observation
 /// Favicons keyed by host or by a tab's own icon (FaviconKey). Chromium hands us PNG bytes through the bridge;
 /// we keep them in memory and on disk so the sidebar is populated on launch
 /// before any tab has loaded (Arc: SidebarItemsFaviconCache).
+///
+/// Observed key by key: a view that read one icon re-renders when that icon changes, not when
+/// any page anywhere loads its favicon. As one observed `[String: NSImage]`, every favicon a
+/// page reported rebuilt every space's list in every window, twice (site and tab key), and the
+/// derived caches (glyph tone, colors) written during that rebuild invalidated it once more.
 @MainActor
 @Observable
 final class FaviconCache {
     private static let persistenceQueue = DispatchQueue(label: "dk.kildahl.cra.favicons", qos: .utility)
-    private(set) var images: [String: NSImage] = [:]
-    private var attemptedDiskLoad: Set<String> = []
+    @ObservationIgnored private(set) var images: [String: NSImage] = [:]
+    @ObservationIgnored private var attemptedDiskLoad: Set<String> = []
+    /// One change counter per key; what a read of that key depends on.
+    @ObservationIgnored private var signals: [String: FaviconSignal] = [:]
+    /// Bumped by `reset()`: every read depends on it.
+    private var generation = 0
+
+    private func observe(_ key: String) {
+        _ = generation
+        _ = signal(key).version
+    }
+
+    private func notify(_ key: String) { signal(key).version &+= 1 }
+
+    private func signal(_ key: String) -> FaviconSignal {
+        if let s = signals[key] { return s }
+        let s = FaviconSignal()
+        signals[key] = s
+        return s
+    }
 
     /// FaviconKey.key(for:), for code written before it moved to CraCore (#51).
     static func key(for urlString: String) -> String? { FaviconKey.key(for: urlString) }
 
     func image(forKey key: String?) -> NSImage? {
         guard let key else { return nil }
+        observe(key)
         if let img = images[key] { return img }
         if !attemptedDiskLoad.contains(key) {
             attemptedDiskLoad.insert(key)
@@ -32,8 +56,8 @@ final class FaviconCache {
 
     func image(for urlString: String) -> NSImage? { image(forKey: FaviconKey.key(for: urlString)) }
 
-    private var dominant: [String: String] = [:]
-    private var selectionPalettes: [String: [String]] = [:]
+    @ObservationIgnored private var dominant: [String: String] = [:]
+    @ObservationIgnored private var selectionPalettes: [String: [String]] = [:]
 
     /// Spatial logo colors for the selected favorite's outline, cached until the icon changes.
     func selectionColors(forKey key: String?) -> [String]? {
@@ -76,7 +100,7 @@ final class FaviconCache {
         return hex
     }
 
-    private var glyphTone: [String: Bool?] = [:]
+    @ObservationIgnored private var glyphTone: [String: Bool?] = [:]
 
     /// For a one-color gray glyph on a transparent background (GitHub's
     /// octocat, black or white depending on the page's color scheme): true when
@@ -116,6 +140,7 @@ final class FaviconCache {
         dominant = [:]
         selectionPalettes = [:]
         glyphTone = [:]
+        generation &+= 1
     }
 
     static func isCustom(_ key: String) -> Bool { key.hasPrefix("custom-") }
@@ -147,6 +172,7 @@ final class FaviconCache {
     func removeCustomIcon(_ key: String) {
         guard Self.isCustom(key) else { return }
         images[key] = nil
+        notify(key)
         try? FileManager.default.removeItem(at: AppPaths.favicons.appendingPathComponent(Self.fileName(key)))
     }
 
@@ -156,12 +182,15 @@ final class FaviconCache {
         glyphTone[key] = nil
         images[key] = image
         selectionPalettes[key] = nil
+        notify(key)
         guard persist else { return }
         let file = AppPaths.favicons.appendingPathComponent(Self.fileName(key))
         Self.persistenceQueue.async {
             guard let tiff = image.tiffRepresentation,
                   let rep = NSBitmapImageRep(data: tiff),
                   let png = rep.representation(using: .png, properties: [:]) else { return }
+            // Every page load reports its icon again, usually the same one: no rewrite then.
+            if (try? Data(contentsOf: file)) == png { return }
             try? png.write(to: file, options: .atomic)
         }
     }
@@ -170,4 +199,10 @@ final class FaviconCache {
         let safe = key.map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" ? String($0) : "_" }.joined()
         return safe + ".png"
     }
+}
+
+/// One favicon key's change counter (FaviconCache).
+@MainActor @Observable
+final class FaviconSignal {
+    var version = 0
 }

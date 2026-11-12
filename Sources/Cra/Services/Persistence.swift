@@ -53,10 +53,17 @@ private let persistenceQueue = DispatchQueue(label: "dk.kildahl.cra.persistence"
 
 /// One JSON file, loaded once, saved with a short debounce. Writes are atomic
 /// and the previous version is kept as `<name>.bak`, which is what Arc does
-/// with its timestamped Storable*.json copies, minus the pile-up.
+/// with its timestamped Storable*.json copies, minus the pile-up. Nothing reads the .bak back:
+/// it is there for a person to restore by hand.
 final class JSONStore<T: Codable> {
     let url: URL
     private var pending: DispatchWorkItem?
+    /// How old the .bak may get before a write copies the file over it again; 0 copies on every
+    /// write. The first write of a launch always copies, so the .bak then holds what the last
+    /// session left.
+    private let backupEvery: TimeInterval
+    /// Only touched on the persistence queue.
+    private var lastBackup: Date?
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -69,7 +76,10 @@ final class JSONStore<T: Codable> {
         return d
     }()
 
-    init(_ name: String) { url = AppPaths.file(name) }
+    init(_ name: String, backupEvery: TimeInterval = 0) {
+        url = AppPaths.file(name)
+        self.backupEvery = backupEvery
+    }
 
     func load(or fallback: () -> T) -> T {
         guard let data = try? Data(contentsOf: url) else { return fallback() }
@@ -85,7 +95,8 @@ final class JSONStore<T: Codable> {
         pending?.cancel()
         let item = DispatchWorkItem { [weak self] in self?.write(value) }
         pending = item
-        persistenceQueue.asyncAfter(deadline: .now() + delay, execute: item)
+        // No delay: queued now, so a later `saveNow` (or any write after it) runs after it.
+        if delay <= 0 { persistenceQueue.async(execute: item) } else { persistenceQueue.asyncAfter(deadline: .now() + delay, execute: item) }
     }
 
     /// Writes before returning (quit, launch-time bookkeeping), after any write in flight.
@@ -105,9 +116,10 @@ final class JSONStore<T: Codable> {
         }
         let fm = FileManager.default
         let bak = url.appendingPathExtension("bak")
-        if fm.fileExists(atPath: url.path) {
+        if fm.fileExists(atPath: url.path), lastBackup.map({ Date().timeIntervalSince($0) >= backupEvery }) ?? true {
             try? fm.removeItem(at: bak)
             try? fm.copyItem(at: url, to: bak)
+            lastBackup = Date()
         }
         do {
             try data.write(to: url, options: .atomic)
