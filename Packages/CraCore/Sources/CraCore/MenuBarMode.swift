@@ -22,7 +22,7 @@ public enum MenuBarMode {
         case stayInMenuBar
     }
 
-    /// Only Cra's own Quit stays in the menu bar: macOS logging out, a script or the updater
+    /// Only Cra's own Quit stays in the menu bar: macOS logging out or a script
     /// must get a real quit, and the menu bar item's Quit is how the user asks for one.
     public static func outcome(enabled: Bool, source: QuitSource) -> QuitOutcome {
         enabled && source == .appMenu ? .stayInMenuBar : .quit

@@ -4,12 +4,12 @@ import Testing
 /// The space menu: one menu for the header, the Library's cards and the dock's icons (#339).
 struct SpaceMenuLayoutTests {
     /// Arc 1.172.2's menu on a dock icon is the header's, item for item: no Edit Space…, Move
-    /// Left or Move Right.
+    /// Left or Move Right. From leaves out Change Space Icon… (no icon picker) and Live Folders.
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/339"))
     func dockShowsArcsWholeSpaceMenu() {
         #expect(SpaceMenuLayout.sections(spaceCount: 3) == [
-            [.changeIcon, .rename, .editTheme, .setProfile, .searchEngine],
-            [.newFolder, .liveFolders],
+            [.rename, .editTheme, .setProfile, .searchEngine],
+            [.newFolder],
             [.export],
             [.manageSpaces],
             [.delete],
@@ -19,7 +19,7 @@ struct SpaceMenuLayoutTests {
     }
 
     /// From the dock on another space, Edit Theme Color…, Rename Space… and New Folder open that
-    /// space first; Change Space Icon… points at the icon and the open space stays open.
+    /// space first; the rest leave the open space open.
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/339"))
     func dockOpensTheSpaceForItsListAndHeader() {
         let switching: [SpaceMenuLayout.Item] = [.rename, .editTheme, .newFolder]

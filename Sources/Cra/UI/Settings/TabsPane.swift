@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// Settings ▸ Tabs. Dia draws this pane as a two-column form of checkboxes, whose titles didn't
-/// say what each one did. Cra gives every setting a line saying what it changes, and the ones
-/// that change how Cra looks a picture of it, the way Arc's Max pane draws a feature.
+/// say what each one did. Cra gives every setting a line saying what it changes.
 /// Links have a pane of their own, as in Arc.
 struct TabsPane: View {
     @Environment(SidebarStore.self) private var store
@@ -20,46 +19,40 @@ struct TabsPane: View {
             }
             .padding(.top, 12)
 
-            // Settings that change how Cra looks carry a picture of the change.
             SettingsHeader("Sidebar").padding(.top, 20)
             SettingsFeatureCard {
-                SettingsSwitchRow("New tabs at the top",
+                SettingsToggleRow("New tabs at the top",
                                   detail: "A new tab goes above your other tabs instead of below them.",
-                                  isOn: $store.settings.newTabsAtTop) { SettingsArt.newTabsAtTop }
+                                  isOn: $store.settings.newTabsAtTop)
                 SettingsCardDivider()
-                SettingsSwitchRow("New Tab button above tabs",
+                SettingsToggleRow("New Tab button above tabs",
                                   detail: "The + New Tab row sits at the top of the tab list, where you can always reach it.",
-                                  isOn: $store.settings.newTabButtonAtTop) { SettingsArt.newTabButtonAtTop }
+                                  isOn: $store.settings.newTabButtonAtTop)
                 SettingsCardDivider()
-                SettingsSwitchRow("Folder previews",
+                SettingsToggleRow("Folder previews",
                                   detail: "Hover over a closed folder to see the tabs inside it.",
-                                  isOn: $store.settings.folderPreviews) { SettingsArt.folderPreviews }
+                                  isOn: $store.settings.folderPreviews)
                 SettingsCardDivider()
-                // Arc: Settings ▸ General ▸ Previews (Gmail's unread mail on its favorite).
-                SettingsSwitchRow("Gmail previews",
-                                  detail: "Hover over Gmail in your Favorites to see your unread mail.",
-                                  isOn: $store.settings.favoritePreviews) { SettingsArt.gmailPreviews }
-                SettingsCardDivider()
-                SettingsSwitchRow("Colorful favorite outline",
+                SettingsToggleRow("Colorful favorite outline",
                                   detail: "The open favorite gets a rim in its logo’s colors instead of a plain one.",
-                                  isOn: $store.settings.favoriteLogoOutline) { SettingsArt.favoriteLogoOutline }
+                                  isOn: $store.settings.favoriteLogoOutline)
                 SettingsCardDivider()
                 // Arc's single-space mode ("Hide Space Header" on the space's menu), for people who
                 // don't use spaces.
-                SettingsSwitchRow("Space header with one space",
+                SettingsToggleRow("Space header with one space",
                                   detail: "Show the space’s name at the top and its icon at the bottom of the sidebar, even while you have only one space.",
-                                  isOn: $store.settings.showSpaceHeaderOnSingleSpace) { SettingsArt.spaceHeader }
+                                  isOn: $store.settings.showSpaceHeaderOnSingleSpace)
             }
 
             SettingsHeader("Pages").padding(.top, 20)
             SettingsFeatureCard {
-                SettingsSwitchRow("Edge to edge",
+                SettingsToggleRow("Edge to edge",
                                   detail: "Pages fill the window, with no margin or rounded corners around them.",
-                                  isOn: $store.settings.edgeToEdgeContent) { SettingsArt.edgeToEdge }
+                                  isOn: $store.settings.edgeToEdgeContent)
                 SettingsCardDivider()
-                SettingsSwitchRow("Automatic Picture in Picture",
+                SettingsToggleRow("Automatic Picture in Picture",
                                   detail: "Switch away from a tab playing a video and the video keeps playing in a small floating window. A site you set in its site controls keeps its own choice.",
-                                  isOn: $store.settings.autoPictureInPicture) { SettingsArt.autoPictureInPicture }
+                                  isOn: $store.settings.autoPictureInPicture)
             }
 
             SettingsHeader("Tabs and Favorites").padding(.top, 20)

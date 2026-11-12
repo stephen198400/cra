@@ -141,8 +141,8 @@ enum PolicyTests {
     }
 
     /// The app's clock: work runs whether or not the caller keeps the handle, and only cancel()
-    /// stops it. SharingService's first usage report, 30 s after launch, was dropped because its
-    /// handle wasn't kept, so 0.1.38 sent no stats until six hours in.
+    /// stops it. Work scheduled 30 s after launch was once dropped because its handle wasn't
+    /// kept, so it didn't run until a six-hour repeat came round (0.1.38).
     @MainActor
     private static func liveScheduler() {
         let clock = LiveScheduler()

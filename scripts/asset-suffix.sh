@@ -1,7 +1,6 @@
 #!/bin/bash
 # Prints the release-asset suffix for a built From.app: nothing for Apple silicon
-# (Cra.dmg, Cra.zip, appcast.xml), "-Intel" for Intel (Cra-Intel.dmg, Cra-Intel.zip,
-# appcast-intel.xml). Asset names carry no version, so releases/latest/download links work.
+# (Cra.dmg, Cra.zip), "-Intel" for Intel (Cra-Intel.dmg, Cra-Intel.zip). Asset names carry no version, so releases/latest/download links work.
 #   scripts/asset-suffix.sh path/to/From.app
 set -euo pipefail
 EXE="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$1/Contents/Info.plist")"

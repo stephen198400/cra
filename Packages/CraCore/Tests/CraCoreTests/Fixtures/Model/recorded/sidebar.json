@@ -179,24 +179,6 @@
       },
       "id" : "D0000000-0000-0000-0000-000000000005",
       "isUnread" : false,
-      "liveFolder" : {
-        "enterprise" : "example-ent",
-        "filter" : {
-          "attributes" : 5,
-          "hiddenRepositories" : [
-            "example\/old"
-          ]
-        },
-        "hiddenItems" : [
-          "https:\/\/github.com\/example\/app\/pull\/7"
-        ],
-        "lastError" : "rateLimited",
-        "lastFetch" : "2026-10-31T10:00:00Z",
-        "source" : "github",
-        "ssoOrganizations" : [
-          "example-org"
-        ]
-      },
       "parentID" : "C0000000-0000-0000-0000-000000000002",
       "title" : "Reviews"
     },
@@ -209,9 +191,6 @@
         "tab" : {
           "_0" : {
             "faviconKey" : "github.com",
-            "liveGoneAt" : "2026-10-31T12:00:00Z",
-            "liveItemURL" : "https:\/\/github.com\/example\/app\/pull\/9",
-            "liveSubtitle" : "someone",
             "muted" : false,
             "savedTitle" : "Fix the thing",
             "savedURL" : "https:\/\/github.com\/example\/app\/pull\/9",

@@ -20,17 +20,12 @@ let cefLinkerFlags: [String] = [
     "-L\(cefRoot)/build/libcef_dll_wrapper",
 ]
 
-// Sparkle, the updater framework Arc ships, lives in vendor/sparkle (scripts/fetch-sparkle.sh);
-// scripts/build.sh copies Sparkle.framework into Cra.app/Contents/Frameworks.
-let sparkleRoot = "\(Context.packageDirectory)/vendor/sparkle"
-
 let package = Package(
     name: "Cra",
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Cra", targets: ["Cra"]),
         .executable(name: "CraHelper", targets: ["CraHelper"]),
-        .executable(name: "CraPluginHost", targets: ["CraPluginHost"]),
         // Loaded by the Dock, not by Cra; scripts/build.sh wraps it in
         // Cra.app/Contents/PlugIns/CraDockTile.docktileplugin.
         .library(name: "CraDockTile", type: .dynamic, targets: ["CraDockTile"]),
@@ -38,8 +33,6 @@ let package = Package(
     // Models and decisions that need no AppKit or CEF, with tests that run without vendor/cef.
     dependencies: [.package(path: "Packages/CraCore")],
     targets: [
-        .executableTarget(name: "CraPluginHost", path: "Sources/CraPluginHost",
-                          linkerSettings: [.linkedFramework("JavaScriptCore")]),
         // Objective-C++ bridge between Swift and CEF.
         .target(
             name: "CraCEF",
@@ -77,9 +70,8 @@ let package = Package(
             name: "Cra",
             dependencies: ["CraCEF", .product(name: "CraCore", package: "CraCore")],
             path: "Sources/Cra",
-            swiftSettings: [.unsafeFlags(["-F", sparkleRoot]), .unsafeFlags(["-Onone"], .when(configuration: .debug))],
-            linkerSettings: [.unsafeFlags(["-F", sparkleRoot, "-framework", "Sparkle",
-                                           "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
+            swiftSettings: [.unsafeFlags(["-Onone"], .when(configuration: .debug))],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
     ],
     swiftLanguageVersions: [.v5],

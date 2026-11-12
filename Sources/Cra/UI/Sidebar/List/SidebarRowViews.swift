@@ -431,13 +431,6 @@ final class SidebarFaviconView: NSImageView {
         }
     }
 
-    func showPluginMark(_ mark: NSImage, colors: SidebarColors, color: NSColor? = nil) {
-        shown = nil
-        imageScaling = .scaleProportionallyUpOrDown
-        image = mark
-        contentTintColor = color ?? colors.monoGlyph
-        layer?.masksToBounds = false
-    }
 }
 
 /// Arc's keyboard-focus ring: 2 pt systemYellow with black 6/6 dashes, inside the edge.
@@ -762,7 +755,6 @@ struct TabRowModel: Equatable {
     var subtitle: String?
     var icon: NSImage?
     var flipIcon: Bool
-    var liveIcon: NSImage?
     var editing: Bool
     var selected: Bool
     var highlighted: Bool
@@ -781,8 +773,6 @@ struct TabRowModel: Equatable {
     var homeFlipIcon: Bool
     /// The favicon of a Peek opened from this tab (Arc: modalIcon), in the close button's place.
     var peekIcon: NSImage?
-    /// Tidy Tab Titles just renamed it: the row plays Arc's rename once.
-    var tidyRename: TidyTitlesService.Effect? = nil
 }
 
 final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
@@ -804,11 +794,6 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
     private var flagsMonitor: Any?
     /// Arc's regional hover background for a tab that can go back: the icon's square or the body.
     private let regionLayer = CALayer()
-    /// The Tidy Tab Titles rename this row last played, and what it is drawing for it.
-    private var playedRename: UUID?
-    private var renameOld: NSTextField?
-    private var renameSparkles: CALayer?
-    private var renameBright = false
 
     override init(key: SpaceListView.RowKey, list: SpaceListView, colors: SidebarColors) {
         super.init(key: key, list: list, colors: colors)
@@ -856,123 +841,12 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
         }
         rebuildAccessories()
         refreshBackground()
-        // A rename that just happened plays once; a row rebuilt later shows only the subtitle.
-        if let e = m.tidyRename, e.token != playedRename {
-            playedRename = e.token
-            if window != nil, Date().timeIntervalSince(e.start) < 0.3 { playTidyRename(from: e.oldTitle) }
-        }
     }
 
     override func setColors(_ c: SidebarColors) {
         guard c != colors else { return }
         super.setColors(c)
         if let m = model { model = nil; apply(m) }
-    }
-
-    /// Arc's rename (TabCellView: animatedGradientView over the old and new title, sparksView;
-    /// measured at 120 fps on Arc 1.171, 4 Nov 2026): one soft front 72 pt wide crosses the row
-    /// left to right at ~1,180 pt/s, fading the old title out and the new title and its "Double-click
-    /// to rename" in, the subtitle bright meanwhile; sparkles rise along a band that crosses the row in
-    /// 0.55 s, and everything stops at once when it has.
-    private func playTidyRename(from old: String) {
-        layoutSubtreeIfNeeded()
-        let total = TidyTitlesService.sweep
-        let fade: CGFloat = 72, speed: CGFloat = 1180
-        let start = titleLabel.frame.minX + SidebarText.inset + 20
-        let oldLabel = NSTextField.sidebarLabel(size: 14)
-        oldLabel.stringValue = old
-        oldLabel.textColor = colors.textPrimary
-        oldLabel.lineBreakMode = .byClipping
-        oldLabel.cell?.truncatesLastVisibleLine = false
-        oldLabel.frame = NSRect(x: titleLabel.frame.minX, y: titleLabel.frame.minY,
-                                width: max(titleLabel.frame.width, bounds.width - 8 - titleLabel.frame.minX), height: titleLabel.frame.height)
-        oldLabel.wantsLayer = true
-        addSubview(oldLabel)
-        renameOld = oldLabel
-        titleLabel.wantsLayer = true
-        subtitleLabel.wantsLayer = true
-        let end = oldLabel.frame.maxX + fade / 2
-        let sweep = min(total, Double((end - start) / speed))
-        for (view, reveal) in [(titleLabel as NSView, true), (subtitleLabel, true), (oldLabel, false)] {
-            view.layer?.mask = Self.frontMask(reveal: reveal, fade: fade, height: view.bounds.height,
-                                              from: start - view.frame.minX, to: end - view.frame.minX, duration: sweep)
-        }
-        renameBright = true
-        refreshSubtitle()
-        let sparkles = Self.sparkles(in: bounds, dark: colors.isDark, duration: total)
-        layer?.addSublayer(sparkles)
-        renameSparkles = sparkles
-        layer?.zPosition = 50
-        DispatchQueue.main.asyncAfter(deadline: .now() + total) { [weak self] in self?.endTidyRename() }
-    }
-
-    private func endTidyRename() {
-        renameOld?.removeFromSuperview()
-        renameOld = nil
-        renameSparkles?.removeFromSuperlayer()
-        renameSparkles = nil
-        titleLabel.layer?.mask = nil
-        subtitleLabel.layer?.mask = nil
-        layer?.zPosition = 0
-        renameBright = false
-        refreshSubtitle()
-    }
-
-    /// A horizontal mask whose soft edge (`fade` wide) travels `from` → `to`: opaque behind the front
-    /// when it reveals, opaque ahead of it when it hides.
-    private static func frontMask(reveal: Bool, fade: CGFloat, height: CGFloat, from: CGFloat, to: CGFloat, duration: Double) -> CALayer {
-        let span: CGFloat = 4000
-        let g = CAGradientLayer()
-        g.startPoint = CGPoint(x: 0, y: 0.5)
-        g.endPoint = CGPoint(x: 1, y: 0.5)
-        let on = NSColor.black.cgColor, off = NSColor.clear.cgColor
-        g.colors = reveal ? [on, on, off, off] : [off, off, on, on]
-        let half = Double(fade / 2 / (2 * span))
-        g.locations = [0, NSNumber(value: 0.5 - half), NSNumber(value: 0.5 + half), 1]
-        g.bounds = CGRect(x: 0, y: 0, width: 2 * span, height: height + 40)
-        g.position = CGPoint(x: to, y: height / 2)
-        g.actions = ["position": NSNull(), "bounds": NSNull()]
-        let move = CABasicAnimation(keyPath: "position.x")
-        move.fromValue = from
-        move.toValue = to
-        move.duration = duration
-        move.timingFunction = CAMediaTimingFunction(name: .linear)
-        g.add(move, forKey: "front")
-        return g
-    }
-
-    /// Arc's sparks: small dots that come up along a band crossing the row, scattered up to ~28 pt
-    /// above and below it, most staying lit until the sweep ends, a few going out early.
-    private static func sparkles(in rect: CGRect, dark: Bool, duration: Double) -> CALayer {
-        let box = CALayer()
-        box.frame = rect
-        box.actions = ["sublayers": NSNull()]
-        var rng = SystemRandomNumberGenerator()
-        let count = 46
-        let now = CACurrentMediaTime()
-        for i in 0..<count {
-            let born = duration * (Double(i) + Double.random(in: 0...1, using: &rng)) / Double(count)
-            let x = rect.width * CGFloat(born / duration) + CGFloat.random(in: -14...14, using: &rng)
-            let spread = CGFloat((0..<3).map { _ in Double.random(in: -1...1, using: &rng) }.reduce(0, +) / 3) * 28
-            let r = CGFloat.random(in: 0.6...1.5, using: &rng)
-            let dot = CALayer()
-            dot.frame = CGRect(x: min(max(x, 2), rect.width - 2) - r, y: rect.midY + spread - r, width: 2 * r, height: 2 * r)
-            dot.cornerRadius = r
-            dot.backgroundColor = (dark ? NSColor.white : NSColor.black.withAlphaComponent(0.55)).cgColor
-            dot.opacity = 0
-            let life = Bool.random(using: &rng) && i % 3 == 0 ? Double.random(in: 0.15...0.3, using: &rng) : duration - born
-            let blink = CAKeyframeAnimation(keyPath: "opacity")
-            let peak = Float.random(in: 0.55...1, using: &rng)
-            blink.values = [0, peak, peak * 0.6, peak, 0]
-            blink.keyTimes = [0, 0.12, 0.5, 0.85, 1]
-            blink.beginTime = now + born
-            blink.duration = max(0.05, life)
-            blink.fillMode = .both
-            blink.isRemovedOnCompletion = false
-            dot.add(blink, forKey: "spark")
-            box.addSublayer(dot)
-        }
-        return box
     }
 
     override var fillLeading: CGFloat { CGFloat(model?.depth ?? 0) * CraMetrics.indent }
@@ -1098,8 +972,6 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
         guard let m = model else { return }
         if overIcon && !separating {
             favicon.show(m.homeIcon, flip: m.homeFlipIcon, colors: colors)
-        } else if let icon = m.liveIcon {
-            favicon.showPluginMark(icon, colors: colors)
         } else {
             favicon.show(m.icon, flip: m.flipIcon, colors: colors)
         }
@@ -1136,8 +1008,7 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
         // A fade-out still running ends here: the label shows what it should, fully.
         if subtitleLabel.alphaValue < 1, shownSubtitle != nil { subtitleFade += 1; subtitleLabel.alphaValue = 1 }
         subtitleLabel.stringValue = shownSubtitle ?? ""
-        // Arc draws the subtitle bright while the rename sweeps in.
-        subtitleLabel.textColor = renameBright ? colors.textPrimary : colors.textTertiary
+        subtitleLabel.textColor = colors.textTertiary
         subtitleLabel.isHidden = shownSubtitle == nil || renameField != nil
     }
 
@@ -1256,8 +1127,7 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
             soundButton.frame = NSRect(x: x - (s.width - Self.soundGlyphWidth) / 2, y: (h - s.height) / 2, width: s.width, height: s.height)
             x += Self.soundGlyphWidth + 8
         }
-        // The unread dot and a peek badge are centred where the close button shows on hover, which
-        // is also under a live folder's refresh button (FolderRowView, Arc lines them up too).
+        // The unread dot and a peek badge are centred where the close button shows on hover.
         let trailing = TabRowTrailing.layout(rowWidth: bounds.width, textX: x, controls: accessories.map {
             TabRowTrailing.Control(width: $0.frame.width, slot: $0 === unreadDot || $0 === peekBadge ? Self.closeSize : nil)
         })
@@ -1396,18 +1266,10 @@ struct FolderRowModel: Equatable {
     var expanded: Bool
     /// Closed with tabs kept in sight under it (FolderPeek): Arc draws three dots in the glyph.
     var peeked: Bool
-    var live: Bool
     var tint: NSColor
     var fill: NSColor
     var back: NSColor
     var tabCount: Int
-    var liveBusy: Bool
-    /// The warning button's tip after a failed refresh.
-    var liveError: String?
-    /// Where the warning button signs in, when GitHub asked for that (else it tries again).
-    var liveSignInURL: String?
-    var liveHelp: String
-    var liveIcon: NSImage? = nil
     var symbol: FolderSymbol? = nil
 }
 
@@ -1433,9 +1295,7 @@ final class FolderRowView: SidebarRowView, NSTextFieldDelegate {
         // The same folder opening or closing turns its glyph; a row taking another folder doesn't.
         let toggled = model.map { $0.id == m.id && $0.expanded != m.expanded } ?? false
         model = m
-        let emblem: FolderEmblem? = m.live
-            ? m.liveIcon.map { FolderEmblem(image: $0, coloring: .template) }
-            : m.symbol.map { FolderEmblem(image: $0.image, coloring: .template) }
+        let emblem = m.symbol.map { FolderEmblem(image: $0.image, coloring: .template) }
         glyph.show(expanded: m.expanded, peeked: m.peeked, emblem: emblem,
                    tint: m.tint, fillColor: m.fill, backColor: m.back, animated: toggled && window != nil)
         titleLabel.stringValue = m.title
@@ -1453,7 +1313,6 @@ final class FolderRowView: SidebarRowView, NSTextFieldDelegate {
     }
 
     override var fillLeading: CGFloat { CGFloat(model?.depth ?? 0) * CraMetrics.indent }
-    var iconRect: NSRect { glyph.frame }
     override func baseFill() -> NSColor { isHovered ? colors.hoverFill : .clear }
 
     override func hoverChanged() {
@@ -1461,38 +1320,13 @@ final class FolderRowView: SidebarRowView, NSTextFieldDelegate {
         rebuildAccessory()
     }
 
-    /// A live folder's refresh button (spinner while it runs, warning after a failure);
-    /// a closed folder's tab count on hover.
+    /// A closed folder's tab count on hover.
     private func rebuildAccessory() {
         accessory?.removeFromSuperview()
         accessory = nil
         guard let m = model, let list else { return }
-        let id = m.id
         let hover = isHovered && !m.editing
-        if m.live {
-            if m.liveBusy {
-                // A spinner fills its frame: the glyph's size, centred where the refresh button sits.
-                let slot = NSView(frame: NSRect(x: 0, y: 0, width: 26, height: 26))
-                let p = NSProgressIndicator(frame: NSRect(x: 7, y: 7, width: 12, height: 12))
-                p.style = .spinning
-                p.controlSize = .mini
-                p.isIndeterminate = true
-                p.startAnimation(nil)
-                slot.addSubview(p)
-                accessory = slot
-            } else if let error = m.liveError {
-                // Arc keeps the warning on hover too ("Sign back in to GitHub."): a click signs in, or tries again.
-                let signIn = m.liveSignInURL
-                accessory = SidebarGlyphButton(symbol: "exclamationmark.triangle", size: 26, iconSize: 13, weight: .regular,
-                                               help: error, colors: colors) { [weak list] in
-                    if let signIn { list?.actions.openURL(signIn) } else { LiveFolderManager.shared.refresh(id) }
-                }
-            } else if hover {
-                accessory = SidebarGlyphButton(symbol: "arrow.clockwise", size: 26, iconSize: 12, help: m.liveHelp, colors: colors) {
-                    LiveFolderManager.shared.refresh(id)
-                }
-            }
-        } else if hover && !m.expanded {
+        if hover && !m.expanded {
             let l = NSTextField.sidebarLabel(size: 11, weight: .medium)
             l.stringValue = "\(m.tabCount)"
             l.textColor = colors.textTertiary
@@ -1514,8 +1348,7 @@ final class FolderRowView: SidebarRowView, NSTextFieldDelegate {
         var right = bounds.width
         if let a = accessory {
             let s = a.frame.size
-            // A live folder's button is centred over its tabs' unread dots and close buttons (17 pt in).
-            right -= (m.live ? 4 : 8) + s.width
+            right -= 8 + s.width
             a.frame = NSRect(x: right, y: (h - s.height) / 2, width: s.width, height: s.height)
             right -= 11
         }
@@ -1581,7 +1414,7 @@ final class FolderRowView: SidebarRowView, NSTextFieldDelegate {
 
     override func contextMenu(at point: NSPoint) -> NSMenu? {
         guard let m = model, let list, let item = list.store.item(m.id) else { return nil }
-        return item.isLiveFolder ? SidebarMenus.liveFolder(item, list: list) : SidebarMenus.folder(item, list: list)
+        return SidebarMenus.folder(item, list: list)
     }
 }
 
@@ -2013,81 +1846,6 @@ final class SplitCellView: NSView, ArcTooltipTarget {
 
 // MARK: - Small rows
 
-struct LiveStatusModel: Equatable {
-    var text: String
-    var url: String?
-    var depth: Int
-}
-
-/// A line inside an open live folder with nothing to show, or when GitHub can't be read.
-final class LiveStatusRowView: SidebarRowView {
-    private(set) var model: LiveStatusModel?
-    private let label: NSTextField = {
-        let l = NSTextField(wrappingLabelWithString: "")
-        l.font = .systemFont(ofSize: 12)
-        l.maximumNumberOfLines = 3
-        // Truncating the tail would make the field one line high inside a row measured for
-        // the wrapped text; the last of the three lines gets the ellipsis instead.
-        l.lineBreakMode = .byWordWrapping
-        l.cell?.truncatesLastVisibleLine = true
-        return l
-    }()
-
-    override init(key: SpaceListView.RowKey, list: SpaceListView, colors: SidebarColors) {
-        super.init(key: key, list: list, colors: colors)
-        addSubview(label)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    static func leading(depth: Int) -> CGFloat { CraMetrics.rowLeading + CGFloat(depth) * CraMetrics.indent + CraMetrics.favicon + 11 }
-
-    static func height(_ m: LiveStatusModel, width: CGFloat) -> CGFloat {
-        let w = max(1, width - leading(depth: m.depth) - 10)
-        let font = NSFont.systemFont(ofSize: 12)
-        let line = ceil(font.ascender - font.descender + font.leading)
-        let r = (m.text as NSString).boundingRect(with: NSSize(width: w, height: line * 3), options: [.usesLineFragmentOrigin],
-                                                  attributes: [.font: font])
-        return ceil(min(r.height, line * 3)) + 16
-    }
-
-    func apply(_ m: LiveStatusModel) {
-        guard m != model else { return }
-        model = m
-        label.stringValue = m.text
-        refreshColors()
-        needsLayout = true
-    }
-
-    private func refreshColors() {
-        label.textColor = model?.url != nil && isHovered ? colors.textSecondary : colors.textTertiary
-    }
-
-    override func setColors(_ c: SidebarColors) {
-        super.setColors(c)
-        refreshColors()
-    }
-
-    override func baseFill() -> NSColor { model?.url != nil && isHovered ? colors.hoverFill : .clear }
-    override var fillLeading: CGFloat { CGFloat(model?.depth ?? 0) * CraMetrics.indent }
-
-    override func hoverChanged() {
-        super.hoverChanged()
-        refreshColors()
-    }
-
-    override func layout() {
-        super.layout()
-        guard let m = model else { return }
-        let x = Self.leading(depth: m.depth)
-        label.frame = NSRect(x: x - SidebarText.inset, y: 8, width: max(0, bounds.width - x - 10) + 2 * SidebarText.inset, height: max(0, bounds.height - 16))
-    }
-
-    override func click(_ event: NSEvent, at point: NSPoint) {
-        if let url = model?.url { list?.actions.openURL(url) }
-    }
-}
-
 final class NewTabRowView: SidebarRowView {
     private let plus = NSImageView()
     private let label = NSTextField.sidebarLabel(size: 14)
@@ -2253,28 +2011,17 @@ struct ClipboardPaste: Equatable {
     }
 }
 
-/// Tidy on the divider: off, offered (shown on hover), or sorting (shown, squiggling).
-enum DividerTidy: Equatable {
-    case none, offered, running
-}
-
-/// The line between pinned and Today; "Clear" shows on hover, and "Tidy" before it once Tidy Tabs
-/// can sort Today (Arc 1.171: UnpinnedSectionHeaderCellView with SidebarTidyButton, a
-/// SquiggleDivider while it works).
+/// The line between pinned and Today; "Clear" shows on hover (Arc 1.171:
+/// UnpinnedSectionHeaderCellView).
 final class DividerRowView: SidebarRowView {
     private let line = NSView()
     private var clear: ClearButton?
-    private var tidyButton: TidyButton?
-    private let squiggle = SquiggleLayer()
     private var hasToday = false
-    private var tidy = DividerTidy.none
 
     override init(key: SpaceListView.RowKey, list: SpaceListView, colors: SidebarColors) {
         super.init(key: key, list: list, colors: colors)
         line.wantsLayer = true
         addSubview(line)
-        layer?.addSublayer(squiggle)
-        squiggle.onFlat = { [weak self] in self?.refresh() }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -2282,14 +2029,8 @@ final class DividerRowView: SidebarRowView {
     override var mouseDownCanMoveWindow: Bool { true }
     override func mouseDown(with event: NSEvent) { super.mouseDown(with: event) }
 
-    func apply(hasToday: Bool, tidy: DividerTidy) {
-        let wasRunning = self.tidy == .running
+    func apply(hasToday: Bool) {
         self.hasToday = hasToday
-        self.tidy = tidy
-        if (tidy == .running) != wasRunning {
-            squiggle.setRunning(tidy == .running, animated: window != nil)
-            tidyButton?.setSweeping(tidy == .running)
-        }
         refresh()
     }
 
@@ -2302,10 +2043,8 @@ final class DividerRowView: SidebarRowView {
 
     private func refresh() {
         line.layer?.backgroundColor = colors.separator.cgColor
-        squiggle.strokeColor = colors.separator.cgColor
-        // The squiggle stands in for the line while Tidy works.
-        line.alphaValue = hasToday && !squiggle.isShowing ? 1 : 0
-        let show = (isHovered || tidy == .running) && hasToday
+        line.alphaValue = hasToday ? 1 : 0
+        let show = isHovered && hasToday
         if show, clear == nil, let list {
             let b = ClearButton(colors: colors) { [weak list] in
                 guard let list else { return }
@@ -2319,23 +2058,7 @@ final class DividerRowView: SidebarRowView {
             clear = nil
             fadeOut(b)
         }
-        let showTidy = show && tidy != .none
-        if showTidy, tidyButton == nil, let list {
-            let b = TidyButton(colors: colors) { [weak list] in
-                guard let list else { return }
-                TidyTabsService.shared.tidy(list.spaceID, store: list.store)
-            }
-            b.alphaValue = 0
-            addSubview(b)
-            tidyButton = b
-            b.setSweeping(tidy == .running)
-            b.animator().alphaValue = 1
-        } else if !showTidy, let b = tidyButton {
-            tidyButton = nil
-            fadeOut(b)
-        }
         clear?.colors = colors
-        tidyButton?.colors = colors
         needsLayout = true
     }
 
@@ -2354,18 +2077,9 @@ final class DividerRowView: SidebarRowView {
             let s = clear.fittingSize
             clear.frame = NSRect(x: bounds.width - 20 - s.width, y: (bounds.height - s.height) / 2, width: s.width, height: s.height)
             right = clear.frame.minX - 8
-            if let tidy = tidyButton {
-                // Arc 1.171, 2x capture of a 347 pt sidebar: the hairline 11 pt before "Clear", the
-                // line 9.5 pt before the broom.
-                let t = tidy.fittingSize
-                tidy.frame = NSRect(x: clear.frame.minX - TidyButton.trailingGap - t.width, y: (bounds.height - t.height) / 2,
-                                    width: t.width, height: t.height)
-                right = tidy.frame.minX + TidyButton.broomInkInset - 9.5
-            }
         }
         let y = (bounds.height - 1) / 2
         line.frame = NSRect(x: 18, y: y, width: max(0, right - 18), height: 1)
-        squiggle.place(from: 18, to: max(18, right), midY: y + 0.5)
     }
 
     private final class ClearButton: NSView {
@@ -2395,287 +2109,6 @@ final class DividerRowView: SidebarRowView {
             if bounds.contains(convert(event.locationInWindow, from: nil)) { action() }
         }
     }
-}
-
-/// Timings of Tidy on the divider, measured on Arc 1.171 (120 fps capture, 4 Nov 2026).
-enum SidebarTidyMetrics {
-    /// The squiggle: a sine of 12.75 pt period, 3 pt amplitude, travelling left at 5 periods a
-    /// second; the amplitude ramps in and out linearly over 0.4 s (SquiggleDivider's
-    /// amplitudeAnimationDuration).
-    static let period: CGFloat = 12.75
-    static let amplitude: CGFloat = 3
-    static let cyclesPerSecond: Double = 5
-    static let ramp: TimeInterval = 0.4
-    /// One sweep of the broom: tips 31° clockwise from the top of its handle in 0.2 s, holds,
-    /// swings 7° past upright and settles, 0.9 s in all.
-    static let sweep: TimeInterval = 0.9
-    /// A tidy runs at least this long on screen: one sweep and the squiggle's ramp in.
-    static let minimumRun: TimeInterval = 0.9
-}
-
-/// The divider's squiggle (Arc's SquiggleDivider): the line becomes a travelling sine wave
-/// while Tidy works and flattens back when it is done.
-final class SquiggleLayer: CALayer {
-    private let wave = CAShapeLayer()
-    private(set) var isShowing = false
-    /// Called once the wave has flattened and the straight line can come back.
-    var onFlat: (() -> Void)?
-    private var width: CGFloat = 0
-    var strokeColor: CGColor? {
-        get { wave.strokeColor }
-        set { wave.strokeColor = newValue }
-    }
-
-    override init() {
-        super.init()
-        masksToBounds = true
-        isHidden = true
-        actions = ["position": NSNull(), "bounds": NSNull(), "hidden": NSNull()]
-        wave.fillColor = nil
-        wave.lineWidth = 1
-        wave.lineCap = .round
-        wave.actions = ["position": NSNull(), "bounds": NSNull(), "path": NSNull(), "strokeColor": NSNull()]
-        addSublayer(wave)
-    }
-
-    override init(layer: Any) { super.init(layer: layer) }
-    required init?(coder: NSCoder) { fatalError() }
-
-    /// Spans the line's run, centred on it.
-    func place(from x0: CGFloat, to x1: CGFloat, midY: CGFloat) {
-        let h = 2 * SidebarTidyMetrics.amplitude + 4
-        frame = CGRect(x: x0, y: midY - h / 2, width: x1 - x0, height: h)
-        if abs(width - (x1 - x0)) > 0.5 {
-            width = x1 - x0
-            wave.frame = CGRect(x: 0, y: 0, width: width + 2 * SidebarTidyMetrics.period, height: h)
-            if isShowing, wave.animation(forKey: "flatten") == nil { wave.path = path(amplitude: SidebarTidyMetrics.amplitude) }
-        }
-    }
-
-    /// One point per 0.5 pt, the same count flat or waving, so the path animates point by point.
-    private func path(amplitude: CGFloat) -> CGPath {
-        let p = CGMutablePath()
-        let mid = bounds.height / 2
-        let total = width + 2 * SidebarTidyMetrics.period
-        var x: CGFloat = 0
-        p.move(to: CGPoint(x: 0, y: mid))
-        while x <= total {
-            p.addLine(to: CGPoint(x: x, y: mid + amplitude * sin(2 * .pi * x / SidebarTidyMetrics.period)))
-            x += 0.5
-        }
-        return p
-    }
-
-    func setRunning(_ on: Bool, animated: Bool) {
-        let flat = path(amplitude: 0), full = path(amplitude: SidebarTidyMetrics.amplitude)
-        if on {
-            isShowing = true
-            isHidden = false
-            wave.removeAnimation(forKey: "flatten")
-            wave.path = full
-            if animated {
-                let grow = CABasicAnimation(keyPath: "path")
-                grow.fromValue = flat
-                grow.toValue = full
-                grow.duration = SidebarTidyMetrics.ramp
-                wave.add(grow, forKey: "grow")
-            }
-            // Leftward travel: the wave slides one period left, over and over. A translation, so the
-            // line growing shorter as the Tidy button comes in doesn't move it.
-            let travel = CABasicAnimation(keyPath: "transform.translation.x")
-            travel.fromValue = 0
-            travel.toValue = -SidebarTidyMetrics.period
-            travel.duration = 1 / SidebarTidyMetrics.cyclesPerSecond
-            travel.repeatCount = .infinity
-            wave.add(travel, forKey: "travel")
-        } else {
-            guard isShowing else { return }
-            let finish = { [weak self] in
-                guard let self else { return }
-                self.isShowing = false
-                self.isHidden = true
-                self.wave.removeAllAnimations()
-                self.onFlat?()
-            }
-            guard animated else { finish(); return }
-            let flatten = CABasicAnimation(keyPath: "path")
-            flatten.fromValue = wave.presentation()?.path ?? full
-            flatten.toValue = flat
-            flatten.duration = SidebarTidyMetrics.ramp
-            CATransaction.begin()
-            CATransaction.setCompletionBlock { finish() }
-            wave.path = flat
-            wave.add(flatten, forKey: "flatten")
-            CATransaction.commit()
-        }
-    }
-}
-
-/// Arc's SidebarTidyButton: a broom, "Tidy" and a hairline before "Clear". The broom sweeps while
-/// Tidy works.
-final class TidyButton: NSView {
-    /// From the hairline to "Clear"'s frame (Arc: 11 pt from the hairline to its first glyph).
-    static let trailingGap: CGFloat = 7.7
-    /// The broom's box is 14 pt; its ink starts 3 pt in.
-    static let broomInkInset: CGFloat = 3
-    /// Arc: the hairline 8.5 pt after "Tidy"'s last glyph.
-    private static let barOffset: CGFloat = 7
-    private let broom = CALayer()
-    private let broomMask = CALayer()
-    private let label = NSTextField.sidebarLabel(size: 11, weight: .semibold)
-    private let bar = CALayer()
-    private let action: () -> Void
-    private var hovering = false { didSet { tint() } }
-    private var sweeping = false
-    var colors: SidebarColors { didSet { if colors != oldValue { tint() } } }
-
-    init(colors: SidebarColors, action: @escaping () -> Void) {
-        self.colors = colors
-        self.action = action
-        super.init(frame: .zero)
-        wantsLayer = true
-        label.stringValue = "Tidy"
-        label.sizeToFit()
-        addSubview(label)
-        broomMask.contents = BroomGlyph.image
-        broom.mask = broomMask
-        broom.actions = ["backgroundColor": NSNull(), "position": NSNull(), "bounds": NSNull()]
-        bar.actions = ["backgroundColor": NSNull(), "position": NSNull(), "bounds": NSNull()]
-        layer?.addSublayer(broom)
-        layer?.addSublayer(bar)
-        frame.size = fittingSize
-        setAccessibilityElement(true)
-        setAccessibilityRole(.button)
-        setAccessibilityLabel("Tidy")
-        _ = ArcTooltipAnchorView.attach(to: self, help: "Organize Today Tabs")
-        tint()
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    /// Broom box, "Tidy" 5 pt after the broom's ink, then the hairline 8.5 pt after its last glyph.
-    override var fittingSize: NSSize {
-        let l = label.frame.size
-        return NSSize(width: Self.labelX + l.width - SidebarText.inset + Self.barOffset + 1, height: max(14, l.height))
-    }
-
-    /// The broom's ink ends 10.6 pt into its box; "Tidy"'s first glyph 5 pt later (Arc).
-    private static let labelX: CGFloat = 10.6 + 5 - SidebarText.inset
-
-    override func layout() {
-        super.layout()
-        let h = bounds.height
-        let l = label.frame.size
-        // The broom turns about the top of its handle, as a hand holds it.
-        let pivot = BroomGlyph.pivot
-        broom.anchorPoint = pivot
-        broom.bounds = CGRect(x: 0, y: 0, width: 14, height: 14)
-        broom.position = CGPoint(x: 14 * pivot.x, y: (h - 14) / 2 + 14 * (isFlipped ? 1 - pivot.y : pivot.y))
-        broomMask.frame = broom.bounds
-        label.frame = NSRect(x: Self.labelX, y: (h - l.height) / 2, width: l.width, height: l.height)
-        let scale = window?.backingScaleFactor ?? 2
-        bar.frame = CGRect(x: label.frame.maxX - SidebarText.inset + Self.barOffset, y: (h - 12.5) / 2, width: 1 / scale, height: 12.5)
-        broomMask.contentsScale = scale
-    }
-
-    private func tint() {
-        let c = hovering || sweeping ? colors.textPrimary : colors.textSecondary
-        label.textColor = c
-        broom.backgroundColor = c.cgColor
-        bar.backgroundColor = colors.separator.cgColor
-    }
-
-    /// Arc's broom while Tidy works: sweep after sweep until the answer is in.
-    func setSweeping(_ on: Bool) {
-        guard on != sweeping else { return }
-        sweeping = on
-        tint()
-        if on {
-            let a = CAKeyframeAnimation(keyPath: "transform.rotation.z")
-            let tip = -31 * CGFloat.pi / 180, past = 7 * CGFloat.pi / 180
-            a.values = [0, tip, tip, past, 0]
-            a.keyTimes = [0, 0.22, 0.39, 0.72, 1]
-            a.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .linear),
-                                 CAMediaTimingFunction(name: .easeInEaseOut), CAMediaTimingFunction(name: .easeInEaseOut)]
-            a.duration = SidebarTidyMetrics.sweep
-            a.repeatCount = .infinity
-            broom.add(a, forKey: "sweep")
-        } else {
-            // Back to upright from wherever the sweep is.
-            let now = (broom.presentation()?.value(forKeyPath: "transform.rotation.z") as? CGFloat) ?? 0
-            broom.removeAnimation(forKey: "sweep")
-            let settle = CABasicAnimation(keyPath: "transform.rotation.z")
-            settle.fromValue = now
-            settle.toValue = 0
-            settle.duration = 0.25
-            settle.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            broom.add(settle, forKey: "settle")
-        }
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        for t in trackingAreas where t.owner === self { removeTrackingArea(t) }
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
-    }
-
-    override func mouseEntered(with event: NSEvent) { hovering = true }
-    override func mouseExited(with event: NSEvent) { hovering = false }
-    override var mouseDownCanMoveWindow: Bool { false }
-    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
-    override func mouseDown(with event: NSEvent) {}
-    override func mouseUp(with event: NSEvent) {
-        if bounds.contains(convert(event.locationInWindow, from: nil)), !sweeping { action() }
-    }
-    override func accessibilityPerformPress() -> Bool {
-        if !sweeping { action() }
-        return true
-    }
-}
-
-/// Cra's own broom for Tidy, drawn after Arc's 14 pt template (2x capture): an almost upright
-/// handle leaning ~18° right, a band, and bristles fanning out to the bottom left, 8.5 × 12 pt of ink.
-enum BroomGlyph {
-    /// The top of the handle, in the image's unit square (y up): where a hand would hold it.
-    static let pivot = CGPoint(x: 9.8 / 14, y: 1 - 1.2 / 14)
-
-    static let image: NSImage = {
-        let img = NSImage(size: NSSize(width: 14, height: 14), flipped: true) { _ in
-            NSColor.black.set()
-            let handle = NSBezierPath()
-            handle.lineWidth = 1.15
-            handle.lineCapStyle = .round
-            handle.move(to: NSPoint(x: 9.8, y: 1.3))
-            handle.line(to: NSPoint(x: 8.1, y: 6.7))
-            handle.stroke()
-            let band = NSBezierPath()
-            band.move(to: NSPoint(x: 5.3, y: 6.9))
-            band.line(to: NSPoint(x: 8.8, y: 6.6))
-            band.line(to: NSPoint(x: 9.0, y: 7.5))
-            band.line(to: NSPoint(x: 5.0, y: 7.8))
-            band.close()
-            band.fill()
-            let head = NSBezierPath()
-            head.move(to: NSPoint(x: 4.6, y: 8.2))
-            head.line(to: NSPoint(x: 9.9, y: 8.0))
-            head.curve(to: NSPoint(x: 10.6, y: 12.3), controlPoint1: NSPoint(x: 10.4, y: 9.6), controlPoint2: NSPoint(x: 10.6, y: 11.0))
-            head.line(to: NSPoint(x: 7.6, y: 12.1))
-            head.curve(to: NSPoint(x: 3.0, y: 10.3), controlPoint1: NSPoint(x: 5.8, y: 11.6), controlPoint2: NSPoint(x: 4.2, y: 11.0))
-            head.curve(to: NSPoint(x: 4.6, y: 8.2), controlPoint1: NSPoint(x: 3.6, y: 9.4), controlPoint2: NSPoint(x: 4.1, y: 8.7))
-            head.close()
-            head.fill()
-            // Gaps between the bristles.
-            NSGraphicsContext.current?.compositingOperation = .clear
-            let cuts = NSBezierPath()
-            cuts.lineWidth = 0.4
-            cuts.move(to: NSPoint(x: 6.3, y: 10.0)); cuts.line(to: NSPoint(x: 7.3, y: 12.4))
-            cuts.move(to: NSPoint(x: 8.2, y: 9.8)); cuts.line(to: NSPoint(x: 8.9, y: 12.5))
-            cuts.stroke()
-            return true
-        }
-        img.isTemplate = true
-        return img
-    }()
 }
 
 // MARK: - Tab group header

@@ -15,7 +15,6 @@ enum FolderGlyphTests {
         imageRendering()
         backingScaleAndRemoval()
         symbolArtwork()
-        liveFolderArtwork()
         print("Folder glyph: \(checks) checks passed")
     }
 
@@ -182,26 +181,6 @@ enum FolderGlyphTests {
                 (0..<pixels.pixelsWide).contains { x in pixel(pixels, x: x, y: y).alphaComponent > 0.1 }
             }
             expect(visible, "every picker symbol must render visible pixels: \(symbol)")
-        }
-    }
-
-    @MainActor
-    private static func liveFolderArtwork() {
-        let glyph = makeGlyph()
-        for artwork in [GitHubMark.image, GitLabMark.image] {
-            expect(artwork.isTemplate, "live folder marks use the folder's ink")
-            show(glyph, emblem: FolderEmblem(image: artwork, coloring: .template))
-            let mark = imageLayer(in: glyph.layer!)!
-            let source = sourceImage(mark)
-            expect(artwork.size == CGSize(width: 32, height: 32) && pixelSize(source) == nativePixelSize(artwork),
-                   "live folder source matches Arc's 32 pt asset canvas")
-            expect(mark.bounds.size == CGSize(width: 9.5, height: 9.5),
-                   "live folder marks use the same fit as picker symbols")
-            let pixels = bitmap(mark)
-            let visible = (0..<pixels.pixelsHigh).contains { y in
-                (0..<pixels.pixelsWide).contains { x in pixel(pixels, x: x, y: y).alphaComponent > 0.1 }
-            }
-            expect(visible, "live folder marks render visible pixels")
         }
     }
 

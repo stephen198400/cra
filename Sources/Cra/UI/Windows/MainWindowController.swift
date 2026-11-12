@@ -19,7 +19,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     let tabSwitcher = TabSwitcher()
     private let tabSwitcherPanel = TabSwitcherPanel()
     private var spaceEditor: NSWindow?
-    private var importWindow: ImportWindowController?
     private var scrollMonitor: Any?
     private var pageTopDragMonitor: Any?
     private var replayingPageClick = false
@@ -339,7 +338,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             b.isLoading ? b.stopLoading() : b.reload()
         }
         sidebarActions.editSpace = { [weak self] s in self?.showSpaceEditor(space: s) }
-        sidebarActions.changeSpaceIcon = { [weak self] s, anchor in self?.showSpaceIconPicker(space: s, anchor: anchor) }
         sidebarActions.editSpaceTheme = { [weak self] s in self?.showSpaceStyleEditor(space: s) }
         sidebarActions.editSpaceThemeBeside = { [weak self] s, card in self?.showSpaceStyleEditor(space: s, beside: card) }
         sidebarActions.newProfile = { [weak self] id in self?.showNewProfileDialog(forSpace: id) }
@@ -623,8 +621,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         if capturing != sidebarUI.capturingTabIDs { sidebarUI.capturingTabIDs = capturing }
         let audible = Set(app.mainWindows.flatMap { $0.browsers.runtimes.filter { $0.value.browser.isAudible }.keys })
         if audible != sidebarUI.audibleTabIDs { sidebarUI.audibleTabIDs = audible }
-        let soundPlaying = Set(app.mainWindows.flatMap { $0.browsers.runtimes.filter { $0.value.soundPlaying }.keys })
-        if soundPlaying != sidebarUI.soundPlayingTabIDs { sidebarUI.soundPlayingTabIDs = soundPlaying }
         let b = browsers.visibleRuntime?.browser
         let canGoBack = canNavigateBack(browsers.visibleTabID, b)
         if sidebarUI.canGoBack != canGoBack { sidebarUI.canGoBack = canGoBack }
@@ -784,47 +780,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         overlay.status = statusMessage
         shell.statusVisible = !statusMessage.isEmpty
         shell.layoutContentChildren()
-        linkHovered(statusMessage, tabID: tabID ?? browsers.visibleRuntime?.tabID)
-    }
-
-    /// 5-Second Previews: the hovered link, with the page it is on and the profile that would load
-    /// it. Incognito spaces get no previews: their pages load in no profile a fetch could use.
-    private func linkHovered(_ link: String, tabID: UUID?) {
-        let space = tabID.flatMap { store.spaceID(ofItem: $0) } ?? focusedSpaceID
-        let rt = tabID.flatMap { browsers.runtime(for: $0) }
-        let page = (rt?.browser.currentURL ?? currentBrowser?.currentURL).flatMap(URL.init(string:))
-        guard store.settings.fiveSecondPreviews, LinkSummaryService.shared.isAvailable, !store.isIncognito(space: space),
-              let url = URL(string: link), LinkSummaryPolicy.canPreview(link: url, page: page) else {
-            LinkSummaryPreviewController.shared.linkHoverChanged(nil)
-            return
-        }
-        let pointerInPage = { (host: NSWindow) -> CGPoint? in
-            let f = host.frame, m = NSEvent.mouseLocation
-            return f.contains(m) ? CGPoint(x: (m.x - f.minX) / f.width, y: (f.maxY - m.y) / f.height) : nil
-        }
-        let site = LinkSummaryPolicy.autoSite(page: page)
-        LinkSummaryPreviewController.shared.linkHoverChanged(.init(
-            link: url, page: page, window: window,
-            profilePath: tabID.flatMap { store.profilePath(item: $0) } ?? store.profilePath(space: space),
-            httpsOnly: store.settings.httpsOnly, theme: store.spaces[space]?.theme ?? focusedSpace.theme,
-            shiftHeld: NSEvent.modifierFlags.contains(.shift),
-            favicon: app.favicons.image(for: url.absoluteString)
-                ?? FaviconKey.key(for: url.absoluteString).flatMap { app.favicons.image(forKey: FaviconKey.siteKey(of: $0)) },
-            inspect: { [weak rt] done in
-                // The link under the pointer, its frame, and whether it is one of Arc's (LinkSummaryPolicy.hoverScript).
-                guard let rt, let host = rt.hostWindow, host.isVisible, let pointer = pointerInPage(host) else { done(nil); return }
-                let params = (try? JSONSerialization.data(withJSONObject: [
-                    "expression": LinkSummaryPolicy.hoverScript(pointer: pointer, site: site), "returnByValue": true]))
-                    .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-                rt.browser.evaluate(inIsolatedWorld: PageScript.world, params: params) { [weak host] result, _ in
-                    let value = PeekSource.value(result)
-                    DispatchQueue.main.async {
-                        guard let host, let value else { done(nil); return }
-                        let rect = PeekLayout.fraction(fromScript: value).flatMap { PeekLayout.source(fraction: $0, in: host.frame) }
-                        done(.init(rect: rect, arcLink: value["arc"] as? Bool ?? false))
-                    }
-                }
-            }))
     }
 
     func browserManager(findMatches count: Int, activeMatch: Int) {
@@ -835,12 +790,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     func browserManager(download: CraDownloadInfo) {
         let name = (download.fullPath as NSString).lastPathComponent.isEmpty ? download.suggestedName : (download.fullPath as NSString).lastPathComponent
-        if let tab = browsers.downloadSourceTab, let item = store.item(tab), let t = item.tab {
-            TidyDownloadsService.shared.noteSource(download.identifier, title: item.displayTitle, url: t.url)
-        }
         if windowDownloads.insert(download.identifier).inserted {
             ChromeDownloadAnimation.suppress()
-            showDownloadInSidebar(download, name: name)
         }
         // Progress and failures show in the downloads list, as in Arc (it has no download toast).
         DownloadHistory.shared.report(id: download.identifier, name: name, path: download.fullPath, received: download.receivedBytes,
@@ -851,8 +802,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
             DownloadHistory.shared.add(path: download.fullPath, profile: browsers.downloadSourceTab.map(store.profileDirectoryName(item:)) ?? profileDirectoryName)
             // The address's scheme only, never the file: scenarios wait for this line.
             CraLog.note("Download finished from a \(URL(string: download.url)?.scheme ?? "unknown"): address")
-            let id = download.identifier
-            TidyDownloadsService.shared.finished(id, path: download.fullPath, downloadURL: download.url, window: windowID, store: store) { _ in }
         }
         if download.state == .inProgress, downloadWatchdog == nil {
             downloadWatchdog = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -895,17 +844,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         }
     }
 
-    /// Arc's download animation, aimed at the sidebar header's downloads button: a download glyph
-    /// is thrown at it from the pointer (DownloadFlight); the card under it lists the download.
-    private func showDownloadInSidebar(_ download: CraDownloadInfo, name: String) {
-        guard let window, window.isVisible, let anchor = sidebarUI.downloadsAnchor, let host = anchor.window,
-              host.isVisible, !anchor.isHiddenOrHasHiddenAncestor else { return }
-        let button = host.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        _ = DownloadFlight.launch(over: window, from: NSEvent.mouseLocation, to: NSPoint(x: button.midX, y: button.midY))
-    }
-
     private var finishedDownloads: Set<UInt32> = []
-    /// Downloads this window's pages started (its flight and stall checks).
+    /// Downloads this window's pages started (its stall checks).
     private var windowDownloads: Set<UInt32> = []
 
     func browserManager(fullscreen: Bool, tabID: UUID) {
@@ -2111,7 +2051,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     /// Edit Pinned URL… (#54): Arc's dialog with the pinned URL. A page showing the old
     /// pinned URL loads the new one; one navigated away stays where it is.
     func editPinnedURL(_ id: UUID) {
-        guard let window, let tab = store.item(id)?.tab, store.isPinned(id), tab.liveItemURL == nil else { return }
+        guard let window, let tab = store.item(id)?.tab, store.isPinned(id) else { return }
         DialogPanel.present(over: window) { [weak self] close in
             EditPinnedURLDialog(url: tab.savedURL, onSave: { url in
                 close()
@@ -3691,15 +3631,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         toast.show(text, keyCap: keyCap, action: action, page: page, in: window, theme: focusedSpace.theme)
     }
 
-    /// The update banner's news while this window's sidebar (which carries the banner) is hidden:
-    /// Cra's toast with the banner's action, staying until its ✕ so it isn't missed.
-    func showUpdateToast(_ notice: UpdateNotice) {
-        guard let window else { return }
-        let page = shell.webContainer.convert(shell.webContainer.bounds, to: nil)
-        toast.show(notice.title, action: ShinyToast.Action(title: notice.button) { SoftwareUpdater.shared.act(on: notice) },
-                   page: page, in: window, theme: focusedSpace.theme, onClose: {})
-    }
-
     // MARK: Bookmarks
 
     /// ⌘D and the address's star (Chrome): the tab's page goes on the Bookmarks Bar, or
@@ -3852,30 +3783,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         }
     }
 
-    /// Dia-style import window (UI/Onboarding): browser, spaces, extensions, progress.
-    /// `firstRun` makes it the onboarding: shown instead of this window, not closable.
-    func showImport(firstRun: Bool = false) {
-        if let existing = importWindow { existing.window?.makeKeyAndOrderFront(nil); return }
-        let controller = ImportWindowController(store: store, favicons: app.favicons, firstRun: firstRun,
-                                                onFinish: { [weak self] outcome in self?.app.importFinished(outcome, firstRun: firstRun) },
-                                                onClosed: { [weak self] in self?.importWindow = nil })
-        importWindow = controller
-        controller.show(over: firstRun ? nil : window)
-    }
-
-    /// Brings the import window forward if one is open (Dock clicks during onboarding).
-    func raiseImport() -> Bool {
-        guard let w = importWindow?.window else { return false }
-        w.makeKeyAndOrderFront(nil)
-        return true
-    }
-
-    var isImportVisible: Bool { importWindow?.window?.isVisible == true }
-
     /// Close whatever transient UI is up (used by from://dismiss for scripting).
     func dismissTransientUI() {
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
-        importWindow?.close()
         commandBar.close()
         if overlay.findVisible { hideFindBar() }
     }
@@ -4043,7 +3953,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as? NSWindow) === window else { return }
-        LinkSummaryPreviewController.shared.stop()
         tabSwitcher.cancel()
         app.mainWindowWillClose(self)
     }

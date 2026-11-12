@@ -27,8 +27,6 @@ final class SidebarUIState {
     var capturingTabIDs: Set<UUID> = []
     /// Recently audible tabs, held for 2 s after sound stops so the speaker stays steady.
     var audibleTabIDs: Set<UUID> = []
-    /// Immediate sound state for favorite music notes.
-    var soundPlayingTabIDs: Set<UUID> = []
     /// The window's sidebar player (NowPlayingTrayView), fed by its BrowserManager.
     @ObservationIgnored let nowPlaying = NowPlaying()
     var canGoBack = false
@@ -41,9 +39,6 @@ final class SidebarUIState {
     var appActive = true
     /// Page theme colour of the visible tab ("#RRGGBB" or "").
     var pageThemeColor = ""
-    /// The sidebar header's downloads button: download flights land on it and Tidy Downloads'
-    /// card points at it.
-    @ObservationIgnored weak var downloadsAnchor: NSView?
     /// The Library page this window's sidebar shows, nil while it shows the tabs (Arc keeps the
     /// Library per window and reopens it on the page last shown).
     var libraryPage: LibraryPage?
@@ -192,9 +187,8 @@ final class SidebarActions {
     var goForward: () -> Void = {}
     var reload: () -> Void = {}
     var editSpace: (Space?) -> Void = { _ in }
-    /// Arc's space menu: the icon picker under the header, the theme editor, a new profile for
-    /// the space, the Library's Spaces page, and deleting this space (not the focused one).
-    var changeSpaceIcon: (Space, NSView) -> Void = { _, _ in }
+    /// Arc's space menu: the theme editor, a new profile for the space, the Library's Spaces
+    /// page, and deleting this space (not the focused one).
     var editSpaceTheme: (Space) -> Void = { _ in }
     /// The theme editor beside a Spaces page card.
     var editSpaceThemeBeside: (Space, NSView) -> Void = { _, _ in }

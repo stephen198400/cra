@@ -70,43 +70,6 @@ final class ExtensionStore {
         return (names.map { directory.appendingPathComponent($0, isDirectory: true).path }, loadProfiles().commandLineValue(forFolders: names))
     }
 
-    nonisolated static func isInstalled(id: String) -> Bool {
-        FileManager.default.fileExists(atPath: directory.appendingPathComponent(id).appendingPathComponent("manifest.json").path)
-    }
-
-    /// Copies an extension imported from Arc or Dia in as Extensions/<id>,
-    /// replacing an older copy of the same extension. It loads in `profiles` (nil: every
-    /// profile) from the next launch.
-    nonisolated static func importExtension(_ ext: ImportableExtension, profiles: Set<String>?) throws {
-        let existed = isInstalled(id: ext.id)
-        try importExtension(ext)
-        var scopes = loadProfiles()
-        scopes.add(folder: ext.id, profiles: profiles, folderExisted: existed)
-        try saveProfiles(scopes)
-    }
-
-    /// Rebuild from Arc (#131): an extension an older import left loading everywhere gets the
-    /// profiles that had it. One that already has its own list keeps it.
-    nonisolated static func scopeImported(folder: String, profiles: Set<String>?) {
-        var scopes = loadProfiles()
-        guard scopes.profiles(ofFolder: folder) == nil, let profiles else { return }
-        scopes.add(folder: folder, profiles: profiles, folderExisted: false)
-        try? saveProfiles(scopes)
-    }
-
-    private nonisolated static func importExtension(_ ext: ImportableExtension) throws {
-        let fm = FileManager.default
-        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
-        let dest = directory.appendingPathComponent(ext.id, isDirectory: true)
-        let staging = directory.appendingPathComponent(".\(ext.id).importing", isDirectory: true)
-        try? fm.removeItem(at: staging)
-        try fm.copyItem(at: ext.folder, to: staging)
-        // Web Store verification hashes (_metadata) do not apply to an unpacked copy.
-        try? fm.removeItem(at: staging.appendingPathComponent("_metadata"))
-        try? fm.removeItem(at: dest)
-        try fm.moveItem(at: staging, to: dest)
-    }
-
     /// Cra's Chromium profile folders ("Default", "Profile <id>"), sorted.
     nonisolated static func chromiumProfiles() -> [String] {
         ((try? FileManager.default.contentsOfDirectory(atPath: AppPaths.chromiumCache.path)) ?? [])
@@ -115,8 +78,8 @@ final class ExtensionStore {
 
     // MARK: Web Store installs (GitHub #203)
 
-    /// The folders in Extensions/ that hold a Web Store extension (an import from Arc, Dia or
-    /// Chrome), with their manifest.
+    /// The folders in Extensions/ that hold a Web Store extension (left by an import from Arc, Dia
+    /// or Chrome in an older version), with their manifest.
     nonisolated static func webStoreCopies() -> [(folder: String, manifest: [String: Any])] {
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).sorted()
         return names.compactMap { name in
@@ -483,16 +446,9 @@ final class ExtensionStore {
     /// Each profile's pins, like Arc's (GitHub #107).
     private(set) var pinned = ExtensionStore.loadPinned()
 
-    /// Before Cra has a list of its own, the browser it replaces supplies one: Arc keeps its
-    /// pinned extensions in Chromium's `extensions.pinned_extensions` pref, as do Dia and Chrome.
     private static func loadPinned() -> PinnedExtensions {
-        if let data = try? Data(contentsOf: pinnedFile) { return (try? JSONDecoder().decode(PinnedExtensions.self, from: data)) ?? PinnedExtensions() }
-        for source in [ImportSource.arc, .dia] + ImportSource.allCases.filter({ $0.id == "chrome" }) {
-            guard let ids = ExtensionImporter.pinnedIDs(inProfile: source.dataDir.appendingPathComponent("Default", isDirectory: true)),
-                  !ids.isEmpty else { continue }
-            return PinnedExtensions(shared: ids)
-        }
-        return PinnedExtensions()
+        guard let data = try? Data(contentsOf: pinnedFile) else { return PinnedExtensions() }
+        return (try? JSONDecoder().decode(PinnedExtensions.self, from: data)) ?? PinnedExtensions()
     }
 
     /// Chromium extension IDs in toolbar order, for spaces on this profile folder.
@@ -503,20 +459,6 @@ final class ExtensionStore {
     func setPinned(_ id: String, _ isPinned: Bool, inProfile profile: String) {
         let before = pinned
         pinned.setPinned(id, isPinned, inProfile: profile)
-        if pinned != before { savePinned() }
-    }
-
-    /// The pins a profile had in the browser the import came from (GitHub #131): a profile the
-    /// import made gets them as its own. Default's become everyone's list while Cra has none
-    /// saved yet, as they would at the first launch after the import (loadPinned).
-    func seedPinned(_ ids: [String], inProfile profile: String) {
-        let before = pinned
-        if profile == "Default" {
-            guard !FileManager.default.fileExists(atPath: Self.pinnedFile.path), pinned.shared.isEmpty else { return }
-            pinned.shared = ids
-        } else {
-            pinned.seed(ids, inProfile: profile)
-        }
         if pinned != before { savePinned() }
     }
 

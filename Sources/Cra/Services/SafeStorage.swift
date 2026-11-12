@@ -1,3 +1,4 @@
+import CommonCrypto
 import Foundation
 import Security
 import SQLite3
@@ -23,9 +24,6 @@ enum SafeStorage {
 
     /// Whether Chromium reads the Keychain item (false: --use-mock-keychain).
     private(set) static var usesKeychain = false
-    /// The key Cra's profile is encrypted with, for the importer. nil when the Keychain
-    /// did not hand out the secret.
-    private(set) static var key: Data?
 
     private static let mockKey = ChromiumCrypto.key(fromSecret: "mock_password")
     /// Present once the profile is encrypted with the Keychain secret.
@@ -39,18 +37,15 @@ enum SafeStorage {
     static func prepare(profileIsFree: Bool) {
         if FileManager.default.fileExists(atPath: marker.path) {
             usesKeychain = true
-            key = keychainSecret().map(ChromiumCrypto.key(fromSecret:))
-            if key == nil { NSLog("Cra: no secret from the \(service) Keychain item") }
+            if keychainSecret() == nil { NSLog("Cra: no secret from the \(service) Keychain item") }
             return
         }
-        key = mockKey
         guard profileIsFree, isSignedByTeam, frameworkUsesCraItem, let secret = keychainSecret() else { return }
         let newKey = ChromiumCrypto.key(fromSecret: secret)
         guard migrate(to: newKey) else { return }
         try? FileManager.default.createDirectory(at: AppPaths.chromiumCache, withIntermediateDirectories: true)
         guard FileManager.default.createFile(atPath: marker.path, contents: Data()) else { return }
         usesKeychain = true
-        key = newKey
     }
 
     /// The item's secret, made the way Chromium makes one (16 random bytes, base64) when
@@ -104,8 +99,7 @@ enum SafeStorage {
         return found
     }
 
-    /// Re-encrypts every mock-keychain value in every profile and the import's staged
-    /// rows. All databases commit together or none does. Each one notes it in its meta
+    /// Re-encrypts every mock-keychain value in every profile. All databases commit together or none does. Each one notes it in its meta
     /// table in the same transaction, so a later run never encrypts a value twice (a
     /// wrong key "decrypts" about once in 256, which tells nothing).
     private static func migrate(to newKey: Data) -> Bool {
@@ -142,10 +136,6 @@ enum SafeStorage {
                 count += n
             }
         }
-        guard CredentialImport.reencryptPending(from: mockKey, to: newKey) else {
-            open.forEach { sqlite3_exec($0, "ROLLBACK", nil, nil, nil) }
-            return false
-        }
         for db in open where sqlite3_exec(db, "COMMIT", nil, nil, nil) != SQLITE_OK {
             NSLog("Cra: committing re-encrypted values failed: \(String(cString: sqlite3_errmsg(db)))")
             return false
@@ -178,5 +168,91 @@ enum SafeStorage {
             }
         }
         return changed
+    }
+}
+
+// MARK: - Chromium crypto (macOS: v10 = AES-128-CBC, key PBKDF2-SHA1 of the Keychain secret)
+
+enum ChromiumCrypto {
+    static func key(fromSecret secret: String) -> Data {
+        var key = Data(count: kCCKeySizeAES128)
+        let salt = Array("saltysalt".utf8)
+        _ = key.withUnsafeMutableBytes { k in
+            CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), secret, secret.utf8.count, salt, salt.count,
+                                 CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA1), 1003,
+                                 k.bindMemory(to: UInt8.self).baseAddress, kCCKeySizeAES128)
+        }
+        return key
+    }
+
+    private static let iv = [UInt8](repeating: 0x20, count: kCCBlockSizeAES128)
+
+    /// nil for a wrong key too: CommonCrypto strips PKCS#7 padding without checking it,
+    /// so the padding is checked here (a wrong key passes about once in 256).
+    static func decrypt(_ blob: Data, key: Data) -> Data? {
+        guard blob.count > 3, blob.prefix(3) == Data("v10".utf8), (blob.count - 3) % kCCBlockSizeAES128 == 0,
+              let padded = crypt(CCOperation(kCCDecrypt), Data(blob.dropFirst(3)), key: key, options: 0),
+              let n = padded.last.map(Int.init), (1...kCCBlockSizeAES128).contains(n), padded.count >= n,
+              padded.suffix(n).allSatisfy({ Int($0) == n }) else { return nil }
+        return Data(padded.dropLast(n))
+    }
+
+    static func encrypt(_ plain: Data, key: Data) -> Data {
+        Data("v10".utf8) + (crypt(CCOperation(kCCEncrypt), plain, key: key, options: CCOptions(kCCOptionPKCS7Padding)) ?? Data())
+    }
+
+    private static func crypt(_ op: CCOperation, _ input: Data, key: Data, options: CCOptions) -> Data? {
+        var out = Data(count: input.count + kCCBlockSizeAES128)
+        var moved = 0
+        let status = out.withUnsafeMutableBytes { o in input.withUnsafeBytes { i in key.withUnsafeBytes { k in
+            CCCrypt(op, CCAlgorithm(kCCAlgorithmAES), options, k.baseAddress, key.count, iv,
+                    i.baseAddress, input.count, o.baseAddress, o.count, &moved)
+        } } }
+        return status == kCCSuccess ? out.prefix(moved) : nil
+    }
+}
+
+// MARK: - SQLite
+
+enum SQLite {
+    static func rows(_ db: OpaquePointer?, _ sql: String) -> [[String: Any]] {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        var out: [[String: Any]] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            var row: [String: Any] = [:]
+            for i in 0..<sqlite3_column_count(stmt) {
+                let name = String(cString: sqlite3_column_name(stmt, i))
+                switch sqlite3_column_type(stmt, i) {
+                case SQLITE_INTEGER: row[name] = sqlite3_column_int64(stmt, i)
+                case SQLITE_FLOAT: row[name] = sqlite3_column_double(stmt, i)
+                case SQLITE_TEXT: row[name] = String(cString: sqlite3_column_text(stmt, i))
+                case SQLITE_BLOB:
+                    let n = Int(sqlite3_column_bytes(stmt, i))
+                    row[name] = n > 0 ? Data(bytes: sqlite3_column_blob(stmt, i), count: n) : Data()
+                default: break
+                }
+            }
+            out.append(row)
+        }
+        return out
+    }
+
+    /// Binds Int64, Int, Bool, Double, String and Data; anything else is NULL.
+    static func bind(_ stmt: OpaquePointer?, _ values: [Any?]) {
+        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        for (i, v) in values.enumerated() {
+            let idx = Int32(i + 1)
+            switch v {
+            case let x as Int64: sqlite3_bind_int64(stmt, idx, x)
+            case let x as Int: sqlite3_bind_int64(stmt, idx, Int64(x))
+            case let x as Bool: sqlite3_bind_int64(stmt, idx, x ? 1 : 0)
+            case let x as Double: sqlite3_bind_double(stmt, idx, x)
+            case let x as String: sqlite3_bind_text(stmt, idx, x, -1, transient)
+            case let x as Data: _ = x.withUnsafeBytes { sqlite3_bind_blob(stmt, idx, $0.baseAddress, Int32(x.count), transient) }
+            default: sqlite3_bind_null(stmt, idx)
+            }
+        }
     }
 }

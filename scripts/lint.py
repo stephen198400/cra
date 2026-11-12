@@ -14,7 +14,7 @@ gains a finding fails, one that loses one is reported so the baseline can come d
       Timer.scheduledTimer in App/ or Services/: decisions taken from time run on the
       injectable clock (Scheduler), or no test can reach them. UI animation timers are exempt.
   wall-clock-in-decision
-      Date() in a file whose decisions run on the clock (store, tab sleep, live folders).
+      Date() in a file whose decisions run on the clock (store, tab sleep).
   raw-observation-tracking
       withObservationTracking reached directly. The closure must read properties of an
       @Observable class; a struct copied out before it (or a plain class) is never tracked and
@@ -66,7 +66,7 @@ PERF_CALLERS = {"App/main.swift", "App/AppDelegate.swift", "Services/BrowserMana
                 "UI/Settings/SettingsWindowController.swift"}
 PERF_NAME = re.compile(r"\b(?:Perf(?:[A-Z]\w*)?|PerformancePane)\b")
 NETWORK = re.compile(r"\bURLSession\b|\bCFNetwork\b|\bNWConnection\b|\bNWPathMonitor\b|^\s*import\s+Network\b|\bCFSocket\w*|\bCFStream\w*|\bsocket\(")
-CLOCK_FILES = {"Services/SidebarStore.swift", "Services/BrowserManager.swift", "Services/LiveFolderManager.swift",
+CLOCK_FILES = {"Services/SidebarStore.swift", "Services/BrowserManager.swift",
                "Services/SidebarIntegrity.swift", "App/AppComposition.swift"}
 
 

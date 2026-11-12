@@ -63,34 +63,30 @@ Embedded Framework, so sites and Chrome extensions work as they do in Chrome.
 | Developer Mode | ✅ |
 | Library | ✅ |
 | Air Traffic Control | ✅ |
-| Live folders | ✅ |
+| Live folders | Left out |
 | Profiles | ✅ |
 | Private windows | ✅ |
 | Arc's keyboard shortcuts | ✅ |
-| Import from Arc | ✅ |
+| Import from Arc | Left out: only bookmarks come over |
 | Easels | ✅ |
 | Boosts | ✅ |
 | Peek | ✅ |
 | Notes | Left out: Arc itself no longer makes new Notes |
-| Arc Max | Tidy Tabs, Tidy Tab Titles, Tidy Downloads and 5-Second Previews, on the Mac's Apple Intelligence; nothing goes to a server |
+| Arc Max | Left out |
 
 The [roadmap](https://crabrowser.app/roadmap) lists what's next.
 
 ## Import
 
-On first launch, or later from Cra ▸ Import from Arc or Dia…, Cra brings over:
+From ▸ Import Bookmarks… (also Settings ▸ Advanced) brings another browser's bookmarks onto
+the bookmarks bar: its bar onto the bar, the rest into Other Bookmarks.
 
-- **Arc:** spaces, pinned tabs, folders, favorites and the archive, plus passwords and
-  sign-ins.
-- **Dia, Chrome, Brave, Edge, Opera, Vivaldi, Chromium, Helium:** tabs, bookmarks, history,
-  passwords, sign-ins and extensions.
-- **Zen and Firefox:** open tabs, bookmarks and history, and Zen's spaces, Essentials and
-  pinned tabs.
-- **Safari:** whatever Safari exports itself (File ▸ Export Browsing Data): bookmarks,
-  history and passwords.
+- **Chrome, Brave, Edge, Opera, Vivaldi, Chromium, Helium:** read from the browser's profiles.
+- **Safari:** the file Safari exports itself (File ▸ Export ▸ Bookmarks…, or the .zip from
+  File ▸ Export Browsing Data).
 
-Spaces with the same name merge, tabs that are already there are skipped, and every
-step can be skipped.
+Bookmarks that are already there are skipped. Nothing else comes over: no spaces, tabs,
+history, passwords, sign-ins or extensions.
 
 ## Keyboard
 
@@ -122,15 +118,14 @@ Google Docs works. The [full list](https://crabrowser.app/shortcuts) is on the s
 
 ## Privacy and security
 
-Cra has no account, and it shares nothing about how you use it unless you turn that on:
-anonymous daily usage stats and crash reports, never the sites you visit
-([what they hold](docs/sharing.md)). Spaces, tabs and the archive are plain JSON in
+Cra has no account, and it shares nothing about how you use it: no usage stats, no crash
+reports, no update checks. Spaces, tabs and the archive are plain JSON in
 `~/Library/Application Support/Cra`. A built-in blocker stops
 requests to more than 22,000 ad and tracker domains.
 
 Pages run in Chromium's sandbox with site isolation, passwords and cookies are encrypted
-with a key in your Keychain, and new Chromium releases are checked daily and shipped as
-signed updates. [crabrowser.app/security](https://crabrowser.app/security) says what is
+with a key in your Keychain, and new Chromium releases are checked daily; this fork has no
+updater, so you rebuild from source to pick them up. [crabrowser.app/security](https://crabrowser.app/security) says what is
 and isn't covered. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Support Cra

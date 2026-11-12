@@ -2,8 +2,7 @@ import SwiftUI
 
 /// Arc's Links pane: where links open. Little Windows for links from other apps (Arc's Little
 /// Arc switch and "Archive Little Arcs after:"), Peek for links to other sites, what "Open Link in
-/// New Tab" does, and the "Air Traffic Control…" button. Little Windows and Peek, which open
-/// a different kind of window, carry a picture like Settings ▸ Tabs; the rest are plain rows.
+/// New Tab" does, and the "Air Traffic Control…" button.
 struct LinksPane: View {
     @Environment(SidebarStore.self) private var store
     @State private var showsAirTrafficControl = false
@@ -14,15 +13,14 @@ struct LinksPane: View {
         SettingsCardPane {
             SettingsHeader("Little Windows")
             SettingsFeatureCard {
-                SettingsSwitchRow("Open links from other apps in a Little Window",
+                SettingsToggleRow("Open links from other apps in a Little Window",
                                   detail: "A link you click in Mail, Slack or another app opens in a small window you can read and close, instead of a new tab in your sidebar.",
-                                  isOn: $store.settings.openExternalLinksInLittleWindow) { SettingsArt.littleWindowFromApps }
+                                  isOn: $store.settings.openExternalLinksInLittleWindow)
                 SettingsCardDivider()
                 // Arc's "Open Little Arc when I press ⌥⌘N" (#195): New Little Window's shortcut from any app.
                 SettingsToggleRow("\(newLittleWindow) in any app",
                                   detail: "Press \(newLittleWindow) wherever you are to open a Little Window, even while From isn’t in front.",
                                   isOn: $store.settings.littleWindowShortcutEverywhere)
-                    .settingsTextColumn()
                 SettingsCardDivider()
                 // Arc: "Archive Little Arcs after:" 1 hour, 6 hours (default), 12 hours.
                 SettingsPlainRow("Archive Little Windows",
@@ -33,16 +31,13 @@ struct LinksPane: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-                .settingsTextColumn()
             }
 
             SettingsHeader("Peek").padding(.top, 20)
             SettingsFeatureCard {
-                SettingsSwitchRow("Peek at links to other sites",
+                SettingsToggleRow("Peek at links to other sites",
                                   detail: "A link to another site opens in a Peek over the page, so you can read it and close it without losing your place.",
                                   isOn: $store.settings.peekLinksToOtherSites) {
-                    SettingsArt.peekLinks
-                } below: {
                     Toggle("In every tab, not only Favorites and Pinned tabs", isOn: $store.settings.peekInEveryTab)
                         .toggleStyle(.checkbox)
                         .disabled(!store.settings.peekLinksToOtherSites)
@@ -51,7 +46,6 @@ struct LinksPane: View {
                 SettingsToggleRow("Peek with ⇧-click",
                                   detail: "Hold ⇧ while you click any link to open it in a Peek.",
                                   isOn: $store.settings.peekOnShiftClick)
-                    .settingsTextColumn()
             }
 
             SettingsHeader("New tabs").padding(.top, 20)

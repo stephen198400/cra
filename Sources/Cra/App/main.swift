@@ -23,19 +23,16 @@ MainActor.assumeIsolated {
     // The icon picked in Settings, before the Dock first shows the running app.
     AppIconManager.shared.applyAtLaunch()
 
-    // Passwords and cookies staged by the import go into the profile while no
-    // Chromium has it open: before initializing, and only when no other Cra runs.
-    // The run loop has not started, so the list can still hold a Cra that just quit.
+    // Profile work below runs while no Chromium has the profile open: before initializing,
+    // and only when no other Cra runs. The run loop has not started, so the list can still
+    // hold a Cra that just quit.
     let me = ProcessInfo.processInfo.processIdentifier
     let profileIsFree = !NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").contains(where: { $0.processIdentifier != me && kill($0.processIdentifier, 0) == 0 })
     CraLog.startSession(owner: profileIsFree)
     // Cookies and passwords move from the mock keychain to Cra's Keychain item first,
-    // staged imports included, so everything below writes with the key Chromium reads.
+    // so everything below writes with the key Chromium reads.
     SafeStorage.prepare(profileIsFree: profileIsFree)
     if profileIsFree {
-        let profile = AppPaths.chromiumCache.appendingPathComponent("Default", isDirectory: true)
-        if CredentialImport.hasPending { CredentialImport.applyPending(root: AppPaths.chromiumCache) }
-        CredentialImport.repairImportedCookies(profileDir: profile)
         // WebKit's data for a deleted profile goes with its Chromium folder (PageEngines).
         ProfileCleanup.removed = { name in MainActor.assumeIsolated { WebKitStores.removeProfile(folderName: name) } }
         ProfileCleanup.run()
@@ -84,7 +81,7 @@ MainActor.assumeIsolated {
                                                                  environment: ProcessInfo.processInfo.environment),
                            config: .init(folder: AppPaths.file("Perf"), chromiumFolder: AppPaths.chromiumCache),
                            craVersion: "\(info?["CFBundleShortVersionString"] as? String ?? "dev") (\(info?["CFBundleVersion"] as? String ?? "?"))",
-                           chromiumVersion: CraCEFRuntime.chromiumVersion(), onboarding: delegate.needsOnboarding)
+                           chromiumVersion: CraCEFRuntime.chromiumVersion(), onboarding: false)
 
     // Belt and braces: Chromium's run loop drives NSApplication and should call
     // applicationDidFinishLaunching, but bootstrapping is idempotent either way.

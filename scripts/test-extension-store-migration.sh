@@ -15,7 +15,7 @@ xcrun swiftc -swift-version 5 -parse-as-library ${CRA_TEST_SWIFTC_FLAGS:-} \
   Packages/CraCore/Sources/CraCore/ExtensionActionState.swift \
   Packages/CraCore/Sources/CraCore/ExtensionBadge.swift \
   Packages/CraCore/Sources/CraCore/ExtensionProxyControl.swift \
-  Sources/Cra/Services/Import/ExtensionImporter.swift Sources/Cra/Services/ExtensionStore.swift \
+  Sources/Cra/Services/ExtensionImporter.swift Sources/Cra/Services/ExtensionStore.swift \
   Tests/ExtensionStoreSupport/AppServices.swift Tests/ExtensionStoreMigrationTests.swift \
   -o "$TEST_DIR/extension-migration-tests"
 CRA_DATA_DIR="$TEST_DIR/data" "$TEST_DIR/extension-migration-tests"

@@ -22,10 +22,10 @@ enum NewestCopy {
 
     /// An installed release opened while a newer one sits elsewhere on the Mac opens that
     /// one and exits. Only signed releases on the default data dir take part: dev builds
-    /// (0.0.0-dev, no SUFeedURL) and CRA_DATA_DIR copies must run as themselves.
+    /// (0.0.0-dev) and CRA_DATA_DIR copies must run as themselves.
     static func openNewerInstalledCopy() {
         guard ProcessInfo.processInfo.environment["CRA_DATA_DIR"] == nil,
-              Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil,
+              !version.hasSuffix("-dev"),
               let id = Bundle.main.bundleIdentifier, let team = teamID(of: Bundle.main.bundleURL) else { return }
         let me = Bundle.main.bundleURL.resolvingSymlinksInPath().path
         let newer = NSWorkspace.shared.urlsForApplications(withBundleIdentifier: id)

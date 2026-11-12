@@ -40,8 +40,9 @@ enum NativeMessagingHosts {
     ]
 
     private static var sources: [URL] {
-        let browsers = ImportSource.allCases.filter { [.chromium, .arc, .dia].contains($0.kind) }
-        let user = (browsers.filter { $0.id == "chrome" } + browsers.filter { $0.id != "chrome" }).map { $0.dataDir.appendingPathComponent("NativeMessagingHosts", isDirectory: true) }
+        // Chrome first, then Arc and Dia, then the other Chromium browsers.
+        let browsers = ChromiumBrowser.all.prefix(1) + [ChromiumBrowser.arc, .dia] + ChromiumBrowser.all.dropFirst()
+        let user = browsers.map { $0.dataDir.appendingPathComponent("NativeMessagingHosts", isDirectory: true) }
         // System-wide installs (all users), per browser.
         let system = [
             "/Library/Google/Chrome/NativeMessagingHosts",

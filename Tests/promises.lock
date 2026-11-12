@@ -19,7 +19,6 @@
 #30    Packages/CraCore/Tests/CraCoreTests/ArcThemeImportTests.swift::solidThemeKeepsItsColour  02956e3cc1bb
 #30    Packages/CraCore/Tests/CraCoreTests/ArcThemeImportTests.swift::unknownStyleFallsBackToThePalettesMidTone  33d9d79c196b
 #30    Tests/Scenarios/solid-spaces.scenario  560ddde39249
-#30    Tests/StoreTests.swift::arcSpacesWithoutAThemeShareOneDefault  f642318e5d34
 #32    Tests/BrowserManagerLifecycleTests.swift::beforeUnloadCase  973ade9207f7
 #32    Tests/BrowserManagerLifecycleTests.swift::refusalBackoffCase  2043060d6237
 #32    Tests/BrowserManagerLifecycleTests.swift::sleepClockCase  d4f708c0529e
@@ -47,7 +46,7 @@
 #50    Packages/CraCore/Tests/CraCoreTests/ToolbarCompositionTests.swift::theToggleLeadsTheBarWithTheSidebarShown  ffde46461bfe
 #50    Tests/CommandBarGlyphTests.swift::leadingGlyph  3e90bfdbd048
 #50    Tests/Scenarios/toolbar-chrome.scenario  079b08625c9b
-#54    Tests/StoreTests.swift::pinnedURL  83caea3b3e16
+#54    Tests/StoreTests.swift::pinnedURL  2817f73061fd
 #66    Packages/CraCore/Tests/CraCoreTests/ProtectedMediaTests.swift::amazon  f0a6891cac93
 #66    Packages/CraCore/Tests/CraCoreTests/ProtectedMediaTests.swift::choosingPerSite  ce4dddce6977
 #66    Packages/CraCore/Tests/CraCoreTests/ProtectedMediaTests.swift::handoffRules  6eea8116562b
@@ -80,7 +79,7 @@
 #88    Packages/CraCore/Tests/CraCoreTests/DismissingClickTests.swift::closedWithoutAClick  a2593763fe16
 #88    Packages/CraCore/Tests/CraCoreTests/DismissingClickTests.swift::theClosingClickDoesNotReopen  3300c4839f6d
 #88    Packages/CraCore/Tests/CraCoreTests/DismissingClickTests.swift::theNextClickOpens  9cf0eeb51035
-#88    Packages/CraCore/Tests/CraCoreTests/SidebarModelTests.swift::sidebarSubtitle  879c6c151d6d
+#88    Packages/CraCore/Tests/CraCoreTests/SidebarModelTests.swift::sidebarSubtitle  d41d79afdf43
 #88    Packages/CraCore/Tests/CraCoreTests/SidebarModelTests.swift::toolbarShowsTheHostOnlyUnlessAsked  f6ce32167e2f
 #88    Packages/CraCore/Tests/CraCoreTests/ToolbarCompositionTests.swift::theDeveloperBar  8ff0c574a49a
 #88    Tests/PolicyTests.swift::devToolsToggle  5786fe494c6e
@@ -163,16 +162,8 @@
 #110   Packages/CraCore/Tests/CraCoreTests/SecureDNSTests.swift::line  fe1dcfb4701b
 #110   Packages/CraCore/Tests/CraCoreTests/SecureDNSTests.swift::severalTemplatesAreOneServerEach  dc2fe791c93f
 #110   Tests/Scenarios/secure-dns-default.scenario  1042904fb8ce
-#131   Packages/CraCore/Tests/CraCoreTests/ExtensionProfilesTests.swift::arcSpaceProfiles  c9cf90d32a72
 #131   Packages/CraCore/Tests/CraCoreTests/ExtensionProfilesTests.swift::commandLineFollowsTheLoadExtensionOrder  eb3441dc88ab
-#131   Packages/CraCore/Tests/CraCoreTests/ExtensionProfilesTests.swift::importedExtensionsGoWhereTheirProfilesWent  689676ea4e95
-#131   Packages/CraCore/Tests/CraCoreTests/ExtensionProfilesTests.swift::importedPinsSeedOnlyNewLists  c959ca5560a7
-#131   Packages/CraCore/Tests/CraCoreTests/ExtensionProfilesTests.swift::rebuildKeepsExtensionsInProfilesMadeInCra  02966012603d
-#131   Packages/CraCore/Tests/CraCoreTests/ExtensionProfilesTests.swift::rebuildMatchesSpacesByName  5db767db6157
 #131   Tests/Scenarios/space-profiles.scenario  6ed609aff7fc
-#131   Tests/StoreTests.swift::arcProfiles  5e32237de12a
-#131   Tests/StoreTests.swift::newProfileDatabases  02fece3b6212
-#131   Tests/StoreTests.swift::rebuildFromArc  616b2788438a
 #132   Packages/CraCore/Tests/CraCoreTests/SidebarBackdropTests.swift::fullscreenSwapsTheBlurForTheDesktopTint  dbfce1b4413d
 #132   Packages/CraCore/Tests/CraCoreTests/SidebarBackdropTests.swift::logLineNamesTheState  16b128ce2bbf
 #132   Packages/CraCore/Tests/CraCoreTests/SidebarBackdropTests.swift::solidThemesBlurWhileActiveAndGoFlatWhileInactive  d974cca84f6e
@@ -211,7 +202,7 @@
 #139   Packages/CraCore/Tests/CraCoreTests/SidebarCloseTests.swift::splitRows  54f8abac7a61
 #139   Packages/CraCore/Tests/CraCoreTests/SidebarCloseTests.swift::tabRows  4a5bf2b97c09
 #139   Packages/CraCore/Tests/CraCoreTests/SidebarModelTests.swift::returningHomeShowsTheHomesNameAndIcon  42a76c8e9cff
-#139   Packages/CraCore/Tests/CraCoreTests/SidebarModelTests.swift::sidebarSubtitle  879c6c151d6d
+#139   Packages/CraCore/Tests/CraCoreTests/SidebarModelTests.swift::sidebarSubtitle  d41d79afdf43
 #152   Packages/CraCore/Tests/CraCoreTests/KeyChordTests.swift::capsSplitTheDisplay  8672a7488fff
 #152   Packages/CraCore/Tests/CraCoreTests/ShippedThemesTests.swift::cloudDevTipTakesArcsTones  9ffad78d3b27
 #152   Packages/CraCore/Tests/CraCoreTests/ThemeTonesTests.swift::shadedDarkKeepsTheHueAtTenPercentLuminance  5f3b98ef816d
@@ -331,7 +322,6 @@
 #214   Packages/CraCore/Tests/CraCoreTests/TabSleepPolicyTests.swift::holds  d2bd0269d879
 #214   Tests/BrowserManagerLifecycleTests.swift::discardedPageLoadCase  4c91d8a1d9df
 #214   Tests/BrowserManagerLifecycleTests.swift::sleepCountsCase  ea4c379bd476
-#215   Tests/StoreTests.swift::arcLiveFolderImportsLive  a5c462b3a9c7
 #218   Tests/Scenarios/extension-popup-download.scenario  9f32a4d139c7
 #219   Packages/CraCore/Tests/CraCoreTests/TabTearOffTests.swift::aWindowLargerThanTheScreenShrinksToFit  bb6acd6907ac
 #219   Packages/CraCore/Tests/CraCoreTests/TabTearOffTests.swift::arcsDropsInTheOpenCentreOnThePointer  f1d51bb5e991
@@ -396,7 +386,6 @@
 #252   Packages/CraCore/Tests/CraCoreTests/SpaceIconTests.swift::menuLabel  0de091f7ac16
 #252   Tests/Scenarios/space-dots-hover.scenario  666d4ec6ab88
 #252   Tests/Scenarios/space-dots.scenario  f78b12d2b069
-#252   Tests/StoreTests.swift::arcSpaceWithoutAnIconImportsAsADot  14c68aa6e846
 #253   Tests/Scenarios/app-shortcuts.scenario  195802a3c768
 #256   Packages/CraCore/Tests/CraCoreTests/SlowResponseNoticeTests.swift::aCommittedPageThatKeepsLoadingNeverShowsIt  74904a1aff59
 #256   Packages/CraCore/Tests/CraCoreTests/SlowResponseNoticeTests.swift::aNewNavigationWhileWaitingStartsAgain  6dcd1be80b22
@@ -409,7 +398,6 @@
 #258   Packages/CraCore/Tests/CraCoreTests/LinkRoutingTests.swift::littleWindowRouteNamesItsSpace  ca310c9880ea
 #258   Packages/CraCore/Tests/CraCoreTests/LinkRoutingTests.swift::littleWindowSpaceFormat  a265f8c194b8
 #258   Tests/Scenarios/little-window-route.scenario  3ace9ba4e586
-#258   Tests/StoreTests.swift::arcLinkRoutes  ed124dc5d64d
 #260   Packages/CraCore/Tests/CraCoreTests/PageDetentHapticsTests.swift::aDragPastHalfTicksOnce  95ddc92dcb30
 #260   Packages/CraCore/Tests/CraCoreTests/PageDetentHapticsTests.swift::aFlickBackFromPastHalfTicksForHome  ddc139d42598
 #260   Packages/CraCore/Tests/CraCoreTests/PageDetentHapticsTests.swift::aFlickTicksOnce  6c4db02074c3
@@ -443,7 +431,7 @@
 #273   Tests/Scenarios/page-history-relaunch.scenario  362ab210037a
 #273   Tests/Scenarios/page-history-webkit.scenario  c830d38d0f51
 #273   Tests/StoreTests.swift::backToReferrer  73c5f89eb560
-#274   Tests/Scenarios/stays-in-background.scenario  7511991cc7d7
+#274   Tests/Scenarios/stays-in-background.scenario  514e731d579c
 #275   Packages/CraCore/Tests/CraCoreTests/TabSleepPolicyTests.swift::sweepThatClosesNothingSaysWhy  046eed78906d
 #275   Packages/CraCore/Tests/CraCoreTests/TabSleepPolicyTests.swift::wakeRunsOnePass  4414a5df9362
 #275   Tests/BrowserManagerLifecycleTests.swift::nowPlayingAfterSleepCase  8f316a63bebf
@@ -505,12 +493,6 @@
 #302   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::spacesPageFitsItsCards  7da5934c4e79
 #302   Tests/Scenarios/library-narrow-window.scenario  e160f9a98a51
 #302   Tests/Scenarios/library-width.scenario  c180cf7d5292
-#303   Packages/CraCore/Tests/CraCoreTests/MusicNotesTests.swift::arcsMusicSites  7073b0e92e72
-#303   Packages/CraCore/Tests/CraCoreTests/MusicNotesTests.swift::fieldIsCentredOnTheIconsTopEdge  ed1fe24fdf19
-#303   Packages/CraCore/Tests/CraCoreTests/MusicNotesTests.swift::otherSites  b58aede4c1c0
-#303   Packages/CraCore/Tests/CraCoreTests/MusicNotesTests.swift::playsOnlyWhatCanBeHeardOnAMusicSite  e257e0be4145
-#303   Tests/BrowserManagerLifecycleTests.swift::musicNotesPauseWithinHoldCase  a89980952d6f
-#303   Tests/Scenarios/music-notes.scenario  964bd2f387d7
 #306   Packages/CraCore/Tests/CraCoreTests/SpaceSearchEngineTests.swift::aSpaceSearchesItsOwnEngine  2162c1ba580b
 #306   Packages/CraCore/Tests/CraCoreTests/SpaceSearchEngineTests.swift::theEngineIsSavedWithTheSpace  0e82d53e86b9
 #306   Packages/CraCore/Tests/CraCoreTests/SpaceSearchEngineTests.swift::withoutOneTheSpaceInheritsTheDefault  862d2c21caef
@@ -571,7 +553,7 @@
 #337   Packages/CraCore/Tests/CraCoreTests/LittleCardTests.swift::enterKeepsTheTopRightCorner  3056652942c8
 #337   Tests/Scenarios/little-window-card.scenario  55be4cfd4498
 #339   Packages/CraCore/Tests/CraCoreTests/SpaceMenuLayoutTests.swift::dockOpensTheSpaceForItsListAndHeader  cd0d0aed9120
-#339   Packages/CraCore/Tests/CraCoreTests/SpaceMenuLayoutTests.swift::dockShowsArcsWholeSpaceMenu  074df60c8297
+#339   Packages/CraCore/Tests/CraCoreTests/SpaceMenuLayoutTests.swift::dockShowsArcsWholeSpaceMenu  0fd9849d75d0
 #340   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::hiddenSidebarKeepsTheWholeCard  df2c85e32e74
 #340   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::narrowerLibraryLeavesNoGap  1c2dda02d1ed
 #340   Packages/CraCore/Tests/CraCoreTests/LibraryWidthTests.swift::pageKeepsItsWidth  6683626032be
@@ -581,8 +563,6 @@
 #344   Packages/CraCore/Tests/CraCoreTests/SidebarAddressEditTests.swift::clickEditsInPlaceOnlyWhenTurnedOnAndATabIsSelected  dbb45b4d979e
 #344   Packages/CraCore/Tests/CraCoreTests/SidebarAddressEditTests.swift::returnLoadsAnAddressOrASearchInTheTab  5fcf3ee80d37
 #344   Packages/CraCore/Tests/CraCoreTests/SidebarAddressEditTests.swift::settingDefaultsOffAndRoundTrips  9ec60d7e8be1
-#344   Tests/Scenarios/sidebar-address-edit-in-place.scenario  9208ba26a19a
-#344   Tests/Scenarios/sidebar-address-opens-command-bar.scenario  2a93624f948c
 #345   Packages/CraCore/Tests/CraCoreTests/PinnedIconClickTests.swift::doubleClickGoesBackWithoutRenaming  0245d5fc1ed4
 #345   Packages/CraCore/Tests/CraCoreTests/PinnedIconClickTests.swift::otherClicksAreTheRows  75f7631008a4
 #345   Tests/Scenarios/pinned-icon-double-click.scenario  7ad243529ef9

@@ -84,21 +84,6 @@
       },
       "id" : "D0000000-0000-0000-0000-000000000002",
       "isUnread" : false,
-      "liveFolder" : {
-        "filter" : {
-          "attributes" : 2,
-          "hiddenRepositories" : [
-
-          ]
-        },
-        "hiddenItems" : [
-
-        ],
-        "source" : "github",
-        "ssoOrganizations" : [
-
-        ]
-      },
       "parentID" : "C0000000-0000-0000-0000-000000000002",
       "title" : "Live"
     },

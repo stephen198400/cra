@@ -1,6 +1,5 @@
 #!/bin/bash
-# KeyBindingRegistry's command list: built-in actions, live folder plugin commands and the user's
-# shortcuts, on a keybindings.json of its own (CRA_DATA_DIR). No window or CEF.
+# KeyBindingRegistry's command list: built-in actions and the user's shortcuts, on a keybindings.json of its own (CRA_DATA_DIR). No window or CEF.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cra-key-bindings.XXXXXX")"

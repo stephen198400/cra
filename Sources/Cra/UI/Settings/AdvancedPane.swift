@@ -1,9 +1,8 @@
 import CraCEF
 import SwiftUI
 
-/// Settings ▸ Advanced: Dia's Advanced pane (Automatically update, Address Bar routing, When
-/// quitting) plus Arc's Advanced switches (sound effects, theme data, window dragging, Boosts)
-/// and Cra's own (page engine, import and export, local agents). None of them changes how Cra
+/// Settings ▸ Advanced: Dia's Advanced pane (Address Bar routing, When quitting) plus Arc's Advanced switches (sound effects, theme data, window dragging, Boosts)
+/// and Cra's own (page engine, bookmark import and export, local agents). None of them changes how Cra
 /// looks, so each is a plain row (name, what it does, control); About closes the pane.
 struct AdvancedPane: View {
     let actions: SettingsActions
@@ -11,21 +10,10 @@ struct AdvancedPane: View {
 
     var body: some View {
         @Bindable var store = store
-        @Bindable var updater = SoftwareUpdater.shared
         let newLittleWindow = KeyBindingRegistry.shared.action("newLittleWindow")?.primary?.display ?? "⌥⌘N"
         SettingsCardPane {
             SettingsHeader("From")
             SettingsFeatureCard {
-                SettingsToggleRow("Automatic updates",
-                                  detail: "From downloads new versions in the background and installs them the next time it opens.",
-                                  isOn: $updater.automaticallyUpdates, enabled: updater.isAvailable) {
-                    HStack(spacing: 8) {
-                        Button("Check for Updates…") { updater.checkForUpdates(nil) }
-                            .disabled(!updater.isAvailable)
-                        Text(updater.lastCheckSummary).foregroundStyle(.secondary)
-                    }
-                }
-                SettingsCardDivider()
                 SettingsToggleRow("Chrome engine for pages",
                                   detail: "Pages run on Chromium, with Chrome extensions and Chrome DevTools. Takes effect when From restarts.",
                                   isOn: $store.settings.chromeEngine)
@@ -99,8 +87,8 @@ struct AdvancedPane: View {
 
             SettingsHeader("Your data").padding(.top, 20)
             SettingsFeatureCard {
-                SettingsPlainRow("Import from another browser",
-                                   detail: importDetail,
+                SettingsPlainRow("Import bookmarks",
+                                   detail: "Bring the bookmarks of Chrome, Brave, Edge, Opera, Vivaldi, Chromium or Helium, or a bookmarks file Safari exported, onto the bookmarks bar.",
                                    trailing: { Button("Import…") { actions.importData() } })
                 SettingsCardDivider()
                 SettingsPlainRow("Export spaces and pinned tabs",
@@ -173,13 +161,6 @@ struct AdvancedPane: View {
                 .padding(14)
             }
         }
-    }
-
-    private var importDetail: String {
-        let names = ImportSource.allCases.filter { $0.kind != .safari && $0.isAvailable }.map(\.name)
-        return names.isEmpty
-            ? "Bring bookmarks, open tabs, passwords and sign-ins over from Safari."
-            : "Bring spaces, tabs, folders, favorites, passwords, sign-ins and extensions over from \(names.joined(separator: ", ")), Safari and more."
     }
 }
 

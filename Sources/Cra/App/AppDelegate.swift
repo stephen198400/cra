@@ -56,10 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         startContentBlocking()
         observeGlobalShortcut()
         observeMenuBarMode()
-        SoftwareUpdater.shared.start(app: self)
         buildMenus()
         store.hasPage = { [unowned self] in self.runtime(for: $0).map { !$0.discarded } ?? false }
-        store.tabPinned = { [unowned self] in TidyTitlesService.shared.tabPinned($0, store: self.store) }
         // A tip takes the tones of the space its browser window is in (the sidebar may be a
         // floating panel, a child of that window).
         ArcTooltipController.shared.tones = { [unowned self] window in
@@ -87,8 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // A link that starts Cra arrives before this (application(_:open:)), into pendingURLs.
         // NSApplicationLaunchIsDefaultLaunchKey isn't used: it is false for any start without
         // LaunchServices, a plain one too.
-        let launch = LaunchStart.launch(firstRun: needsOnboarding, automaticUpdate: SoftwareUpdater.shared.launchedByAutoUpdate,
-                                        withLinks: !pendingURLs.isEmpty)
+        let launch = LaunchStart.launch(firstRun: false, withLinks: !pendingURLs.isEmpty)
         let startOnNewTab = LaunchStart.startsOnNewTab(enabled: store.settings.startOnNewTab, launch: launch)
         CraLog.note("launch: \(launch)\(startOnNewTab ? ", on a new tab" : "")")
         if startOnNewTab { store.selectTab(nil, window: store.activeWindowID) }
@@ -105,18 +102,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         mainWindows = store.prefs.windows.map { MainWindowController(app: self, session: $0) }
         followKeyWindow()
         observeFlippingRows()
-        observeUpdateNotice()
-        // First launch: the default browser step and the import are the onboarding and
-        // the browser window appears once they are done (Dia does the same).
-        if needsOnboarding {
-            isOnboarding = true
-            main.showImport(firstRun: true)
-        } else {
-            // The window in use last comes up in front.
-            for w in mainWindows.reversed() { w.showWindow(nil) }
-            // As ⌘T: the command bar makes the new tab, Esc leaves the window empty.
-            if startOnNewTab { DispatchQueue.main.async { [weak self] in self?.main.openCommandBar(.newTab) } }
-        }
+        // No onboarding: the first launch opens the browser window like any other.
+        // The window in use last comes up in front.
+        for w in mainWindows.reversed() { w.showWindow(nil) }
+        // As ⌘T: the command bar makes the new tab, Esc leaves the window empty.
+        if startOnNewTab { DispatchQueue.main.async { [weak self] in self?.main.openCommandBar(.newTab) } }
         installKeyFallbackMonitor()
         installSideButtonKeyMonitor()
         installCommandFileWatcher()
@@ -124,15 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         composition.startPeriodicWork { [weak self] in self?.sleepIdleTabs() }
         composition.sync.keybindingsChanged = { [weak self] in self?.bindings.reloadOverrides() }
         composition.sync.start()
-        SharingService.shared.start(store: store, clock: composition.clock)
         observeSystemWake()
         logSidebarProblems()
-        LiveFolderManager.shared.start(store: store)
-        // A restart into an update while the user was away leaves the front app alone.
         if HitchMonitor.background {
             // Measured behind whatever is in front; still on screen, so pages keep drawing.
             for w in mainWindows { w.window?.orderBack(nil) }
-        } else if !SoftwareUpdater.shared.launchedByAutoUpdate {
+        } else {
             NSApp.activate(ignoringOtherApps: true)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.installURLEventHandler() }
@@ -196,30 +183,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         pendingURLs = []
         for u in urls { openExternalURL(u) }
         Perf.phase("windowsShown")
-    }
-
-    /// A fresh install runs Dia's onboarding (cover, default browser, privacy,
-    /// import, pinned tabs, personalization, outro).
-    /// This launch shows the onboarding, until it ends: the sidebar's sharing card waits.
-    private(set) var isOnboarding = false
-
-    /// This fork has no onboarding: the first launch opens the browser window like any other.
-    /// File ▸ Import still runs the import flow.
-    var needsOnboarding: Bool { false }
-
-    /// End of the import flow. Onboarding counts as done only here, so quitting halfway
-    /// shows it again on the next launch.
-    func importFinished(_ outcome: ImportOutcome, firstRun: Bool) {
-        if firstRun {
-            isOnboarding = false
-            store.settings.hasSeenImportPrompt = true
-        }
-        if let id = outcome.focusSpaceID { store.focusSpace(id) }
-        // Chromium reads --load-extension only at start-up, and imported passwords
-        // and cookies go into its databases before it starts (CredentialImport).
-        if outcome.needsRelaunch { relaunch(); return }
-        main.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// Saves, quits and starts again once this process is gone (the CEF profile is
@@ -396,23 +359,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         observeChanges(of: { [store] in store.settings.blockAdsAndTrackers }, apply: CraCEFRuntime.setContentBlockingEnabled)
     }
 
-    /// The last update notice toasted this launch (UpdateNotice.toast), and how many were.
-    private var toldUpdate: UpdateNotice?
-    private var updateToasts = 0
-
-    /// An update that turns up, or a sidebar hidden while one waits, toasts in the front window
-    /// when that window's sidebar is hidden: the banner can't be seen there.
-    private func observeUpdateNotice() {
-        observeChanges(of: { [unowned self] in
-            UpdateNotice.toast(SoftwareUpdater.shared.notice, told: toldUpdate, sidebarVisible: main?.sidebarVisible ?? true)
-        }) { [weak self] notice in
-            guard let self, let notice, let w = main, w.window?.isVisible == true else { return }
-            toldUpdate = notice
-            updateToasts += 1
-            w.showUpdateToast(notice)
-            CraLog.note("update toast \(updateToasts): \(notice.title) [\(notice.button)] \(notice.version)")
-        }
-    }
 
     private func installURLEventHandler() {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleGetURLEvent(_:reply:)),
@@ -434,7 +380,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         leaveMenuBarForWindow()
-        if main?.raiseImport() == true { return true }
         main?.showWindow(nil)
         return true
     }
@@ -477,27 +422,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillShutdown() { MCPServer.shared.stop(); store.saveAll(); BookmarkStore.shared.flush() }
 
-    /// Sparkle quits Cra to install an update and starts it again: no quit confirmation.
-    func prepareForUpdateRelaunch() {
-        isRelaunching = true
-        for w in mainWindows { w.saveFrameNow() }
-        store.saveAll()
-    }
-
-    /// Why an automatic update restart should wait (Arc: downloads in progress,
-    /// window_dialog_sheet_visible, active tabs). Little Windows go to the Library on quit,
-    /// so an open one waits too.
-    func autoUpdateBlocker() -> String? {
-        if DownloadHistory.shared.hasRunningDownloads { return "a download is in progress" }
-        if NSApp.modalWindow != nil || NSApp.windows.contains(where: { $0.isVisible && $0.attachedSheet != nil }) { return "a dialog is open" }
-        if !littleWindows.isEmpty { return "a Little Window is open" }
-        if PictureInPictureChrome.shared.isPlaying { return "Picture in Picture is playing" }
-        if main.isImportVisible { return "the import is open" }
-        return nil
-    }
-
     /// Arc 1.172's question when quitting would cancel downloads (its words, "Close Arc" made
-    /// Cra's). Also asked before Install and Relaunch restarts into an update (#272).
+    /// Cra's).
     func confirmQuitCancellingDownloads() -> Bool {
         CraLog.note("quit asks: downloads in progress")
         let alert = AppDialog(title: "Downloads in progress",
@@ -923,7 +849,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     /// from:// URLs any app may send: they do what the user could do from the Dock.
-    /// The rest (action, navigate, key, import, debug, open with a file: or javascript:
+    /// The rest (action, navigate, key, debug, open with a file: or javascript:
     /// URL) run scripts, DevTools Protocol and key presses, so a link in a mail or another
     /// browser must not reach them. CRA_COMMAND_FILE and the scriptingURLs default do.
     static func isUserFacing(_ u: URL) -> Bool {
@@ -1002,14 +928,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                     NSApp.sendEvent(ev)
                 }
             }
-        case "import":
-            // Headless import (scripting): from://import?source=arc&archive=1&settings=1
-            let plan = try? (q("source") == "dia" ? DiaImporter.plan() : ArcImporter.plan())
-            if let plan {
-                let r = store.apply(plan, includeArchive: q("archive") != "0", includeSettings: q("settings") != "0")
-                favicons.reset()
-                NSLog("Cra: imported %d spaces, %d tabs, %d folders, %d archived", r.spaces, r.tabs, r.folders, r.archived)
-            }
         case "debug":
             var dict: [String: String] = [:]
             for item in comps?.queryItems ?? [] { if let v = item.value { dict[item.name] = v } }
@@ -1066,9 +984,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 CraLog.note("zoom level \(main.currentBrowser?.zoomLevel() ?? .nan), keys go to \(keys)")
                 return
             }
-            // tidy: the divider's Tidy on the window's space, without hovering it; undoTidy: ⌘Z's.
-            if dict["tidy"] != nil { TidyTabsService.shared.tidy(store.focusedSpace(window: main.windowID).id, store: store); return }
-            if dict["undoTidy"] != nil { _ = store.undoTidy(); return }
             // applescript=<source>: an AppleScript run inside Cra (raw «class …» codes address its own
             // dictionary), its result or error logged; no other app, so no Automation prompt.
             // Off the main thread, as a script from another app would be: commands that wait for a
@@ -1081,12 +996,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 }
                 return
             }
-            // gmailPreview=<unread>: the Gmail favorite's preview card for a sample inbox.
-            if let n = dict["gmailPreview"].flatMap(Int.init), let w = main.window { FavoritePreviewCard.shared.demoGmail(unread: n, in: w); return }
-            // calendarPreview=1: the Calendar favorite's card for a sample day (a call in 90 s).
-            if dict["calendarPreview"] != nil, let w = main.window { FavoritePreviewCard.shared.demoCalendar(in: w); return }
-            // previewDismiss=1: the card goes, as when the pointer leaves it.
-            if dict["previewDismiss"] != nil { FavoritePreviewCard.shared.dismiss(animated: false); return }
             // boostZap=1|0: Boost editor's Zap on or off for the open page.
             if let z = dict["boostZap"] { main.debugZap(z == "1"); return }
             // boostPick=1|0|copyThis|copyRelated|zapRelated: the code panel's eyedropper on (the
@@ -1145,24 +1054,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 case let cell as SpaceCellView: (cell.superview as? SpaceDockView)?.debugHover(cell)
                 default: CraLog.note("hover: no visible \(spec)")
                 }
-                return
-            }
-            // musicNotes=<label>: report visible note overlays and their offsets from tile centers.
-            if let label = dict["musicNotes"] {
-                var tiles: [FavoriteTileView] = [], notes: [MusicNotesView] = []
-                func collect(_ v: NSView) {
-                    if let t = v as? FavoriteTileView { tiles.append(t) }
-                    if let n = v as? MusicNotesView, !n.isHiddenOrHasHiddenAncestor { notes.append(n) }
-                    v.subviews.forEach(collect)
-                }
-                main.window?.contentView.map(collect)
-                func middle(_ v: NSView) -> NSPoint { v.convert(NSPoint(x: v.bounds.midX, y: v.bounds.midY), to: nil) }
-                let places = notes.map { n -> String in
-                    let at = middle(n)
-                    guard let tile = tiles.map(middle).min(by: { hypot($0.x - at.x, $0.y - at.y) < hypot($1.x - at.x, $1.y - at.y) }) else { return "no tile" }
-                    return String(format: "%.1f across, %.1f up", at.x - tile.x, at.y - tile.y)
-                }
-                NSLog("Cra music notes %@: %d%@", label, notes.count, places.isEmpty ? "" : " (" + places.joined(separator: "; ") + ")")
                 return
             }
             if let size = dict["windowSize"]?.split(separator: "x").compactMap({ Double($0) }), size.count == 2, let w = main.window {
@@ -1426,22 +1317,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             // The sidebar as if Cra were in front (1) or behind (0), until the app's next activation change:
             // a background test copy is in either state depending on what it was sent.
             if let v = dict["appActive"] { main.sidebarUI.appActive = v == "1"; return }
-            // Settings ▸ Privacy sharing now, not in 30 s or tomorrow (only with CRA_SHARING_ENDPOINT
-            // in a test copy): stats sends the usage report, crash looks for new crash reports,
-            // on and off tick and untick onboarding's "Help improve Cra" row.
-            if let v = dict["sharing"] {
-                if v == "stats" { SharingService.shared.sendStatsIfDue(force: true) }
-                if v == "crash" { SharingService.shared.checkCrashReports() }
-                if v == "on" { store.settings.setSharesToImproveCra(true) }
-                if v == "card-share" { SharingCard.answer(share: true) }
-                if v == "card-close" { SharingCard.answer(share: false) }
-                if v == "off" { store.settings.setSharesToImproveCra(false) }
-                return
-            }
             // Settings ▸ Privacy ▸ Fingerprinting protection on or off, as its switch sets it.
             if let v = dict["fingerprinting"] { store.settings.fingerprintingProtection = v == "on"; return }
-            if let v = dict["banner"] { SoftwareUpdater.shared.debugUpdated(v == "none" ? nil : v); return }
-            if let v = dict["bannerReady"] { SoftwareUpdater.shared.debugReady(v == "none" ? nil : v); return }
             if dict["switcher"] != nil { main.debugTabSwitcher(); return }
             // The Site Control Center's Safari's Engine switch for the focused page, without the pointer.
             if let v = dict["safariEngine"] { main.debugChooseSafariEngine(v == "on"); return }
@@ -1769,15 +1646,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             let browser = keyLittleWindow.map { $0.browser } ?? main.currentBrowser
             item.title = browser?.isInPictureInPicture == true ? "Exit Picture in Picture" : "Picture in Picture"
         case "promoteLittleWindow", "littleWindowOpenInMenu": return keyLittleWindow?.hasPage ?? false
-        case "checkForUpdates": return SoftwareUpdater.shared.validateMenuItem(item)
         case "closeSplitPane", "separateFromSplit", "flipSplitOrientation":
             return store.selectedTabID.flatMap { store.splitContaining($0) } != nil
         case "addSplitView": return store.selectedTabID != nil
         case "editSpace", "deleteSpace", "nextSpace", "previousSpace", "manageSpaces", "changeProfile": return !main.isStandalone
         // A Blank Window has no favorites or pinned section to put a tab in (Arc).
         case "favoriteTab", "newFolder", "resetTab": return !main.isBlank
-        case let id? where LiveFolderPluginStore.shared.entry(forCommand: id) != nil: return !main.isStandalone
-        case "joinNextMeeting": return LiveCalendarClient.shared.nextCall()?.meetingURL != nil
         case "closeLittleWindows": return !littleWindows.isEmpty
         case let id? where id.hasPrefix("moveTabToSpace"):
             guard let n = Int(id.dropFirst(14)), n >= 1, n <= store.spaceOrder.count else { return false }
@@ -1927,13 +1801,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return false
     }
 
-    /// Arc: ⌘Z brings back the tab you closed last (closing registers an undo, GitHub #21), or undoes
-    /// the last Tidy, unless the keyboard is in something with text to undo: a text field, or an editable
-    /// element in a page (Chromium's page view reports its ui::TextInputType, 0 = none).
+    /// Arc: ⌘Z brings back the tab you closed last (closing registers an undo, GitHub #21), unless
+    /// the keyboard is in something with text to undo: a text field, or an editable element in a page
+    /// (Chromium's page view reports its ui::TextInputType, 0 = none).
     private func undoClosedTab(_ event: NSEvent) -> Bool {
         guard Shortcut("z", .command).matches(event), !textFieldHasKey(event) else { return false }
-        // The last thing to undo may be a tidy (Arc's "Undo Tidy Tabs"); a tab closed since comes first.
-        if !store.undoTidy() { perform("reopenClosedTab") }
+        perform("reopenClosedTab")
         return true
     }
 
@@ -1951,11 +1824,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         // A key Little Window takes the page/window actions first (⌘W, ⌘L, ⌘R…).
         if let little = keyLittleWindow, little.handle(action: id) { return }
-        if let entry = LiveFolderPluginStore.shared.entry(forCommand: id) {
-            guard !main.isStandalone else { return }
-            SidebarMenus.addPluginFolder(entry, space: store.focusedSpace.id, store: store, window: main.window)
-            return
-        }
         let current = store.selectedTabID
         switch id {
         case "newLittleWindow": openLittleWindow(url: "")
@@ -2080,8 +1948,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case "pinTab": if let c = current, !main.isBlank { store.togglePinned(c) }
         case "favoriteTab":
             if let c = current, !main.isBlank { store.isFavorite(c) ? store.removeFromFavorites(c) : store.addToFavorites(c) }
-        case "joinNextMeeting":
-            if let url = LiveCalendarClient.shared.nextCall()?.meetingURL { main.sidebarActions.openURL(url) } else { NSSound.beep() }
         // A pane has no row of its own: its split's name is edited.
         case "renameTab": main.sidebarUI.renamingID = current.map { store.splitContaining($0)?.id ?? $0 }
         case "duplicateTab": if let c = current { store.duplicateTab(c) }
@@ -2106,10 +1972,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case "nextSplitPane": main.cycleSplitPane(1)
         case "previousSplitPane": main.cycleSplitPane(-1)
         case "settings": showSettingsWindow()
-        case "importData": main.showImport()
-        case "rebuildArcProfiles": ArcProfileRebuilder.run(store: store) { [weak self] in self?.relaunch() }
+        case "importData": BookmarkImportPanel.run()
         case "setDefaultBrowser": Task { await SystemIntegration.shared.makeDefaultBrowser() }
-        case "checkForUpdates": SoftwareUpdater.shared.checkForUpdates(nil)
         case "languageSettings":
             // Chromium's page edits the profile of the space it opens in.
             let normal = useNormalWindow()
@@ -2185,11 +2049,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func showSettingsWindow() {
         if settingsController == nil {
             let actions = SettingsActions(
-                importData: { [weak self] in self?.main.showImport() },
-                rebuildArcProfiles: { [weak self] in
-                    guard let self else { return }
-                    ArcProfileRebuilder.run(store: self.store) { [weak self] in self?.relaunch() }
-                },
+                importData: { BookmarkImportPanel.run() },
                 openURL: { [weak self] url in
                     guard let self else { return }
                     self.useNormalWindow()
@@ -2256,7 +2116,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         appMenu.addItem(item("clearBrowsingData"))
         appMenu.addItem(.separator())
         appMenu.addItem(item("importData"))
-        appMenu.addItem(item("checkForUpdates"))
         appMenu.addItem(.separator())
         appMenu.addItem(std("Hide From", #selector(NSApplication.hide(_:)), "h"))
         appMenu.addItem(std("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]))

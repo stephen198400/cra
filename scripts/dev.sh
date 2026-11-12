@@ -23,7 +23,7 @@ PID=""
 HELPERS=("|" " (Alerts)|.alerts" " (GPU)|.gpu" " (Plugin)|.plugin" " (Renderer)|.renderer")
 
 bootstrap() {
-  echo "Creating $APP with the current CEF and Sparkle builds..."
+  echo "Creating $APP with the current CEF build..."
   rm -rf "$APP" || return 1
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks" || return 1
   sed -e "s/__VERSION__/0.0.0-dev/" -e "s/__BUILD__/0/" resources/Info.plist > "$APP/Contents/Info.plist"
@@ -31,19 +31,12 @@ bootstrap() {
       -c "Set :CFBundleName $NAME" -c "Set :CFBundleDisplayName $NAME" \
       -c "Delete :CFBundleURLTypes" -c "Delete :CFBundleDocumentTypes" \
       -c "Delete :UTExportedTypeDeclarations" "$APP/Contents/Info.plist"
-  $PB -c "Delete :SUFeedURL" "$APP/Contents/Info.plist"
   echo -n "APPL????" > "$APP/Contents/PkgInfo"
   [ -f resources/AppIcon.icns ] && cp resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
   local fw="$APP/Contents/Frameworks/Chromium Embedded Framework.framework"
   cp -R "$ROOT/vendor/cef/Release/Chromium Embedded Framework.framework" "$APP/Contents/Frameworks/" || return 1
   find "$fw/Libraries" -name '*.dylib' -exec codesign --force --sign - {} \; 2>/dev/null || return 1
   codesign --force --sign - "$fw" || return 1
-  ditto "$ROOT/vendor/sparkle/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework" || return 1
-  local sparkle="$APP/Contents/Frameworks/Sparkle.framework"
-  rm -rf "$sparkle/Versions/B/XPCServices" "$sparkle/XPCServices"
-  codesign --force --sign - "$sparkle/Versions/B/Autoupdate" || return 1
-  codesign --force --sign - "$sparkle/Versions/B/Updater.app" || return 1
-  codesign --force --sign - "$sparkle" || return 1
   for entry in "${HELPERS[@]}"; do
     local ns="${entry%%|*}" ps="${entry#*|}"
     local helper="$APP/Contents/Frameworks/$NAME Helper$ns.app"
@@ -54,7 +47,6 @@ bootstrap() {
     echo -n "APPL????" > "$helper/Contents/PkgInfo"
   done
   cp "$ROOT/vendor/cef/.cra-source" "$APP/Contents/Resources/cef-source" || return 1
-  cp "$ROOT/vendor/sparkle/VERSION" "$APP/Contents/Resources/sparkle-version" || return 1
 }
 
 # A separately launched CraDev (or a second watch process) must be quit before its
@@ -69,7 +61,6 @@ build() {
   mkdir -p "$SCRATCH"
   touch "$STAMP"
   scripts/fetch-cef.sh >/dev/null || return 1
-  scripts/fetch-sparkle.sh >/dev/null || return 1
   swift build -c debug --scratch-path "$SCRATCH" || return 1
   local bin
   bin="$(swift build -c debug --scratch-path "$SCRATCH" --show-bin-path)" || return 1
@@ -81,9 +72,7 @@ build() {
   fi
   if [ ! -d "$APP/Contents/Frameworks/$NAME Helper.app" ] || \
      [ ! -f "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework" ] || \
-     [ ! -d "$APP/Contents/Frameworks/Sparkle.framework" ] || \
-     ! cmp -s "$ROOT/vendor/cef/.cra-source" "$APP/Contents/Resources/cef-source" || \
-     ! cmp -s "$ROOT/vendor/sparkle/VERSION" "$APP/Contents/Resources/sparkle-version"; then
+     ! cmp -s "$ROOT/vendor/cef/.cra-source" "$APP/Contents/Resources/cef-source"; then
     bootstrap || return 1
   fi
   for entry in "${HELPERS[@]}"; do
@@ -95,9 +84,7 @@ build() {
     fi
   done
   cp "$bin/Cra" "$APP/Contents/MacOS/$NAME" || return 1
-  cp "$bin/CraPluginHost" "$APP/Contents/MacOS/CraPluginHost" || return 1
-  codesign --force --sign - "$APP/Contents/MacOS/CraPluginHost" || return 1
-  for d in web brand blocklist browsers app-icons licenses fonts live-folder-plugins; do
+  for d in web brand blocklist app-icons licenses fonts; do
     if [ -d "resources/$d" ]; then
       rsync -a --delete "resources/$d/" "$APP/Contents/Resources/$d/" || return 1
     fi
@@ -123,7 +110,7 @@ launch() {
 }
 
 changed() {
-  [ scripts/fetch-cef.sh -nt "$STAMP" ] || [ scripts/fetch-sparkle.sh -nt "$STAMP" ] || \
+  [ scripts/fetch-cef.sh -nt "$STAMP" ] || \
   [ -n "$(find Sources resources Package.swift -newer "$STAMP" -type f \
           \( -name '*.swift' -o -name '*.m' -o -name '*.mm' -o -name '*.h' -o -path 'resources/*' \) \
           -print -quit 2>/dev/null)" ]

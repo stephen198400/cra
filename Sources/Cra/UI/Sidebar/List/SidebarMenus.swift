@@ -101,7 +101,7 @@ enum SidebarMenus {
         }
         add(menu, action: "renameTab", "Rename…") { ui.renamingID = id }
         if item.title != nil { add(menu, "Use Page Title") { store.rename(id, to: nil) } }
-        if m.pinned, tab.liveItemURL == nil { pinnedURLItems(menu, id, navigatedAway: m.navigatedAway, store: store, actions: actions) }
+        if m.pinned { pinnedURLItems(menu, id, navigatedAway: m.navigatedAway, store: store, actions: actions) }
         // Arc: "Add Split View" on the open tab, "Open in Split View" on any other.
         if store.isSelected(id, window: ui.windowID) {
             add(menu, action: "addSplitView", "Add Split View") { actions.performAction("addSplitView") }
@@ -155,7 +155,7 @@ enum SidebarMenus {
     /// Move to Folder / New Folder for this tab, or for every picked tab.
     private static func folderItems(_ menu: NSMenu, _ ids: [UUID], list: SpaceListView) {
         let store = list.store, ui = list.ui
-        let folders = store.children(of: store.focusedSpace(window: ui.windowID).pinnedContainerID).filter { $0.isFolder && !$0.isLiveFolder }
+        let folders = store.children(of: store.focusedSpace(window: ui.windowID).pinnedContainerID).filter(\.isFolder)
         if !folders.isEmpty {
             let sub = submenu(menu, ids.count > 1 ? "Move \(ids.count) Tabs to Folder" : "Move to Folder")
             for f in folders {
@@ -183,7 +183,6 @@ enum SidebarMenus {
         let store = list.store, ui = list.ui
         let id = item.id
         let menu = menu()
-        add(menu, "Change Icon…") { list.showFolderIconPicker(id) }
         add(menu, "Rename…") { ui.renamingID = id }
         add(menu, "New Folder Inside") {
             let f = store.createFolder(named: "New Folder", in: id, index: 0)
@@ -196,142 +195,7 @@ enum SidebarMenus {
         return menu
     }
 
-    /// The live folder's menu (Arc: SidebarMenu+ListContextMenu liveFolderContextMenu).
-    static func liveFolder(_ item: SidebarItem, list: SpaceListView) -> NSMenu {
-        let store = list.store, ui = list.ui, actions = list.actions
-        let manager = LiveFolderManager.shared
-        let id = item.id
-        let live = item.liveFolder ?? LiveFolderData()
-        let menu = menu()
-        let entry = LiveFolderPluginStore.shared.entry(for: live)
-        let requests = submenu(menu, entry?.presentation.menuTitle ?? item.title ?? "Live Folder", image: entry?.icon)
-        note(requests, manager.refreshing.contains(id) ? "Updating…" : LiveFolderText.lastUpdate(live))
-        if let detail = live.plugin?.detailLabel { note(requests, detail) }
-        add(requests, "Refresh") { manager.refresh(id) }
-        requests.addItem(.separator())
-        for filter in entry?.presentation.filters ?? [] {
-            let on = live.plugin?.filters.contains(filter.id) == true
-            add(requests, filter.title, on: on) {
-                store.updateLiveFolder(id) { live in
-                    if on { live.plugin?.filters.removeAll { $0 == filter.id } }
-                    else { live.plugin?.filters.append(filter.id) }
-                }
-                manager.refresh(id, force: true)
-            }
-        }
-        let repos = store.liveRepositories(id, fetched: manager.repositories[id])
-        if !repos.isEmpty, let groups = entry?.presentation.groups {
-            requests.addItem(.separator())
-            let sub = submenu(requests, groups.title)
-            note(sub, groups.description)
-            sub.addItem(.separator())
-            for repo in repos {
-                let shown = !live.filter.isRepositoryHidden(repo)
-                add(sub, repo, on: shown) {
-                    store.updateLiveFolder(id) { l in
-                        l.filter.setRepository(repo, hidden: shown)
-                    }
-                    manager.refresh(id, force: true)
-                }
-            }
-        }
-        if live.lastError == .notSignedIn, let signIn = live.plugin?.signIn {
-            requests.addItem(.separator())
-            add(requests, signIn.title) { actions.openURL(signIn.url) }
-        } else if let snapshot = live.plugin?.snapshot, !snapshot.actions.isEmpty {
-            requests.addItem(.separator())
-            if let message = snapshot.actionMessage { note(requests, message) }
-            for action in snapshot.actions { add(requests, action.title) { actions.openURL(action.url) } }
-        }
-        menu.addItem(.separator())
-        let spaces = submenu(menu, "Move to")
-        for space in store.orderedSpaces {
-            let current = store.isInSpace(id, space.id)
-            add(spaces, space.labeled, on: current) {
-                if !current { store.moveTab(id, toSpace: space.id, window: ui.windowID) }
-            }
-        }
-        menu.addItem(.separator())
-        iconColor(menu, item, list: list)
-        add(menu, "Rename…") { ui.renamingID = id }
-        add(menu, "Copy All Links as Markdown", enabled: !item.children.isEmpty) {
-            let lines = store.tabs(under: id).compactMap { c in c.tab.map { "- [\(c.displayTitle)](\($0.liveItemURL ?? $0.url))" } }
-            copy(lines.joined(separator: "\n"))
-        }
-        menu.addItem(.separator())
-        let window = list.window
-        add(menu, "Delete Live Folder") { confirmDeleteLiveFolder(item, store: store, in: window) }
-        return menu
-    }
-
-    /// Arc asks first ("Delete your %@ Live Folder?") and says how to get it back, in its own words.
-    static func confirmDeleteLiveFolder(_ item: SidebarItem, store: SidebarStore, in window: NSWindow? = nil) {
-        let alert = AppDialog(title: "Delete your \(item.title ?? "Pull Requests") Live Folder?",
-                              message: "You can restore this folder at any time by right-clicking the sidebar.",
-                              actions: [DialogAction("Delete Folder", role: .destructive), .cancel])
-        let id = item.id
-        if let window = window ?? AppDialog.parentWindow {
-            alert.present(over: window) { if $0 == .alertFirstButtonReturn { store.deleteFolder(id) } }
-        } else if alert.runModal() == .alertFirstButtonReturn {
-            store.deleteFolder(id)
-        }
-    }
-
     // MARK: Splits
-
-    static func addLiveFolderPlugins(to menu: NSMenu, space: UUID, store: SidebarStore, window: NSWindow?) {
-        let registry = LiveFolderPluginStore.shared
-        for entry in registry.entries.values.sorted(by: { $0.package.manifest.name < $1.package.manifest.name }) {
-            let existing = store.liveFolders.filter { store.isInSpace($0.id, space) && $0.liveFolder?.plugin?.id == entry.package.manifest.id }
-                .sorted { ($0.liveFolder?.plugin?.instanceLabel ?? "") < ($1.liveFolder?.plugin?.instanceLabel ?? "") }
-            if entry.presentation.setup == nil {
-                add(menu, entry.package.manifest.name, enabled: !store.isStandalone(space: space), on: !existing.isEmpty) {
-                    if let folder = existing.first { confirmDeleteLiveFolder(folder, store: store, in: window) }
-                    else { addPluginFolder(entry, space: space, store: store, window: window) }
-                }
-            } else {
-                for folder in existing {
-                    add(menu, folder.liveFolder?.plugin?.instanceLabel ?? entry.package.manifest.name, on: true) {
-                        confirmDeleteLiveFolder(folder, store: store, in: window)
-                    }
-                }
-                add(menu, entry.package.manifest.name + "…", enabled: !store.isStandalone(space: space) && window != nil) {
-                    addPluginFolder(entry, space: space, store: store, window: window)
-                }
-            }
-        }
-
-    }
-
-    static func addPluginFolder(_ entry: LiveFolderPluginStore.Entry, space: UUID, store: SidebarStore, window: NSWindow?) {
-        func create(_ settings: [String: String]) {
-            Task {
-                do {
-                    var configuration = try LiveFolderManager.configuration(entry: entry, settings: settings,
-                        filters: entry.presentation.filters.filter(\.enabledByDefault).map(\.id))
-                    try await LiveFolderManager.shared.updateSignIn(&configuration, entry: entry)
-                    guard let folder = store.createPluginFolder(configuration, title: entry.presentation.folderTitle, inSpace: space,
-                        legacySource: entry.package.manifest.legacySource) else { return }
-                    store.setExpanded(folder.id, true)
-                    LiveFolderManager.shared.refresh(folder.id, force: true)
-                } catch { AppDialog(title: "Could not add live folder", message: error.localizedDescription).runModal(over: window) }
-            }
-        }
-        guard let setup = entry.presentation.setup else { create([:]); return }
-        guard let window else { return }
-        let dialog = AppDialog(title: setup.title, message: setup.message,
-            actions: [DialogAction("Add Folder"), .cancel], input: "", placeholder: setup.placeholder,
-            icon: .none, width: 496, buttonSpacing: 30, buttonOutset: 0)
-        dialog.present(over: window) { response in
-            guard response == .alertFirstButtonReturn else { return }
-            let input = (dialog.input ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let address = LiveFolderPluginConfiguration.normalizedAddress(input.isEmpty ? setup.defaultValue : input) else {
-                DispatchQueue.main.async { AppDialog(title: setup.invalidTitle, message: setup.invalidMessage).runModal(over: window) }
-                return
-            }
-            create([setup.key: address])
-        }
-    }
 
     /// Arc 1.171's split menu, item for item where Cra has the feature (no Share or Change Icon).
     /// It is pinned by dragging it into Pinned or with Pin Tab (⌘D), not from here.
@@ -402,7 +266,6 @@ enum SidebarMenus {
         // Arc's sidebar menu starts with the space's look, as the header's does (#170).
         if let s = store.space(space) {
             if SidebarStore.showsSpaceHeaderRow, let header = list.header, !store.hidesSpaceHeader(space) {
-                add(menu, "Change Space Icon…") { [weak header] in if let header { actions.changeSpaceIcon(s, header) } }
                 add(menu, "Rename Space…") { [weak header] in header?.beginRename() }
             }
             add(menu, "Edit Theme Color…") { actions.editSpaceTheme(s) }
@@ -410,8 +273,6 @@ enum SidebarMenus {
         }
         add(menu, action: "newTab", "New Tab") { actions.openCommandBar(.newTab) }
         add(menu, action: "newFolder") { actions.performAction("newFolder") }
-        let liveFolders = submenu(menu, "Live Folders")
-        addLiveFolderPlugins(to: liveFolders, space: space, store: store, window: list.window)
         menu.addItem(.separator())
         if let s = store.space(space), !store.children(of: s.todayContainerID).isEmpty {
             add(menu, action: "clearToday") { store.clearToday(space) }

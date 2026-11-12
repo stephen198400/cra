@@ -1,7 +1,7 @@
 import Foundation
 
-/// Feeds the parsers of other browsers' files with mutated copies of the fixtures: Chromium's
-/// SNSS session, Bookmarks and Preferences, and Arc's StorableSidebar.json. Built with
+/// Feeds the parsers of Chromium's files with mutated copies of the fixtures: the Bookmarks file
+/// From ▸ Import Bookmarks… reads, and the Preferences extensions are read from. Built with
 /// AddressSanitizer by scripts/fuzz.sh; a crash or an ASan report fails the run and leaves the
 /// input in $CRA_FUZZ_OUT/crash-input. Seeded, so a run repeats exactly (CRA_FUZZ_SEED).
 /// Xcode's toolchain has no libFuzzer on macOS; this is the coverage-blind kind, mutations of
@@ -16,28 +16,19 @@ enum FuzzTests {
         let out = URL(fileURLWithPath: env["CRA_FUZZ_OUT"] ?? NSTemporaryDirectory(), isDirectory: true)
         let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures")
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("cra-fuzz-\(UUID().uuidString)", isDirectory: true)
-        let arc = work.appendingPathComponent("Arc", isDirectory: true), profile = work.appendingPathComponent("Default", isDirectory: true)
-        try FileManager.default.createDirectory(at: arc, withIntermediateDirectories: true)
+        let profile = work.appendingPathComponent("Default", isDirectory: true)
         try FileManager.default.createDirectory(at: profile, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: work) }
         setenv("CRA_DATA_DIR", work.path, 1)
-        setenv("CRA_ARC_DIR", arc.path, 1)
 
         let chromium = fixtures.appendingPathComponent("Chromium/Default")
-        let session = try Data(contentsOf: chromium.appendingPathComponent("Sessions/Session_13300000000000000"))
         let targets: [(name: String, seed: Data, run: (Data) throws -> Void)] = [
-            ("SNSS session", session, { _ = ChromiumImporter.parseSession($0) }),
             ("Bookmarks", try Data(contentsOf: chromium.appendingPathComponent("Bookmarks")), {
-                try $0.write(to: profile.appendingPathComponent("Bookmarks"))
-                _ = ChromiumImporter.bookmarks(profile: profile)
+                _ = BookmarkImport.chromium(bookmarksFile: $0)
             }),
             ("Preferences", try Data(contentsOf: chromium.appendingPathComponent("Preferences")), {
                 try $0.write(to: profile.appendingPathComponent("Preferences"))
                 _ = ExtensionImporter.disabledIDs(inProfile: profile)
-            }),
-            ("StorableSidebar.json", try Data(contentsOf: fixtures.appendingPathComponent("Arc/StorableSidebar.json")), {
-                try $0.write(to: arc.appendingPathComponent("StorableSidebar.json"))
-                _ = try? ArcImporter.plan()
             }),
         ]
         let current = out.appendingPathComponent("crash-input")

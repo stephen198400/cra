@@ -16,7 +16,6 @@ extension NSPasteboard.PasteboardType {
 final class SpaceListView: NSView, NSDraggingSource {
     enum RowKey: Hashable {
         case item(UUID)
-        case liveStatus(UUID)
         case placeholder
         case divider
         case newTab
@@ -26,9 +25,8 @@ final class SpaceListView: NSView, NSDraggingSource {
         case tab(TabRowModel)
         case folder(FolderRowModel)
         case split(SplitRowModel)
-        case liveStatus(LiveStatusModel)
         case placeholder(active: Bool)
-        case divider(hasToday: Bool, tidy: DividerTidy)
+        case divider(hasToday: Bool)
         case groupHeader(GroupHeaderRowModel)
         case newTab(active: Bool)
     }
@@ -249,8 +247,6 @@ final class SpaceListView: NSView, NSDraggingSource {
         let focusID = ui.keyboardFocusID
         let capturing = ui.capturingTabIDs
         let audible = ui.audibleTabIDs
-        let refreshing = LiveFolderManager.shared.refreshing
-        let tidyEffects = TidyTitlesService.shared.effects
         let settings = store.settings
         // The ⌘T bar's New Tab row takes the selection's fill while it is open.
         let placeholder = showsNewTab && ui.newTabPlaceholderActive && store.focusedSpaceID(window: window) == spaceID
@@ -293,12 +289,9 @@ final class SpaceListView: NSView, NSDraggingSource {
                 let glyph = palette.folderColors(item.folderIcon)
                 row.content = .folder(FolderRowModel(
                     id: item.id, depth: depth, title: item.title ?? "Folder", renameText: item.title ?? "",
-                    editing: renaming == item.id, expanded: expanded, peeked: !peeked.isEmpty, live: item.isLiveFolder,
+                    editing: renaming == item.id, expanded: expanded, peeked: !peeked.isEmpty,
                     tint: NSColor(glyph.tint), fill: NSColor(glyph.fill), back: NSColor(glyph.back),
                     tabCount: expanded ? 0 : store.tabs(under: item.id).count,
-                    liveBusy: refreshing.contains(item.id), liveError: item.liveFolder.flatMap(LiveFolderText.warning)?.help,
-                    liveSignInURL: item.liveFolder.flatMap(LiveFolderText.warning)?.signInURL,
-                    liveHelp: LiveFolderText.refreshHelp(item.liveFolder), liveIcon: item.liveFolder.flatMap { LiveFolderPluginStore.shared.entry(for: $0)?.icon },
                     symbol: item.folderSymbol))
                 out.append(row)
                 guard expanded else {
@@ -313,9 +306,6 @@ final class SpaceListView: NSView, NSDraggingSource {
                 for c in store.children(of: item.id) {
                     add(c, depth: depth + 1, pinned: pinned, parent: item.id, index: kids[c.id] ?? 0)
                 }
-                if item.isLiveFolder, let m = Self.liveStatus(item, hasTabs: !store.tabs(under: item.id).isEmpty) {
-                    out.append(Row(key: .liveStatus(item.id), content: .liveStatus(LiveStatusModel(text: m.text, url: m.url, depth: depth + 1))))
-                }
             } else if let tab = item.tab {
                 let selected = store.isSelected(item.id, window: window)
                 let navigatedAway = pinned && tab.url != tab.savedURL && !tab.savedURL.isEmpty
@@ -324,25 +314,20 @@ final class SpaceListView: NSView, NSDraggingSource {
                     ? (NSImage(systemSymbolName: "pencil.and.scribble", accessibilityDescription: "Easel"), false) : icon(tab.iconKey)
                 let (homeImg, homeFlip) = navigatedAway ? icon(tab.customIconKey ?? FaviconKey.key(for: tab.savedURL)) : (img, flip)
                 let developerMode = settings.isDeveloperMode(siteKey: siteKey(tab.url))
-                // Tidy Tab Titles' rename: "Double-click to rename" under the new name for a few seconds.
-                let tidyRename = tidyEffects[item.id]
-                let subtitle = tidyRename != nil ? TidyTitlesService.subtitle : tab.sidebarSubtitle(developerMode: developerMode)
+                let subtitle = tab.sidebarSubtitle(developerMode: developerMode)
                 // Arc's tidy titles: a known site's page shows a shorter title unless the tab has a name.
                 let title = item.title == nil ? tidyTitle(item.displayTitle, url: tab.url) : item.displayTitle
-                let liveIcon = tab.liveItemURL != nil && tab.customIconKey == nil
-                    ? store.liveFolder(containing: parent)?.liveFolder.flatMap { LiveFolderPluginStore.shared.entry(for: $0)?.icon } : nil
                 row.content = .tab(TabRowModel(
                     id: item.id, depth: depth, pinned: pinned, title: title, customTitle: item.title != nil,
                     renameText: item.title ?? title, subtitle: subtitle,
-                    icon: img, flipIcon: flip, liveIcon: liveIcon,
+                    icon: img, flipIcon: flip,
                     editing: renaming == item.id, selected: selected,
                     highlighted: picks.isEmpty ? selected && !placeholder : picks.contains(item.id),
                     capturing: capturing.contains(item.id), audible: audible.contains(item.id), muted: tab.muted, unread: item.isUnread,
                     navigatedAway: navigatedAway,
                     focusRing: focusID == item.id, developerMode: developerMode, peeked: peeked,
                     homeIcon: homeImg, homeFlipIcon: homeFlip,
-                    peekIcon: ui.peekBadges[item.id].flatMap { icon($0.iconKey).0 },
-                    tidyRename: tidyRename))
+                    peekIcon: ui.peekBadges[item.id].flatMap { icon($0.iconKey).0 }))
                 out.append(row)
             } else if item.isSplit {
                 let children = store.children(of: item.id).filter(\.isTab)
@@ -380,9 +365,7 @@ final class SpaceListView: NSView, NSDraggingSource {
         }
         let pinnedCount = out.count
         let todayKids = store.item(space.todayContainerID)?.children ?? []
-        let tidy: DividerTidy = blank ? .none : store.tidyingSpaces.contains(spaceID) ? .running
-            : TidyTabsService.shared.offers(spaceID, store: store) ? .offered : .none
-        out.append(Row(key: .divider, content: .divider(hasToday: !todayKids.isEmpty && !blank, tidy: tidy)))
+        out.append(Row(key: .divider, content: .divider(hasToday: !todayKids.isEmpty && !blank)))
         let atTop = store.settings.newTabButtonAtTop
         if atTop && showsNewTab { out.append(Row(key: .newTab, content: .newTab(active: placeholder))) }
         let todayPositions = Self.positions(todayKids)
@@ -393,18 +376,6 @@ final class SpaceListView: NSView, NSDraggingSource {
         return Built(rows: out, pinnedCount: pinnedCount, palette: palette,
                      highlightPinned: section == .pinned && !pinnedItems.isEmpty, highlightToday: section == .today,
                      line: drop?.line)
-    }
-
-    /// A line inside the open live folder when there are no pull requests to show, or GitHub
-    /// can't be read (Arc: "Sign back in to GitHub.", "Login with SSO to unlock this folder").
-    private static func liveStatus(_ item: SidebarItem, hasTabs: Bool) -> (text: String, url: String?)? {
-        guard let live = item.liveFolder, !hasTabs else { return nil }
-        guard let plugin = live.plugin else { return nil }
-        if live.lastError == .notSignedIn, let text = plugin.signInWarning { return (text, plugin.signIn?.url) }
-        if live.lastError != nil, let text = plugin.failureText { return (text, plugin.failureURL) }
-        if let text = plugin.snapshot?.warning { return (text, plugin.snapshot?.actions.first?.url) }
-        guard live.lastFetch != nil, let text = plugin.emptyText else { return nil }
-        return (text, nil)
     }
 
     /// Which list a drop lands in, when that pins or unpins the dragged item; that list
@@ -485,7 +456,6 @@ final class SpaceListView: NSView, NSDraggingSource {
         case .tab: return v is TabRowView
         case .folder: return v is FolderRowView
         case .split: return v is SplitRowView
-        case .liveStatus: return v is LiveStatusRowView
         case .placeholder: return v is PinPlaceholderRowView
         case .divider: return v is DividerRowView
         case .groupHeader: return v is GroupHeaderRowView
@@ -498,7 +468,6 @@ final class SpaceListView: NSView, NSDraggingSource {
         case .tab: return TabRowView(key: row.key, list: self, colors: colors)
         case .folder: return FolderRowView(key: row.key, list: self, colors: colors)
         case .split: return SplitRowView(key: row.key, list: self, colors: colors)
-        case .liveStatus: return LiveStatusRowView(key: row.key, list: self, colors: colors)
         case .placeholder: return PinPlaceholderRowView(key: row.key, list: self, colors: colors)
         case .divider: return DividerRowView(key: row.key, list: self, colors: colors)
         case .groupHeader: return GroupHeaderRowView(key: row.key, list: self, colors: colors)
@@ -511,9 +480,8 @@ final class SpaceListView: NSView, NSDraggingSource {
         case .tab(let m): (v as? TabRowView)?.apply(m)
         case .folder(let m): (v as? FolderRowView)?.apply(m)
         case .split(let m): (v as? SplitRowView)?.apply(m)
-        case .liveStatus(let m): (v as? LiveStatusRowView)?.apply(m)
         case .placeholder(let active): (v as? PinPlaceholderRowView)?.apply(active: active)
-        case .divider(let hasToday, let tidy): (v as? DividerRowView)?.apply(hasToday: hasToday, tidy: tidy)
+        case .divider(let hasToday): (v as? DividerRowView)?.apply(hasToday: hasToday)
         case .groupHeader(let m): (v as? GroupHeaderRowView)?.apply(m)
         case .newTab(let active): (v as? NewTabRowView)?.apply(active: active)
         }
@@ -579,15 +547,14 @@ final class SpaceListView: NSView, NSDraggingSource {
                 pinnedFrame = NSRect(x: CraMetrics.rowInset, y: pinnedTop, width: inner, height: y - pinnedTop)
             }
             if isDivider {
-                if case .divider(true, _) = rows[i].content { afterLine = true } else { afterLine = false }
+                if case .divider(true) = rows[i].content { afterLine = true } else { afterLine = false }
                 let h: CGFloat = afterLine ? 18 : 0
                 rows[i].frame = NSRect(x: 0, y: y, width: width, height: h)
                 y += h
                 continue
             }
             if !(afterLine && i == pinnedCount + 1) { y += CraMetrics.rowSpacing }
-            let h: CGFloat
-            if case .liveStatus(let m) = rows[i].content { h = LiveStatusRowView.height(m, width: inner) } else { h = CraMetrics.rowHeight }
+            let h = CraMetrics.rowHeight
             rows[i].frame = NSRect(x: CraMetrics.rowInset, y: y, width: inner, height: h)
             y += h
         }
@@ -734,13 +701,6 @@ final class SpaceListView: NSView, NSDraggingSource {
         for l in all.allObjects where l.ui === ui {
             guard let row = l.views[.item(folderID)] as? FolderRowView else { continue }
             FolderPreviewController.shared.debugOpen(folderID, row: row, list: l)
-        }
-    }
-
-    func showFolderIconPicker(_ id: UUID) {
-        guard let row = views[.item(id)] as? FolderRowView, let item = store.item(id) else { return }
-        FolderIconPicker.show(current: item.folderSymbol, anchor: row, rect: row.iconRect) { [store] symbol in
-            store.setFolderSymbol(symbol, for: id)
         }
     }
 
@@ -1122,14 +1082,6 @@ final class SpaceListView: NSView, NSDraggingSource {
             } else if group.count == 1, store.item(id)?.parentID == parent, let old = store.item(parent)?.children.firstIndex(of: id), index == old || index == old + 1 {
                 target = nil
             }
-        }
-
-        // A live folder fills itself: nothing goes into it from outside, and its tabs make no new folders.
-        switch target {
-        case .into(let f)? where store.liveFolder(containing: f) != nil: target = nil
-        case .insert(let parent, _)? where store.liveFolder(containing: parent) != nil && store.item(id)?.parentID != parent: target = nil
-        case .split(let tab, _)? where store.liveFolder(containing: tab) != nil: target = nil
-        default: break
         }
 
         var drop = SidebarListDrop(draggedID: id, target: target)

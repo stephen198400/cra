@@ -3,39 +3,6 @@ import SwiftUI
 
 /// What Arc's space menu opens (the header's ••• and its right-click menu).
 extension MainWindowController {
-    /// Change Space Icon…: Arc's picker in a popover pointing up at the header's icon.
-    func showSpaceIconPicker(space: Space, anchor: NSView) {
-        let popover = NSPopover()
-        popover.behavior = .transient
-        let id = space.id, store = self.store
-        let set: (String, String?) -> Void = { [weak popover] emoji, symbol in
-            guard var s = store.space(id) else { return }
-            s.emoji = emoji
-            s.symbol = symbol
-            store.updateSpace(s)
-            popover?.performClose(nil)
-        }
-        let picker = SpaceIconPicker(current: space.emoji, currentSymbol: space.symbol, onPick: { set($0, nil) },
-                                     onPickSymbol: { set("", $0) }, onRemove: { set("", nil) })
-        // A fixed size: NSPopover placed itself for the hosting view's first, larger size and then
-        // shrank toward its bottom-left corner, which left it 52 pt low with the arrow off-centre.
-        let host = NSHostingController(rootView: picker)
-        host.sizingOptions = []
-        host.preferredContentSize = NSSize(width: 272, height: 272)
-        popover.contentViewController = host
-        popover.contentSize = NSSize(width: 272, height: 272)
-        guard let content = anchor.window?.contentView else { return }
-        var rect = anchor.convert((anchor as? SpaceHeaderView)?.iconRect ?? anchor.bounds, to: content)
-        // From the dock (#339) Arc opens it above the bar, its arrow pointing down at the icon.
-        if anchor is SpaceCellView {
-            popover.show(relativeTo: rect, of: content, preferredEdge: content.isFlipped ? .minY : .maxY)
-            return
-        }
-        // Arc's arrow tip sits a point higher, at the icon box's last row.
-        rect.origin.y += content.isFlipped ? -1 : 1
-        popover.show(relativeTo: rect, of: content, preferredEdge: content.isFlipped ? .maxY : .minY)
-    }
-
     /// Edit Theme Color…: Arc's editor in a panel against the sidebar's edge at the window's top.
     /// Every change shows in the space at once but is written only when the editor closes, as in
     /// Arc (offline Arc 1.171: StorableSidebar.json changed on Escape, not on the swatch press).

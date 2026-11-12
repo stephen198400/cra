@@ -31,7 +31,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHANGED_MIN = 70.0
 CORE_MIN = 85.0
-NOT_HARNESSES = {"scripts/test-update.sh", "scripts/test.sh"}
+NOT_HARNESSES = {"scripts/test.sh"}
 
 
 def run(cmd, **kw):

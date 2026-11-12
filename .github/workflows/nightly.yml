@@ -83,7 +83,7 @@ jobs:
           CRA_TEST_SWIFTC_FLAGS: -sanitize=${{ matrix.sanitizer }}
         run: |
           for t in scripts/test-*.sh Tests/test-*.sh; do
-            case "$t" in scripts/test-update.sh|scripts/test.sh) continue ;; esac
+            case "$t" in scripts/test.sh) continue ;; esac
             echo "== $t"; bash "$t"
           done
 

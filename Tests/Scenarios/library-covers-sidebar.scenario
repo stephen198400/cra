@@ -1,5 +1,5 @@
-# The Library takes the sidebar's place: the favorites under it get no pointer (their tooltips and
-# Gmail/Calendar preview cards showed through, 8 Nov 2026), and come back when it closes.
+# The Library takes the sidebar's place: the favorites under it get no pointer (their tooltips
+# showed through, 8 Nov 2026), and come back when it closes.
 budget rss=700 stalls50=10
 from://open?url=${PAGE}?n=fav
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)

@@ -2,7 +2,7 @@ import CraCore
 import Foundation
 import Testing
 
-/// Arc's tidy titles (per-site rules, always on) and Tidy Tab Titles (the model's names on pin).
+/// Arc's tidy titles: per-site rules, always on.
 struct TidyTitleRulesTests {
     let rules = TidyTitleRules.arc
 
@@ -41,24 +41,5 @@ struct TidyTitleRulesTests {
         let json = #"{"a.com": {"siteName": "A", "rules": [{"title": {"removingPattern": ".*"}}]}}"#
         let r = TidyTitleRules(sites: try JSONDecoder().decode([String: TidyTitleRules.Site].self, from: Data(json.utf8)))
         #expect(r.tidy("Anything", url: "https://a.com/") == "Anything")
-    }
-}
-
-struct TidyTitlesTests {
-    @Test func promptGivesExamplesTitleAndSite() {
-        let p = TidyTitles.prompt(title: "Foundation Models | Apple Developer Documentation", url: "https://developer.apple.com/documentation/foundationmodels")
-        #expect(p.hasPrefix("Examples:\n\"IT Career Paths - IT General - Confluence\" (atlassian.net) → IT Career Paths"))
-        #expect(p.hasSuffix("Rename this tab: \"Foundation Models | Apple Developer Documentation\" (developer.apple.com)"))
-        #expect(TidyTitles.prompt(title: "x", url: "https://www.bbc.com/").hasSuffix("(bbc.com)"))
-    }
-
-    @Test func cleanKeepsShorterNames() {
-        #expect(TidyTitles.clean("\"Climate News\"", shown: "Climate - BBC News") == "Climate News")
-        #expect(TidyTitles.clean("  Foundation   Models.\nextra", shown: "Foundation Models | Apple Developer Documentation") == "Foundation Models")
-        // Nothing to gain: empty, the same, or no shorter.
-        #expect(TidyTitles.clean("", shown: "Jupiter") == nil)
-        #expect(TidyTitles.clean("jupiter", shown: "Jupiter") == nil)
-        #expect(TidyTitles.clean("Jupiter the planet", shown: "Jupiter") == nil)
-        #expect(TidyTitles.clean(String(repeating: "a", count: 41), shown: String(repeating: "b", count: 90)) == nil)
     }
 }

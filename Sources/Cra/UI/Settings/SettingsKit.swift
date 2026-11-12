@@ -77,7 +77,7 @@ struct SettingsFootnote: View {
     }
 }
 
-/// The card around picture rows (Arc's Max card): a hairline border on a lighter fill, rows
+/// The card around setting rows (Arc's Max card): a hairline border on a lighter fill, rows
 /// split by hairlines.
 struct SettingsFeatureCard<Content: View>: View {
     @ViewBuilder let content: Content
@@ -93,56 +93,32 @@ struct SettingsFeatureCard<Content: View>: View {
     }
 }
 
-/// Arc frames each Max picture in white: 3 pt round an 88×56 tile with 5 pt corners.
-struct SettingsPictureFrame<Content: View>: View {
-    @ViewBuilder let content: Content
-    var body: some View {
-        content
-            .frame(width: 88, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-            .padding(3)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
-            .accessibilityHidden(true)
-    }
-}
-
-/// One setting as Arc's Max pane draws a feature: the picture of what it does, its name over a
-/// line saying what changes, the control on the right. Only settings that change how Cra looks
-/// get a picture; the rest are SettingsPlainRow and SettingsToggleRow. `below` holds what belongs to the setting
-/// under its description: a duration menu, a button, a narrower option.
-struct SettingsFeatureRow<Picture: View, Trailing: View, Below: View>: View {
+/// One setting as Arc's Max pane draws a feature: its name over a line saying what changes, the
+/// control on the right. `below` holds what belongs to the setting under its description: a
+/// duration menu, a button, a narrower option.
+struct SettingsFeatureRow<Trailing: View, Below: View>: View {
     let title: String
     let detail: Text
-    @ViewBuilder let picture: Picture
     @ViewBuilder let trailing: Trailing
     @ViewBuilder let below: Below
 
-    init(_ title: String, detail: Text, @ViewBuilder picture: () -> Picture,
-         @ViewBuilder trailing: () -> Trailing, @ViewBuilder below: () -> Below = { EmptyView() }) {
+    init(_ title: String, detail: Text, @ViewBuilder trailing: () -> Trailing,
+         @ViewBuilder below: () -> Below = { EmptyView() }) {
         self.title = title
         self.detail = detail
-        self.picture = picture()
         self.trailing = trailing()
         self.below = below()
     }
 
-    init(_ title: String, detail: String, @ViewBuilder picture: () -> Picture,
-         @ViewBuilder trailing: () -> Trailing, @ViewBuilder below: () -> Below = { EmptyView() }) {
-        self.init(title, detail: Text(detail), picture: picture, trailing: trailing, below: below)
-    }
-
-    private var hasPicture: Bool { Picture.self != EmptyView.self }
-
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            if hasPicture { SettingsPictureFrame { picture } }
-            VStack(alignment: .leading, spacing: hasPicture ? 4 : 2) {
-                Text(title).font(.system(size: hasPicture ? 14 : 13))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13))
                 detail
-                    .font(.system(size: hasPicture ? 12 : 11)).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 below
-                    .font(.system(size: hasPicture ? 12 : 11))
+                    .font(.system(size: 11))
                     .controlSize(.small)
                     .padding(.top, 2)
             }
@@ -150,12 +126,11 @@ struct SettingsFeatureRow<Picture: View, Trailing: View, Below: View>: View {
             trailing
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, hasPicture ? 10 : 9)
+        .padding(.vertical, 9)
     }
 }
 
-/// A setting that doesn't change how Cra looks: no picture, just its name, what it does and the
-/// control on the right.
+/// A setting whose control isn't a switch: its name, what it does and the control on the right.
 struct SettingsPlainRow<Trailing: View, Below: View>: View {
     let title: String
     let detail: String
@@ -171,11 +146,11 @@ struct SettingsPlainRow<Trailing: View, Below: View>: View {
     }
 
     var body: some View {
-        SettingsFeatureRow(title, detail: detail, picture: { EmptyView() }, trailing: { trailing }, below: { below })
+        SettingsFeatureRow(title, detail: Text(detail), trailing: { trailing }, below: { below })
     }
 }
 
-/// A plain row whose control is a switch. Off and greyed while `enabled` is false.
+/// A row whose control is a switch. Off and greyed while `enabled` is false.
 struct SettingsToggleRow<Below: View>: View {
     let title: String
     let detail: String
@@ -193,46 +168,12 @@ struct SettingsToggleRow<Below: View>: View {
     }
 
     var body: some View {
-        SettingsSwitchRow(title, detail: detail, isOn: $isOn, enabled: enabled, picture: { EmptyView() }, below: { below })
-    }
-}
-
-/// A picture row whose control is a switch. Off and greyed while `enabled` is false.
-struct SettingsSwitchRow<Picture: View, Below: View>: View {
-    let title: String
-    let detail: Text
-    @Binding var isOn: Bool
-    var enabled = true
-    @ViewBuilder let picture: Picture
-    @ViewBuilder let below: Below
-
-    init(_ title: String, detail: Text, isOn: Binding<Bool>, enabled: Bool = true,
-         @ViewBuilder picture: () -> Picture, @ViewBuilder below: () -> Below = { EmptyView() }) {
-        self.title = title
-        self.detail = detail
-        self._isOn = isOn
-        self.enabled = enabled
-        self.picture = picture()
-        self.below = below()
-    }
-
-    init(_ title: String, detail: String, isOn: Binding<Bool>, enabled: Bool = true,
-         @ViewBuilder picture: () -> Picture, @ViewBuilder below: () -> Below = { EmptyView() }) {
-        self.init(title, detail: Text(detail), isOn: isOn, enabled: enabled, picture: picture, below: below)
-    }
-
-    var body: some View {
-        SettingsFeatureRow(title, detail: detail, picture: { picture }, trailing: {
+        SettingsFeatureRow(title, detail: Text(detail), trailing: {
             Toggle(title, isOn: Binding(get: { isOn && enabled }, set: { isOn = $0 }))
                 .toggleStyle(.switch).labelsHidden()
                 .disabled(!enabled)
         }, below: { below })
     }
-}
-
-extension View {
-    /// A plain card row under picture rows starts where their text does (10 + 94 + 14 pt in).
-    func settingsTextColumn() -> some View { padding(.leading, 94 + 14) }
 }
 
 /// A menu under a setting's description: "After: [12 hours]".

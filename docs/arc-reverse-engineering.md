@@ -242,7 +242,7 @@ Legend: [O] observed in shipped artifact or data file, [I] inference, [U] unknow
   `window` node per window (open tabs; closed windows have deleted_at). `tabs`, `tab_groups(title, icon JSON, behavior)`,
   `content_panes(custom_title, variant web_content | new_tab_page)`, `web_contents(content_pane_id, url, title)`; a split
   is a tab with several content panes. Dates are GRDB text in UTC. Recent edits often sit only in tabs.db-wal.
-  Cra reads it in Services/Import/DiaSidebar.swift.
+  Cra read it in Services/Import/DiaSidebar.swift (From removed the import; only bookmark import remains).
 
 ## Other observed features (not in Cra's first scope)
 - Little Arc (LittleBrowser), Peek, Easels, Boosts, split view, hover cards, site control center, sidebar banners,
@@ -1500,8 +1500,9 @@ Static only: strings and `__swift5_fieldmd` of `Dia.app/Contents/MacOS/Dia`, art
 
 ## Dia onboarding steps and multi-browser import (Dia 1.54.2, 25 Oct 2026)
 
-Source of the full first-run flow (`ImportFlow`, `OnboardingSteps`) and the importers
-(`BrowserSources`, `ChromiumImporter`, `FirefoxImporter`, `SafariImporter`, `CredentialImport`).
+Source of Cra's first-run flow (`ImportFlow`, `OnboardingSteps`) and importers (`BrowserSources`,
+`ChromiumImporter`, `FirefoxImporter`, `SafariImporter`, `CredentialImport`), all removed in From,
+which keeps only From ▸ Import Bookmarks… (CraCore `BookmarkImport`).
 Static evidence: `__swift5_fieldmd`/`__swift5_reflstr` of `Dia.app/Contents/MacOS/Dia` (parser in
 scratch `fieldmd.py`), its localization strings, and the SQLite/Keychain layout of installed
 browsers on this Mac read read-only. Dia's onboarding itself was not re-run past the browser step.

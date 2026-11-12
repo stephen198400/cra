@@ -33,8 +33,6 @@ final class TabRuntime {
     var hiddenFrameReleasedFor: Date?
     /// When the page last started or stopped playing sound; tab sleeping waits as long after it.
     var audibleAt: Date?
-    /// Immediate sound state for music notes; the speaker's audible state has a 2 s hold.
-    var soundPlaying = false
     /// Tab sleeping discarded the page in place (Cra.discard): Chromium keeps its history and
     /// scroll position and loads it again when the tab is shown.
     var discarded = false
@@ -603,7 +601,6 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
                 }
                 guard discarded else { return self.unload(id) }
                 rt.discarded = true
-                rt.soundPlaying = false
                 rt.sleepRefusal = nil
                 // Its page is gone, as a closed one's is: the card would play nothing (#275).
                 self.nowPlaying?.remove(id)
@@ -1015,15 +1012,13 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
         delegate?.browserManagerDidUpdate(id)
     }
 
-    /// Music notes follow sound immediately; the speaker and player cards keep the audible hold.
-    /// A card paused then resumed within that hold also needs the immediate start event.
+    /// The page's sound starting or stopping as it happens, before the 2 s hold `didChangeAudible`
+    /// waits out. Sound starting marks the tab's card playing: paused from the card and played
+    /// again on the page within the hold, the tab never went quiet, so `didChangeAudible` doesn't
+    /// come. Cards come and go only with the held state.
     func browser(_ browser: CraBrowser, didChangeSoundPlaying playing: Bool) {
-        guard let id = tabID(of: browser), let rt = runtimes[id] else { return }
-        let changed = rt.soundPlaying != playing
-        rt.soundPlaying = playing
-        let resumesCard = playing && nowPlaying?.entries.contains(where: { $0.id == id && !$0.playing }) == true
-        if resumesCard { nowPlaying?.update(id) { $0.playing = true } }
-        guard changed || resumesCard else { return }
+        guard playing, let id = tabID(of: browser), nowPlaying?.entries.contains(where: { $0.id == id && !$0.playing }) == true else { return }
+        nowPlaying?.update(id) { $0.playing = true }
         delegate?.browserManagerDidUpdate(id)
     }
 
@@ -1214,7 +1209,6 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
         store.updateTab(id, url: url)
         // A page's own address change (pushState) adds an entry without a load.
         scheduleHistorySave(id)
-        if !browser.isIncognito { LiveFolderManager.shared.pageChanged(tab: id, to: url) }
         delegate?.browserManagerDidUpdate(id)
     }
 
@@ -1573,7 +1567,7 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
     }
 
     func browser(_ browser: CraBrowser, didUpdateDownload download: CraDownloadInfo) {
-        // The delegate reads it during the call: Tidy Downloads names the file from that tab.
+        // The delegate reads it during the call: the download goes under that tab's profile.
         downloadSourceTab = tabID(of: browser)
         delegate?.browserManager(download: download)
         downloadSourceTab = nil

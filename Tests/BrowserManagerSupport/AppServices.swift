@@ -108,10 +108,6 @@ enum EmbeddedPages {
     static func isHost(_ window: NSWindow) -> Bool { viewsByHost[ObjectIdentifier(window)] != nil }
     static func pageViews(of window: NSWindow) -> [NSView]? { viewsByHost[ObjectIdentifier(window)] }
 }
-final class LiveFolderManager {
-    static let shared = LiveFolderManager()
-    func pageChanged(tab: UUID, to url: String) {}
-}
 struct PictureInPictureActions {
     var backToTab: () -> Void
     var togglePlayback: () -> Void

@@ -80,19 +80,17 @@ struct SettingsSyncTests {
         s.httpsOnly = true
         s.searchEngine = .duckduckgo
         s.setDownloadLocation(DownloadLocation(folder: "/Volumes/Work"), profileID: nil)
-        s.hasSeenImportPrompt = true
         s.perfRecording = !AppSettings.perfRecordingDefault
         s.perfHidesSiteNames = true
         let synced = s.forSync()
         #expect(synced.httpsOnly && synced.searchEngine == .duckduckgo)
-        #expect(synced.downloadLocations.isEmpty && !synced.hasSeenImportPrompt)
+        #expect(synced.downloadLocations.isEmpty)
         #expect(synced.perfRecording == AppSettings.perfRecordingDefault && !synced.perfHidesSiteNames)
     }
 
     @Test func applyingSyncedSettingsKeepsThisMacsOwn() {
         var mine = AppSettings()
         mine.setDownloadLocation(DownloadLocation(askWhereToSave: true), profileID: nil)
-        mine.hasSeenImportPrompt = true
         mine.chromeEngine = false
         mine.perfHidesSiteNames = true
         var remote = AppSettings()
@@ -101,7 +99,7 @@ struct SettingsSyncTests {
         remote.toolbarDefaultMigrated = false
         let merged = mine.applyingSynced(remote)
         #expect(merged.httpsOnly && merged.autoArchive == .sevenDays)
-        #expect(merged.downloadLocation(profileID: nil).askWhereToSave && merged.hasSeenImportPrompt)
+        #expect(merged.downloadLocation(profileID: nil).askWhereToSave)
         #expect(!merged.chromeEngine && merged.perfHidesSiteNames)
         #expect(merged.toolbarDefaultMigrated, "a migration never runs again because of a synced file")
     }

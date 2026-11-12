@@ -534,7 +534,7 @@ final class SuggestionEngine {
             }
         }
         if currentTabID != nil {
-            for f in store.children(of: store.focusedSpace.pinnedContainerID) where f.isFolder && !f.isLiveFolder {
+            for f in store.children(of: store.focusedSpace.pinnedContainerID) where f.isFolder {
                 let name = f.title ?? "Folder"
                 let m = nameScore("Move Tab to Folder \(name)", triggers: [name.lowercased()])
                 if m > 0 {

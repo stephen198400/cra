@@ -3,7 +3,7 @@ import AppKit
 /// Chrome plays a download-started animation when a download begins: a 64 pt round
 /// download glyph that fades in over the page and flies to the toolbar's download button
 /// (DownloadBubbleStartedAnimationViews, 500 ms). Cra keeps Chrome's toolbar hidden, so
-/// the glyph flies to nothing, and Cra shows its own animation like Arc. Chrome has no
+/// the glyph flies to nothing; From shows no download animation at all. Chrome has no
 /// switch for it (only reduced motion), so its window is ordered out as soon as it
 /// appears: a views popup parented to the page (a child window), created with
 /// accept_events = false (ignores the mouse), sized 2 × kIconBackgroundRadius 32.

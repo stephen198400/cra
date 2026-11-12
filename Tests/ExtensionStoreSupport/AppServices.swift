@@ -12,14 +12,6 @@ enum AppPaths {
     static func file(_ name: String) -> URL { supportDir.appendingPathComponent(name) }
 }
 
-struct ImportSource {
-    let id: String
-    var dataDir: URL { AppPaths.supportDir.appendingPathComponent("source-\(id)", isDirectory: true) }
-    static let arc = ImportSource(id: "arc")
-    static let dia = ImportSource(id: "dia")
-    static let allCases: [ImportSource] = []
-}
-
 enum CraLog {
     static func note(_ message: String) {}
 }

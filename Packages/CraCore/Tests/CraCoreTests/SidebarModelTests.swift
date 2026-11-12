@@ -27,10 +27,8 @@ struct SidebarModelTests {
         let tab = SidebarItem.tab("https://example.com", parent: parent)
         #expect(tab.isTab && !tab.isFolder && !tab.isSplit && tab.split == nil && tab.container == nil && tab.parentID == parent)
         #expect(tab.tab?.faviconKey == "example.com" && tab.tab?.savedURL == "https://example.com")
-        var folder = SidebarItem.folder("F", parent: nil)
-        #expect(folder.isFolder && !folder.isLiveFolder && folder.tab == nil && !folder.isEmptyTab)
-        folder.liveFolder = LiveFolderData()
-        #expect(folder.isLiveFolder)
+        let folder = SidebarItem.folder("F", parent: nil)
+        #expect(folder.isFolder && folder.tab == nil && !folder.isEmptyTab)
         let split = SidebarItem.split(parent: nil)
         #expect(split.isSplit && split.split == SplitData())
         let id = UUID()
@@ -46,8 +44,8 @@ struct SidebarModelTests {
     }
 
     /// The line under a tab's title (GitHub #88, #139): Arc's TabCellState.subtitle is a
-    /// developer-mode site's host (and port), else a pull request's author. Leaving a pinned
-    /// page shows none.
+    /// developer-mode site's host (and port), else a live folder pull request's author, which From
+    /// doesn't have. Leaving a pinned page shows none.
     @Test(.bug("https://github.com/VictorKildahl/cra/issues/88"), .bug("https://github.com/VictorKildahl/cra/issues/139"))
     func sidebarSubtitle() {
         var tab = TabData(url: "https://www.youtube.com/watch?v=1", title: "Video")
@@ -56,10 +54,7 @@ struct SidebarModelTests {
         tab.savedURL = "https://example.com/"
         #expect(tab.sidebarSubtitle(developerMode: false) == nil, "a pinned tab that left its site shows no host")
         #expect(TabData(url: "http://127.0.0.1:8080/a").sidebarSubtitle(developerMode: true) == "127.0.0.1:8080", "with its port")
-        var pull = TabData(url: "https://github.com/o/r/pull/1")
-        pull.liveSubtitle = "octocat"
-        #expect(pull.sidebarSubtitle(developerMode: false) == "octocat")
-        #expect(pull.sidebarSubtitle(developerMode: true) == "github.com", "developer mode comes first in Arc")
+        #expect(TabData(url: "https://github.com/o/r/pull/1").sidebarSubtitle(developerMode: false) == nil)
         #expect(TabData(url: "notes").sidebarSubtitle(developerMode: true) == nil, "no host, no line")
     }
 

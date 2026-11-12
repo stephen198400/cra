@@ -65,21 +65,6 @@ final class KeyBindingRegistry {
     private(set) var actions: [KeyAction]
     @ObservationIgnored private let overridesFile = JSONStore<[String: [Shortcut]]>("keybindings.json")
     @ObservationIgnored private var overrides: [String: [Shortcut]]
-    @ObservationIgnored private var pluginActions: [KeyAction] = []
-
-    private var defaultActions: [KeyAction] {
-        var defaults = Self.defaults
-        let index = defaults.firstIndex { $0.id == "newFolder" }.map { $0 + 1 } ?? defaults.endIndex
-        defaults.insert(contentsOf: pluginActions, at: index)
-        return defaults
-    }
-
-    func setPluginActions(_ values: [KeyAction]) {
-        pluginActions = values
-        actions = defaultActions
-        apply()
-        NotificationCenter.default.post(name: .craKeyBindingsChanged, object: nil)
-    }
 
     init() {
         actions = KeyBindingRegistry.defaults
@@ -107,7 +92,7 @@ final class KeyBindingRegistry {
     func resetShortcuts(for id: String) {
         overrides[id] = nil
         overridesFile.save(overrides)
-        if let d = defaultActions.first(where: { $0.id == id }), let i = actions.firstIndex(where: { $0.id == id }) {
+        if let d = Self.defaults.first(where: { $0.id == id }), let i = actions.firstIndex(where: { $0.id == id }) {
             actions[i].shortcuts = d.shortcuts
         }
         NotificationCenter.default.post(name: .craKeyBindingsChanged, object: nil)
@@ -116,8 +101,7 @@ final class KeyBindingRegistry {
     /// keybindings.json was written by another Mac's bundle (SettingsSyncService): read it again.
     func reloadOverrides() {
         overrides = overridesFile.load(or: { [:] })
-        // With the plugins' commands: the built-in list alone would drop New GitHub Live Folder and the rest.
-        actions = defaultActions
+        actions = Self.defaults
         apply()
         NotificationCenter.default.post(name: .craKeyBindingsChanged, object: nil)
     }
@@ -125,7 +109,7 @@ final class KeyBindingRegistry {
     func resetOverrides() {
         overrides = [:]
         overridesFile.saveNow(overrides)
-        actions = defaultActions
+        actions = Self.defaults
         NotificationCenter.default.post(name: .craKeyBindingsChanged, object: nil)
     }
 
@@ -254,10 +238,6 @@ final class KeyBindingRegistry {
             KeyAction(id: "recentTabBackward", name: "Previous Recent Tab", section: .tabs, shortcuts: [Shortcut(Shortcut.tab, [.control, .shift])], inCommandBar: false),
             KeyAction(id: "clearToday", name: "Clear Today", section: .tabs, shortcuts: [Shortcut("k", cmdShift)], triggers: ["clear", "tidy"]),
             KeyAction(id: "favoriteTab", name: "Add to Favorites", section: .tabs, shortcuts: [], triggers: ["favorite", "top app"]),
-            // Arc's Join Meeting ⌃⌘J (Settings ▸ Shortcuts; the command bar's "Join next video conference"):
-            // the call from a Calendar favorite's Live Calendar.
-            KeyAction(id: "joinNextMeeting", name: "Join Meeting", section: .none, shortcuts: [Shortcut("j", [.control, .command])],
-                      triggers: ["join", "meeting", "video call", "join next video conference"]),
             KeyAction(id: "renameTab", name: "Rename Tab…", section: .tabs, shortcuts: [], triggers: ["rename"]),
             KeyAction(id: "duplicateTab", name: "Duplicate Tab", section: .tabs, shortcuts: [], triggers: ["duplicate"]),
             KeyAction(id: "resetTab", name: "Reset Pinned Tab", section: .tabs, shortcuts: [], triggers: ["reset", "home"]),
@@ -296,16 +276,13 @@ final class KeyBindingRegistry {
             KeyAction(id: "settings", name: "Settings…", section: .app, shortcuts: [Shortcut(",", cmd)], triggers: ["preferences", "settings"]),
             // Arc's app menu shows ⌘♡ beside it, a glyph no key types (see buildMenus).
             KeyAction(id: "setDefaultBrowser", name: "Set as Default Browser", section: .app, shortcuts: [], triggers: ["default browser"]),
-            KeyAction(id: "importData", name: "Import from Arc or Dia…", section: .app, shortcuts: [], triggers: ["import", "arc", "dia"]),
-            KeyAction(id: "rebuildArcProfiles", name: "Rebuild Profiles from Arc…", section: .app, shortcuts: [], triggers: ["profiles", "arc profiles"]),
+            KeyAction(id: "importData", name: "Import Bookmarks…", section: .app, shortcuts: [], triggers: ["import", "bookmarks"]),
             // Chrome's app menu item and key; Arc has neither, only Settings ▸ Profiles ▸ Clear Browsing Data.
             KeyAction(id: "clearBrowsingData", name: "Clear Browsing Data…", section: .app, shortcuts: [Shortcut(Shortcut.delete, cmdShift)],
                       triggers: ["clear history", "delete history", "clear browsing data", "delete browsing data"], symbol: "trash"),
             // Arc's Translate bubble item "Language Settings": Chromium's page, in the space's profile (#209).
             KeyAction(id: "languageSettings", name: "Language Settings", section: .app, shortcuts: [],
                       triggers: ["language", "languages", "preferred language", "accept language"], symbol: "globe"),
-            KeyAction(id: "checkForUpdates", name: "Check for Updates…", section: .app, shortcuts: [],
-                      triggers: ["update", "upgrade", "new version"], symbol: "arrow.down.circle"),
             // Arc: Help ▸ Essential Keyboard Shortcuts.
             KeyAction(id: "essentialShortcuts", name: "Essential Keyboard Shortcuts", section: .help, shortcuts: [],
                       triggers: ["shortcuts", "keyboard shortcuts", "hotkeys"], symbol: "keyboard"),

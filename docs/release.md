@@ -113,7 +113,6 @@ jobs on the same Apple silicon runner (Intel is cross-compiled) and a third job 
 |---|---|
 | `Cra.dmg` | `Cra-Intel.dmg` |
 | `Cra.zip` | `Cra-Intel.zip` |
-| `appcast.xml` | `appcast-intel.xml` |
 
 plus one `SHA256SUMS.txt` for all four archives. The names carry no version so
 `releases/latest/download/Cra.dmg` always resolves; the website's download buttons and
@@ -131,7 +130,7 @@ scripts/release.sh
 `scripts/release.sh` does this once per CPU (`CRA_ARCHS`, default `arm64 x86_64`): it runs
 `build.sh` (sign, innermost first, with the CEF entitlements), notarizes and staples the
 app, runs `package.sh` (zip, DMG with an Applications link, checksums), then notarizes and
-staples the DMG, checks it with `spctl` and writes that CPU's appcast. Both CPUs share one
+staples the DMG and checks it with `spctl`. Both CPUs share one
 build number. Without `CRA_SIGN_IDENTITY` it produces an ad-hoc build and skips notarization.
 
 `CRA_ARCH=x86_64 scripts/build.sh` builds the other CPU on its own: the host CPU keeps
@@ -160,10 +159,8 @@ Order matters because each signature seals what is inside it:
 
 1. every `.dylib` in `Chromium Embedded Framework.framework/Libraries`
 2. the framework itself
-3. Sparkle's `Autoupdate` and `Updater.app`, then `Sparkle.framework` (its XPC services are
-   removed: they are only for sandboxed apps)
-4. the five helper apps, each with `resources/CraHelper.entitlements`
-5. `Cra.app` with `resources/Cra.entitlements`
+3. the five helper apps, each with `resources/CraHelper.entitlements`
+4. `Cra.app` with `resources/Cra.entitlements`
 
 The entitlements are the hardened-runtime exceptions Chromium needs (JIT, unsigned
 executable memory, library validation off, dyld environment variables), plus camera,
@@ -266,31 +263,8 @@ a patch to its update and full-hash protocol.
 
 ## Updates
 
-Cra updates itself the way Arc does, with [Sparkle 2](https://sparkle-project.org)
-(`scripts/fetch-sparkle.sh` puts a pinned, checksummed release in `vendor/sparkle`). Every
-8 hours it reads `releases/latest/download/appcast.xml`, downloads a newer `Cra.zip` in
-the background, installs it when Cra quits, or restarts into it by itself once the user
-is away. Cra menu ▸ Check for Updates… and Settings ▸ Advanced ▸ "Automatically update Cra"
-are the controls. Details and Arc's original are in `docs/arc-reverse-engineering.md`
-("Software updates").
-
-- **Signing key.** Updates are accepted only when `Cra.zip` carries an EdDSA signature
-  matching `SUPublicEDKey` in `resources/Info.plist`. The private key is in the login
-  keychain of the Mac that made it (`vendor/sparkle/bin/generate_keys --account cra`,
-  made 26 Oct 2026) and in the `SPARKLE_PRIVATE_KEY` secret. Back it up
-  (`generate_keys --account cra -x <file>`): without it, installed copies can never be
-  updated again.
-- **Appcast.** `scripts/release.sh` ends with `scripts/appcast.sh`, which signs the final
-  `Cra.zip` and writes `build/dist/appcast.xml`; the workflow uploads it with the other
-  assets. Each archive holds one CPU's app, so Intel copies have their own feed:
-  `build.sh` points their `SUFeedURL` at `appcast-intel.xml`, which signs `Cra-Intel.zip`. `CRA_RELEASE_NOTES=<file.html>` adds release notes to the update window.
-- **Version numbers.** Sparkle compares `CFBundleVersion`, the build number `build.sh`
-  takes from the clock, so every release is newer than the last.
-- **Dev builds** have no feed (`build.sh` drops `SUFeedURL` unless `CRA_RELEASE=1`), so they
-  never replace themselves with a release. To test, run a copy with
-  `CRA_UPDATE_FEED=http://127.0.0.1:8889/appcast.xml` (and `CRA_UPDATE_IDLE_SECONDS=0` for
-  the automatic restart) against a local appcast made with `CRA_UPDATE_URL=… scripts/appcast.sh`.
-- Copies from before the updater (0.1.0, 0.1.1) update once by hand: rerun the install line.
+This fork has no updater: Sparkle, the appcast and the update feed were removed. Installed
+copies never check for or download a new version; rebuild from source to update.
 
 ## The Chromium engine (CEF)
 

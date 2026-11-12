@@ -4,7 +4,6 @@ import SwiftUI
 /// Callbacks the panes hand back to the app.
 struct SettingsActions {
     var importData: () -> Void = {}
-    var rebuildArcProfiles: () -> Void = {}
     var openURL: (String) -> Void = { _ in }
     /// A page in a space on that profile (nil is Default), e.g. its chrome://settings/languages.
     var openProfilePage: (String, UUID?) -> Void = { _, _ in }
@@ -14,10 +13,9 @@ struct SettingsActions {
 
 /// The panes in Dia's Settings sidebar (Dia 1.54.2: Account, Tabs, Privacy, Profiles, Skills,
 /// Apps, Shortcuts, Advanced). Cra has no account or AI skills/apps; General
-/// (system integration) and Extensions take rows instead. Max is Arc's Max pane, for the
-/// features Cra runs on the Mac's own Apple Intelligence model; Links is Arc's Links pane.
+/// (system integration) and Extensions take rows instead; Links is Arc's Links pane.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, tabs, links, max, privacy, profiles, extensions, plugins, shortcuts, performance, advanced
+    case general, tabs, links, privacy, profiles, extensions, shortcuts, performance, advanced
     var id: String { rawValue }
 
     var title: String {
@@ -25,11 +23,9 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .tabs: return "Tabs"
         case .links: return "Links"
-        case .max: return "Max"
         case .privacy: return "Privacy"
         case .profiles: return "Profiles"
         case .extensions: return "Extensions"
-        case .plugins: return "Plugins"
         case .shortcuts: return "Shortcuts"
         case .performance: return "Performance"
         case .advanced: return "Advanced"
@@ -42,12 +38,9 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .tabs: return "square.on.square"
         case .links: return "link"
-        // macOS 15.1 added Apple's mark; before it, sparkles.
-        case .max: return NSImage(systemSymbolName: "apple.intelligence", accessibilityDescription: nil) != nil ? "apple.intelligence" : "sparkles"
         case .privacy: return "hand.raised"
         case .profiles: return "person"
         case .extensions: return "puzzlepiece.extension"
-        case .plugins: return "folder.badge.gearshape"
         case .shortcuts: return "keyboard"
         case .performance: return "gauge.with.dots.needle.67percent"
         case .advanced: return "gearshape.2"
@@ -189,11 +182,9 @@ struct SettingsContent: View {
                 case .general: GeneralPane()
                 case .tabs: TabsPane()
                 case .links: LinksPane()
-                case .max: MaxPane()
                 case .privacy: PrivacyPane(actions: actions)
                 case .profiles: ProfilesPane(nav: nav, actions: actions)
                 case .extensions: ExtensionsPane(actions: actions)
-                case .plugins: PluginsPane()
                 case .shortcuts: ShortcutsPane()
                 case .performance: PerformancePane(nav: nav, actions: actions)
                 case .advanced: AdvancedPane(actions: actions)

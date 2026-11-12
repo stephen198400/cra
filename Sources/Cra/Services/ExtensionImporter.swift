@@ -1,64 +1,23 @@
 import AppKit
 import Foundation
 
-/// A Chrome extension installed in Arc or Dia, read from the profile's
-/// `Secure Preferences` (extensions.settings). Web Store installs keep their
-/// manifest `key`, so a copy loaded unpacked keeps the same extension ID.
+/// A Chrome extension installed in a Chromium profile, read from the profile's
+/// `Secure Preferences` (extensions.settings) or live from Chromium. Web Store installs keep
+/// their manifest `key`, so a copy loaded unpacked keeps the same extension ID. The name is from
+/// when this read other browsers' profiles for an import; it now reads only Cra's own.
 struct ImportableExtension: Identifiable {
     let id: String
     let name: String
     let version: String
     let folder: URL
-    /// Turned on in at least one of `profiles`.
     var isEnabled: Bool
     let icon: NSImage?
-    /// The source profile folders it is installed in, and whether it is on there (GitHub #131).
-    var profiles: [String: Bool] = [:]
-
-    /// Where Cra loads it: the profiles that have it on, else (picked though off) every one that has it.
-    var sourceProfiles: Set<String> {
-        let on = Set(profiles.filter(\.value).keys)
-        return on.isEmpty ? Set(profiles.keys) : on
-    }
 }
 
 enum ExtensionImporter {
     /// Chrome's Manifest::Location: 1 internal (Web Store), 4 unpacked. Component
     /// (5) and external installs belong to the browser itself and are skipped.
     private static let importableLocations: Set<Int> = [1, 4]
-
-    static func extensions(inBrowserSupportDir supportDir: URL) -> [ImportableExtension] {
-        extensions(inUserData: supportDir.appendingPathComponent("User Data", isDirectory: true))
-    }
-
-    /// Every profile under a Chromium "User Data" folder (Chrome, Brave, Edge… keep it at the top level),
-    /// one entry per extension with the profiles that have it.
-    static func extensions(inUserData userData: URL) -> [ImportableExtension] {
-        let profiles = ((try? FileManager.default.contentsOfDirectory(atPath: userData.path)) ?? [])
-            .filter { $0 == "Default" || $0.hasPrefix("Profile ") }.sorted()
-        var out: [ImportableExtension] = []
-        for profile in profiles {
-            let dir = userData.appendingPathComponent(profile, isDirectory: true)
-            for e in extensions(inProfile: dir) {
-                if let i = out.firstIndex(where: { $0.id == e.id }) {
-                    out[i].profiles[profile] = e.isEnabled
-                    out[i].isEnabled = out[i].isEnabled || e.isEnabled
-                } else {
-                    var e = e
-                    e.profiles = [profile: e.isEnabled]
-                    out.append(e)
-                }
-            }
-        }
-        return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
-
-    /// The profile's pinned extensions (Chromium's extensions.pinned_extensions), in toolbar order.
-    static func pinnedIDs(inProfile dir: URL) -> [String]? {
-        guard let data = try? Data(contentsOf: dir.appendingPathComponent("Preferences")),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return (json["extensions"] as? [String: Any])?["pinned_extensions"] as? [String]
-    }
 
     /// extensions.settings by extension ID, from the profile's files. Newer Chromium keeps
     /// extension state in Secure Preferences; older in Preferences.

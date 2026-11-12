@@ -10,11 +10,10 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @{{just_executable()}} --justfile {{quote(justfile())}} --list --unsorted
 
-# Downloads the pinned CEF and Sparkle into vendor/ (build does this too)
+# Downloads the pinned CEF into vendor/ (build does this too)
 [group('build')]
 fetch:
     scripts/fetch-cef.sh
-    scripts/fetch-sparkle.sh
 
 # Builds build/From.app; `debug` for a debug build
 [group('build')]
@@ -56,7 +55,7 @@ scenario name:
 coverage *args:
     scripts/coverage.py "$@"
 
-# The importer parsers on mutated fixtures, under AddressSanitizer
+# The Chromium file parsers (bookmark import, extension prefs) on mutated fixtures, under AddressSanitizer
 [group('test')]
 fuzz:
     scripts/fuzz.sh
@@ -66,22 +65,12 @@ fuzz:
 mutate *args:
     scripts/mutate.py "$@"
 
-# Sparkle end to end on a local feed, next to your Cra: [manual|idle|again|stop]
-[group('test')]
-test-update *args:
-    scripts/test-update.sh "$@"
-
 # Packages build/From.app (or the app given) into build/dist: DMG, zip, checksums
 [group('release')]
 package *args:
     scripts/package.sh "$@"
 
-# Writes build/dist/appcast.xml: [From.zip] [From.app] [release-notes.html]
-[group('release')]
-appcast *args:
-    scripts/appcast.sh "$@"
-
-# Build, sign, notarize, package and appcast as <version>; tags run this in CI
+# Build, sign, notarize and package as <version>; tags run this in CI
 [group('release')]
 release version:
     CRA_VERSION="$1" scripts/release.sh

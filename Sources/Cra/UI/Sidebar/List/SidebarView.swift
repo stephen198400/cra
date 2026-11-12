@@ -1,8 +1,8 @@
 import AppKit
 
 /// The whole left column in AppKit, laid out like Arc: traffic lights + sidebar toggle with the
-/// nav buttons at the right of the top row, the space pager (favorites, header, tab list), the
-/// update banner and the dock. The Library takes the column over while it is open.
+/// nav buttons at the right of the top row, the space pager (favorites, header, tab list) and the
+/// dock. The Library takes the column over while it is open.
 @MainActor
 final class SidebarView: NSView {
     private let store: SidebarStore
@@ -33,8 +33,6 @@ final class SidebarView: NSView {
     func debugURLFieldType(_ text: String, commit: Bool) -> Bool { topBar.debugURLFieldType(text, commit: commit) }
     private let pager: SpacePagerView
     private let player: NowPlayingTrayView
-    private let pagerMask = CALayer()
-    private let bannerHost = UpdateBannerView()
     private let dock: SpaceDockView
     private var libraryHost: LibraryView?
     /// The palette drawn now; the theme-shown scenario hook reads it (#155).
@@ -56,59 +54,11 @@ final class SidebarView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         pager.wantsLayer = true
-        pagerMask.backgroundColor = NSColor.black.cgColor
-        for v in [topBar, pager, player, bannerHost, dock] as [NSView] { tabs.addSubview(v) }
+        for v in [topBar, pager, player, dock] as [NSView] { tabs.addSubview(v) }
         addSubview(tabs)
         player.onCountChange = { [weak self] in self?.needsLayout = true }
         ui.observeLibraryReveal { [weak self] in self?.applyLibraryReveal() }
         observe()
-        observeRenameCard()
-    }
-
-    // MARK: Tidy Downloads' card
-
-    private var renameCard: DownloadRenameCard?
-
-    /// The card for a download this window renamed: in over the bin, out after 8 s or a click.
-    private func observeRenameCard() {
-        let window = ui.windowID
-        observeChanges(of: { TidyDownloadsService.shared.card.flatMap { $0.window == window ? $0 : nil } }) { [weak self] card in
-            self?.showRenameCard(card)
-        }
-    }
-
-    private func showRenameCard(_ mine: TidyDownloadsService.Rename?) {
-        guard mine?.id != renameCard?.rename.id else { return }
-        if let old = renameCard {
-            renameCard = nil
-            old.disappear { old.removeFromSuperview() }
-        }
-        guard let r = mine else { return }
-        let v = DownloadRenameCard(rename: r, colors: SidebarColors(palette))
-        let service = TidyDownloadsService.shared
-        let toast = actions.showToast
-        v.onClose = { service.dismiss() }
-        v.onHover = { service.hold($0) }
-        v.onOpen = { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: r.newPath)]) }
-        v.onRevert = {
-            let ok = service.revert(r) { _, _ in }
-            if ok { toast("Download name reverted!") }
-        }
-        // The downloads card would cover it: the rename points at the button instead.
-        topBar.closeDownloadsCard()
-        tabs.addSubview(v)
-        renameCard = v
-        layoutRenameCard()
-        v.appear()
-    }
-
-    /// Under the sidebar header's downloads button, the tail pointing up at it.
-    private func layoutRenameCard() {
-        guard let v = renameCard, let anchor = ui.downloadsAnchor, anchor.isDescendant(of: tabs) else { return }
-        let button = anchor.convert(anchor.bounds, to: tabs)
-        let w = tabs.bounds.width - 16
-        v.frame = NSRect(x: 8, y: button.maxY + 2, width: w, height: DownloadRenameCard.height)
-        v.tailX = button.midX - 8
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -116,11 +66,9 @@ final class SidebarView: NSView {
     override var isFlipped: Bool { true }
 
     private func observe() {
-        var bannerHeight: CGFloat = 0
         let (space, library) = withObservationTracking {
             let space = store.focusedSpace(window: ui.windowID)
             _ = SystemAppearance.shared.isDark
-            bannerHeight = UpdateBannerView.preferredHeight
             return (space, ui.libraryPage)
         } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
@@ -134,30 +82,12 @@ final class SidebarView: NSView {
         }
         if paletteChanged || palette.isDark != space.theme.palette.isDark {
             palette = space.theme.palette
-            let colors = SidebarColors(palette)
-            bannerHost.colors = colors
             let shown = space.theme.shown
-            bannerHost.themeColor = shown.accent ?? shown.colors.first
             player.setTheme(shown.accent ?? shown.colors.first, dark: palette.isDark)
             libraryHost?.palette = palette
         }
-        self.bannerHeight = bannerHeight
-        updatePagerMask()
         showLibrary(library)
         needsLayout = true
-    }
-
-    private var bannerHeight: CGFloat = 0
-
-    /// Clips the pager, leaving `MusicNotes.overhang` above the top favorites for notes to rise
-    /// under the URL field.
-    private func updatePagerMask() {
-        let over = MusicNotes.overhang
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        pagerMask.frame = NSRect(x: 0, y: -over, width: pager.bounds.width, height: pager.bounds.height + over)
-        CATransaction.commit()
-        if pager.layer?.mask !== pagerMask { pager.layer?.mask = pagerMask }
     }
 
     /// The Library takes over the column: in from a little to the left, out to the left past its
@@ -277,14 +207,11 @@ final class SidebarView: NSView {
         // Arc's list viewport ends 50 pt above the window bottom; the dock sits centred in that band.
         let dockH: CGFloat = 36
         dock.frame = NSRect(x: 10, y: b.height - 6 - dockH, width: b.width - 20, height: dockH)
-        let bannerTop = b.height - 6 - dockH - 8 - bannerHeight
-        bannerHost.frame = NSRect(x: 0, y: bannerTop, width: b.width, height: bannerHeight)
+        let listEnd = b.height - 6 - dockH - 8
         // The player rests where the list ends and takes that room from it; opened, it grows over the list.
-        player.frame = NSRect(x: 0, y: th, width: b.width, height: max(0, bannerTop - th))
-        let listBottom = bannerTop - NowPlayingMetrics.restHeight(cards: player.shownCount)
+        player.frame = NSRect(x: 0, y: th, width: b.width, height: max(0, listEnd - th))
+        let listBottom = listEnd - NowPlayingMetrics.restHeight(cards: player.shownCount)
         pager.frame = NSRect(x: 0, y: th, width: b.width, height: max(0, listBottom - th))
-        updatePagerMask()
-        if renameCard?.layer?.animationKeys()?.isEmpty ?? true { layoutRenameCard() }
     }
 }
 
@@ -345,7 +272,6 @@ final class SidebarTopBarView: NSView {
         layoutSubtreeIfNeeded()
         downloads.toggleCard()
     }
-    func closeDownloadsCard() { downloads.closeCard() }
     func debugDownloadsCard(_ op: String) -> String {
         layoutSubtreeIfNeeded()
         if op == "1" { downloads.openCard() } else if op == "0" { downloads.closeCard() }
@@ -382,7 +308,6 @@ final class SidebarTopBarView: NSView {
             return store.window(ui.windowID).sidebarVisible
         }
         addSubview(downloads)
-        ui.downloadsAnchor = downloads
         sync()
     }
 

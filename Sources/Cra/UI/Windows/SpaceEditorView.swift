@@ -23,7 +23,6 @@ struct SpaceEditorView: View {
     @State private var title: String
     /// Saved as it is: an untouched symbol or empty icon stays what it was (#205).
     @State private var icon: SpaceIcon
-    @State private var pickingIcon = false
     @State private var theme: SpaceTheme
     @State private var profile: SpaceProfileChoice
     @State private var newProfileName = ""
@@ -65,7 +64,7 @@ struct SpaceEditorView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     preview
                     HStack(spacing: 6) {
-                        iconButton
+                        iconTile
                         TextField("Name", text: $title).textFieldStyle(.roundedBorder)
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 4), count: 8), spacing: 4) {
@@ -119,30 +118,18 @@ struct SpaceEditorView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    /// Arc's icon picker (Emoji / Icon / Remove Icon) in a popover, as Change Space Icon… opens
-    /// it; the grid below keeps a few emoji one click away.
-    private var iconButton: some View {
-        Button { pickingIcon = true } label: {
-            Group {
-                if icon == .none {
-                    Image(systemName: "face.dashed").font(.system(size: 14)).foregroundStyle(.secondary)
-                } else {
-                    glyph(size: 16, color: .primary)
-                }
+    /// The space's icon; the grid below picks an emoji.
+    private var iconTile: some View {
+        Group {
+            if icon == .none {
+                Image(systemName: "face.dashed").font(.system(size: 14)).foregroundStyle(.secondary)
+            } else {
+                glyph(size: 16, color: .primary)
             }
-            .frame(width: 28, height: 22)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(pickingIcon ? 0.14 : 0.07)))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help("Change Icon")
-        .accessibilityLabel("Change Icon")
-        .popover(isPresented: $pickingIcon, arrowEdge: .bottom) {
-            SpaceIconPicker(current: icon.emoji, currentSymbol: icon.symbol,
-                            onPick: { icon = .emoji($0); pickingIcon = false },
-                            onPickSymbol: { icon = .symbol($0); pickingIcon = false },
-                            onRemove: { icon = .none; pickingIcon = false })
-        }
+        .frame(width: 28, height: 22)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.07)))
+        .accessibilityLabel("Icon")
     }
 
     /// The icon as the sidebar draws it: an emoji, or a symbol in the space's text colour.

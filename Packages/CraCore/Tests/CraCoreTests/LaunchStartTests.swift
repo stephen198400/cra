@@ -18,8 +18,6 @@ struct LaunchStartTests {
         (false, .opened, false),
         // A link from another app opens its own tab, and that is what the window shows.
         (true, .forLink, false),
-        // An update restart while the user was away carries the session on.
-        (true, .automaticUpdate, false),
         (true, .firstRun, false),
     ])
     func startsOnNewTab(enabled: Bool, launch: LaunchStart.Launch, expected: Bool) {
@@ -27,9 +25,8 @@ struct LaunchStartTests {
     }
 
     @Test func launchKind() {
-        #expect(LaunchStart.launch(firstRun: false, automaticUpdate: false, withLinks: false) == .opened)
-        #expect(LaunchStart.launch(firstRun: false, automaticUpdate: false, withLinks: true) == .forLink)
-        #expect(LaunchStart.launch(firstRun: false, automaticUpdate: true, withLinks: false) == .automaticUpdate)
-        #expect(LaunchStart.launch(firstRun: true, automaticUpdate: false, withLinks: true) == .firstRun)
+        #expect(LaunchStart.launch(firstRun: false, withLinks: false) == .opened)
+        #expect(LaunchStart.launch(firstRun: false, withLinks: true) == .forLink)
+        #expect(LaunchStart.launch(firstRun: true, withLinks: true) == .firstRun)
     }
 }

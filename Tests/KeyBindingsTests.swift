@@ -1,7 +1,7 @@
 import AppKit
 
-/// The command list KeyBindingRegistry keeps: the built-in actions, the live folder plugins' commands
-/// after New Folder, and the user's shortcuts on both, through every way the list is rebuilt.
+/// The command list KeyBindingRegistry keeps: the built-in actions and the user's shortcuts on them,
+/// through every way the list is rebuilt.
 @main
 enum KeyBindingsTests {
     static var failures = 0
@@ -21,35 +21,25 @@ enum KeyBindingsTests {
         expect(registry.action("toggleBookmark")?.shortcuts == [Shortcut("d", [.command])], "⌘D is Bookmark This Page")
         expect(registry.action("pinTab")?.shortcuts == [Shortcut("d", [.command, .shift])], "⇧⌘D is Pin/Unpin Tab")
         expect(registry.action("toggleToolbar") == nil, "no Hide Toolbar command")
-        let github = KeyAction(id: "newGitHubLiveFolder", name: "New GitHub Live Folder", section: .file, shortcuts: [], triggers: ["github"])
-        let jira = KeyAction(id: "liveFolderPlugin:cra.jira", name: "New Jira Live Folder", section: .file, shortcuts: [], triggers: ["jira"])
-        registry.setPluginActions([github, jira])
-        let ids = registry.actions.map(\.id)
-        expect(registry.actions.count == builtIn + 2, "the plugins' commands join the list")
-        if let folder = ids.firstIndex(of: "newFolder") {
-            expect(Array(ids[(folder + 1)...(folder + 2)]) == [github.id, jira.id], "right after New Folder, in the plugins' order")
-        } else { expect(false, "New Folder is a built-in action") }
-
+        let id = "newFolder"
         let chord = Shortcut("j", [.command, .option])
-        registry.setShortcuts([chord], for: jira.id)
-        expect(registry.action(jira.id)?.shortcuts == [chord], "a plugin command takes a shortcut")
+        registry.setShortcuts([chord], for: id)
+        expect(registry.action(id)?.shortcuts == [chord], "a command takes a shortcut")
 
-        // keybindings.json written by another Mac (settings sync): the plugins' commands stay, with
-        // the shortcuts that file gives them.
+        // keybindings.json written by another Mac (settings sync): the shortcuts that file gives.
         let synced = Shortcut("k", [.command, .option])
         let file = URL(fileURLWithPath: ProcessInfo.processInfo.environment["CRA_DATA_DIR"]!).appendingPathComponent("keybindings.json")
-        try! JSONEncoder().encode([jira.id: [synced]]).write(to: file)
+        try! JSONEncoder().encode([id: [synced]]).write(to: file)
         registry.reloadOverrides()
-        expect(registry.action(github.id) != nil && registry.action(jira.id) != nil, "a synced keybindings.json keeps the plugins' commands")
-        expect(registry.action(jira.id)?.shortcuts == [synced], "and their shortcuts from the synced file")
+        expect(registry.actions.count == builtIn, "a synced keybindings.json keeps the list")
+        expect(registry.action(id)?.shortcuts == [synced], "and its shortcuts come from the synced file")
 
-        registry.resetShortcuts(for: jira.id)
-        expect(registry.action(jira.id)?.shortcuts == [], "a reset command goes back to no shortcut")
+        let builtInShortcuts = KeyBindingRegistry.defaults.first { $0.id == id }?.shortcuts
+        registry.resetShortcuts(for: id)
+        expect(registry.action(id)?.shortcuts == builtInShortcuts, "a reset command goes back to its own shortcut")
+        registry.setShortcuts([chord], for: id)
         registry.resetOverrides()
-        expect(registry.action(github.id) != nil, "Reset All keeps the plugins' commands")
-
-        registry.setPluginActions([])
-        expect(registry.actions.count == builtIn && registry.action(github.id) == nil, "a disabled plugin's command goes")
+        expect(registry.action(id)?.shortcuts == builtInShortcuts && registry.actions.count == builtIn, "Reset All restores the list")
 
         print("Key bindings: \(checks) checks, \(failures) failed")
         exit(failures == 0 ? 0 : 1)

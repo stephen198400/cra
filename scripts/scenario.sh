@@ -29,25 +29,20 @@
 #   reject-log <regex>          no such line logged so far
 #   snapshot <View[,n]> <name>  the nth visible view of that class drawn to PNG and compared with
 #                               Tests/Snapshots/<name>.png (CRA_SNAPSHOT_RECORD=1 records it)
-#   fresh                       no seeded settings: onboarding shows, as on a new Mac
+#   fresh                       no seeded settings, as on a new Mac
 #   seed <file> <json>          that data-folder file before launch (a seeded settings.json
 #                               replaces the default one)
 #   env <NAME=value>            passed to Cra
 #   arg <--switch=value>        on Cra's command line, for Chromium (the first launch only: a
 #                               relaunch drops it)
 #   extension <folder>          copied into the data folder's Extensions/ before launch, as an
-#                               import leaves an extension
+#                               import from an older version left an extension
 #   home                        a throwaway home folder, so downloads stay out of ~/Downloads
-#   crash-report <file>         copied into the throwaway home's Library/Logs/DiagnosticReports
-#                               before launch, as macOS leaves one (needs home)
 #   requires screen
 #   port <n>                    serve ${PAGE} on a fixed port (snapshots show the address)
-# ${FIXTURES}, ${ORIGIN} (that server's http://127.0.0.1:<port>, which also answers a POST with 204,
-# logs it to server.log and keeps its body in posts/), ${PAGE} (Tests/Fixtures/Pages/page.html from a local server, so it has a host
+# ${FIXTURES}, ${ORIGIN} (that server's http://127.0.0.1:<port>), ${PAGE} (Tests/Fixtures/Pages/page.html from a local server, so it has a host
 # for developer mode and tab sleep), ${WEBKIT} (that server as http://localhost:<port>, a host the
-# run treats as a DRM service, so its pages open in WebKit), ${MUSIC} (that server as
-# http://nts.live:<port>, a recognized music host, for a scenario whose `arg` maps the name to
-# 127.0.0.1), ${EXTENSION_ID} (Tests/Fixtures/Extension) and
+# run treats as a DRM service, so its pages open in WebKit), ${EXTENSION_ID} (Tests/Fixtures/Extension) and
 # ${SIDE_PANEL_EXTENSION_ID} (Tests/Fixtures/SidePanelExtension) and ${DOWNLOAD_EXTENSION_ID}
 # (Tests/Fixtures/DownloadExtension) and ${WEB_STORE_COPY_ID} (Tests/Fixtures/WebStoreCopy) and
 # ${TABS_CREATE_EXTENSION_ID} (Tests/Fixtures/TabsCreateExtension) expand,
@@ -102,9 +97,9 @@ if grep -q '^home$' "$FILE"; then
   mkdir -p "$DATA/home/Downloads"
   app_env+=(CFFIXED_USER_HOME="$DATA/home")
 fi
-# Past onboarding, and nothing taken from this Mac's Arc (its toolbar default) unless asked.
+# Nothing taken from this Mac's Arc (its toolbar default) unless asked.
 if ! grep -q '^fresh' "$FILE" && [ ! -f "$DATA/settings.json" ]; then
-  echo '{"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false}' > "$DATA/settings.json"
+  echo '{"toolbarDefaultMigrated": true, "showToolbar": false}' > "$DATA/settings.json"
 fi
 # ${PAGE} is on 127.0.0.1, which starts in Developer Mode as in Arc (#228). Runs start with it
 # turned off, as after ⌃D, so pages show the normal bar; a seeded settings.json that names
@@ -134,25 +129,14 @@ FIXED_PORT=$(sed -n 's/^port \([0-9]*\).*/\1/p' "$FILE" | head -1)
 # Not `python3 -m http.server`: it looks up 127.0.0.1's name before it says its port, and on a CI
 # runner that lookup outlasted the wait for every scenario after the first (nightly, 3–6 Nov).
 python3 -I -u -c '
-import functools, http.server, os, socketserver, sys
+import functools, http.server, socketserver, sys
 class Server(http.server.ThreadingHTTPServer):
     def server_bind(self):
         socketserver.TCPServer.server_bind(self)
         self.server_name, self.server_port = "127.0.0.1", self.server_address[1]
-class Handler(http.server.SimpleHTTPRequestHandler):
-    # Settings ▸ Privacy sharing posts here under CRA_SHARING_ENDPOINT=${ORIGIN}.
-    def do_POST(self):
-        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        kind = self.headers.get("Content-Type")
-        print(f"POST {self.path} {len(body)} bytes {kind}", flush=True)
-        os.makedirs(sys.argv[3], exist_ok=True)
-        name = self.path.strip("/").replace("/", "-")
-        open(os.path.join(sys.argv[3], f"{name}-{len(os.listdir(sys.argv[3])) + 1}.json"), "wb").write(body)
-        self.send_response(204)
-        self.end_headers()
-s = Server(("127.0.0.1", int(sys.argv[2])), functools.partial(Handler, directory=sys.argv[1]))
+s = Server(("127.0.0.1", int(sys.argv[2])), functools.partial(http.server.SimpleHTTPRequestHandler, directory=sys.argv[1]))
 print(f"Serving HTTP on 127.0.0.1 port {s.server_address[1]}", flush=True)
-s.serve_forever()' "$FIXTURES/Pages" "${FIXED_PORT:-0}" "$OUT/posts" >"$OUT/server.log" 2>&1 &
+s.serve_forever()' "$FIXTURES/Pages" "${FIXED_PORT:-0}" >"$OUT/server.log" 2>&1 &
 SERVER=$!
 disown "$SERVER"  # killed at the end without a "Terminated" line
 for _ in $(seq 1 300); do PORT=$(sed -n 's/.*port \([0-9]*\).*/\1/p' "$OUT/server.log" | head -1); [ -n "$PORT" ] && break; sleep 0.1; done
@@ -161,9 +145,6 @@ ORIGIN="http://127.0.0.1:$PORT"
 # The same server under another host, which the run lists as a DRM service (CRA_WEBKIT_HOSTS):
 # its pages open in WebKit, the way Spotify and Netflix do (ProtectedMediaSites).
 WEBKIT="http://localhost:${PORT}"
-# A music host recognized by MusicNotes, mapped to this Mac by the scenario:
-#   arg --host-resolver-rules=MAP nts.live 127.0.0.1
-MUSIC="http://nts.live:${PORT}"
 # A port that accepts connections (the kernel's backlog does) and never answers one.
 python3 -I -u -c '
 import socket, time
@@ -199,17 +180,16 @@ TRICKLER=$!
 disown "$TRICKLER"
 for _ in $(seq 1 50); do TRICKLE_PORT=$(head -1 "$OUT/trickle.log"); [ -n "$TRICKLE_PORT" ] && break; sleep 0.1; done
 TRICKLE="http://127.0.0.1:${TRICKLE_PORT:?trickle port did not open}"
-expand() { local s="$1"; s="${s//\$\{FIXTURES\}/$FIXTURES}"; s="${s//\$\{ORIGIN\}/$ORIGIN}"; s="${s//\$\{PAGE\}/$PAGE}"; s="${s//\$\{WEBKIT\}/$WEBKIT}"; s="${s//\$\{MUSIC\}/$MUSIC}"; s="${s//\$\{STALL\}/$STALL}"; s="${s//\$\{TRICKLE\}/$TRICKLE}"; s="${s//\$\{EXTENSION_ID\}/$EXTENSION_ID}"; s="${s//\$\{SIDE_PANEL_EXTENSION_ID\}/$SIDE_PANEL_EXTENSION_ID}"; s="${s//\$\{DOWNLOAD_EXTENSION_ID\}/$DOWNLOAD_EXTENSION_ID}"; s="${s//\$\{WEB_STORE_COPY_ID\}/$WEB_STORE_COPY_ID}"; s="${s//\$\{TABS_CREATE_EXTENSION_ID\}/$TABS_CREATE_EXTENSION_ID}"; printf '%s' "$s"; }
+expand() { local s="$1"; s="${s//\$\{FIXTURES\}/$FIXTURES}"; s="${s//\$\{ORIGIN\}/$ORIGIN}"; s="${s//\$\{PAGE\}/$PAGE}"; s="${s//\$\{WEBKIT\}/$WEBKIT}"; s="${s//\$\{STALL\}/$STALL}"; s="${s//\$\{TRICKLE\}/$TRICKLE}"; s="${s//\$\{EXTENSION_ID\}/$EXTENSION_ID}"; s="${s//\$\{SIDE_PANEL_EXTENSION_ID\}/$SIDE_PANEL_EXTENSION_ID}"; s="${s//\$\{DOWNLOAD_EXTENSION_ID\}/$DOWNLOAD_EXTENSION_ID}"; s="${s//\$\{WEB_STORE_COPY_ID\}/$WEB_STORE_COPY_ID}"; s="${s//\$\{TABS_CREATE_EXTENSION_ID\}/$TABS_CREATE_EXTENSION_ID}"; printf '%s' "$s"; }
 # AppKit asks "reopen windows?" after a test copy was killed, and that modal blocks every command;
 # Cra restores its own windows from windows.json, so AppKit's restoration is off.
 app_args=(-ApplePersistenceIgnoreState YES)
 while read -r _ a; do app_args+=("$(expand "$a")"); done < <(grep '^arg ' "$FILE")
 while read -r _ f; do mkdir -p "$DATA/Extensions" && cp -R "$(expand "$f")" "$DATA/Extensions/"; done < <(grep '^extension ' "$FILE")
-while read -r _ f; do mkdir -p "$DATA/home/Library/Logs/DiagnosticReports" && cp "$(expand "$f")" "$DATA/home/Library/Logs/DiagnosticReports/"; done < <(grep '^crash-report ' "$FILE")
 for i in "${!app_env[@]}"; do app_env[$i]="$(expand "${app_env[$i]}")"; done
 
 CRA_DATA_DIR="$DATA" CRA_COMMAND_FILE="$CMD" CRA_HITCH_LOG="$HITCH" CRA_TEST_BACKGROUND=1 CRA_PERF=1 CRA_WEBKIT_HOSTS=localhost \
-  CRA_ARC_DIR="$FIXTURES/Arc" CRA_FLAGS="${CRA_FLAGS:-}" \
+  CRA_FLAGS="${CRA_FLAGS:-}" \
   "${app_env[@]}" "$APP/Contents/MacOS/From" ${app_args[@]+"${app_args[@]}"} >"$OUT/stdout.log" 2>&1 &
 PID=$!
 PIDS+=("$PID")
@@ -313,7 +293,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
         [ -x "$OUT/compare-png" ] || xcrun swiftc -O "$ROOT/scripts/compare-png.swift" -o "$OUT/compare-png" 2>"$OUT/compare-png.log"
         verdict=$("$OUT/compare-png" "$ref" "$shot" "$OUT/snapshots/$3.diff.png" 2>&1) || budget_problem "snapshot $3: $verdict"
       fi ;;
-    fresh|requires|port|seed|env|arg|extension|home|crash-report) ;;
+    fresh|requires|port|seed|env|arg|extension|home) ;;
     *) problem "unknown scenario line: $line" ;;
   esac
 done < "$FILE"

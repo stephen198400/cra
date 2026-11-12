@@ -4,8 +4,8 @@ import Foundation
 ///
 /// A tab Cra opens by itself sends no referrer, so the site's analytics (Phantom) counted
 /// these visits as "Direct / None", the same as a typed address. `utm_source=cra-app` plus a
-/// campaign that names the button lets the site's stats tell the "Cra updated!" card's
-/// What's new from Help → Release Notes. The tag names the button and nothing else: nothing
+/// campaign that names the button lets the site's stats tell one button's visits from
+/// another's. The tag names the button and nothing else: nothing
 /// about the person or the Mac goes in it. The site removes it from the address bar once the
 /// page view is counted (cra-website `CampaignTagCleanup`).
 public enum SiteLinks {
@@ -13,18 +13,12 @@ public enum SiteLinks {
 
     /// The button a link was opened from: the `utm_campaign` value.
     public enum Origin: String, CaseIterable, Sendable {
-        /// What's new on the "Cra updated!" card.
-        case whatsNew = "whats-new"
         /// The Help menu's links.
         case helpMenu = "help-menu"
         /// "Learn more" on the site control center's protected-media card.
         case protectedMedia = "protected-media"
-        /// "Learn more" under onboarding's sharing row and in Settings ▸ Privacy.
-        case privacy
         /// "here" on the command bar's search-suggestions banner (#314).
         case commandBarNotice = "command-bar-notice"
-        /// "What’s sent" on the sidebar's "Help improve Cra" card.
-        case sharingCard = "sharing-card"
     }
 
     /// `url` with Cra's tag when it points at crabrowser.app; any other URL (GitHub, a typo)

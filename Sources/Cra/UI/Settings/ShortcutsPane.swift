@@ -238,7 +238,6 @@ struct SettingsSearchField: NSViewRepresentable {
 @MainActor
 enum ShortcutDescriptions {
     static func text(for a: KeyAction) -> String {
-        if let description = LiveFolderPluginStore.shared.entry(forCommand: a.id)?.package.manifest.command?.description { return description }
         if let t = table[a.id] { return t }
         if a.id.hasPrefix("item"), let n = a.id.dropFirst(4).first { return "Switch to the \(n). tab in the sidebar." }
         if a.id.hasPrefix("space"), let n = a.id.dropFirst(5).first { return "Switch to the \(n). space." }
@@ -313,10 +312,8 @@ enum ShortcutDescriptions {
         "closeLittleWindows": "Close all Little Windows.",
         "settings": "Open Settings.",
         "setDefaultBrowser": "Make From the default browser.",
-        "importData": "Bring tabs, spaces and extensions over from Arc or Dia.",
-        "rebuildArcProfiles": "Put spaces imported from Arc back on their Arc profiles, with their sign-ins and extensions.",
+        "importData": "Bring another browser’s bookmarks onto the bookmarks bar.",
         "clearBrowsingData": "Delete history, cookies and cached files with Chrome’s dialog.",
         "languageSettings": "Choose the languages websites show their pages in, for this space’s profile.",
-        "checkForUpdates": "Look for a newer version of From.",
     ]
 }

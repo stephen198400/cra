@@ -56,39 +56,18 @@ struct ModelFixtureTests {
         #expect(try Self.roundTrips(loaded))
     }
 
-    /// sidebar.json as Cra 0.1.37 reads it: a live folder's `source` is github or gitlab, and any
-    /// other value fails the whole file (it is set aside as corrupt and the sidebar starts empty).
-    private struct OlderSidebar: Decodable {
-        struct Item: Decodable {
-            struct Live: Decodable {
-                enum Source: String, Decodable { case github, gitlab }
-                var source: Source?
-            }
-            var id: UUID
-            var liveFolder: Live?
-        }
-        var items: [Item]
-    }
-
-    /// A plugin's own folder (Jira here) saves under `pluginFolder`, so an older Cra still opens the
-    /// sidebar and shows it as a plain folder with its tabs; a migrated GitHub folder stays a GitHub one.
-    @Test func pluginFoldersStayReadableByOlderCra() throws {
+    /// From has no live folders: a GitHub one and a plugin's (Jira here, under `pluginFolder`) load
+    /// as plain folders that keep their tabs, and the tabs' live fields are dropped on save.
+    @Test func liveFoldersLoadAsPlainFolders() throws {
         let (loaded, _) = try Self.load("sidebar-plugin-folder.json", as: SidebarDocument.self)
-        let saved = try Self.encoder.encode(loaded)
-        let older = try Self.decoder.decode(OlderSidebar.self, from: saved)
-        let jira = UUID(uuidString: "D0000000-0000-0000-0000-0000000000A1")!
-        let github = UUID(uuidString: "D0000000-0000-0000-0000-000000000005")!
-        #expect(older.items.first { $0.id == jira }.map { $0.liveFolder == nil } == true)
-        #expect(older.items.first { $0.id == github }?.liveFolder?.source == .github)
-        let reloaded = try Self.decoder.decode(SidebarDocument.self, from: saved)
-        #expect(reloaded.items.first { $0.id == jira }?.liveFolder?.plugin?.id == "cra.jira")
-        #expect(reloaded.items.first { $0.id == jira }?.liveFolder?.source == .plugin)
-    }
-
-    /// A newer Cra's source this one doesn't know loads as a plugin folder, not as a corrupt file.
-    @Test func unknownLiveFolderSourceLoads() throws {
-        let live = try Self.decoder.decode(LiveFolderData.self, from: Data(#"{"source":"notion"}"#.utf8))
-        #expect(live.source == .plugin)
+        let github = try #require(loaded.items.first { $0.id == UUID(uuidString: "D0000000-0000-0000-0000-000000000005")! })
+        let jira = try #require(loaded.items.first { $0.id == UUID(uuidString: "D0000000-0000-0000-0000-0000000000A1")! })
+        #expect(github.isFolder && github.children == [UUID(uuidString: "D0000000-0000-0000-0000-000000000004")!])
+        #expect(jira.isFolder && jira.children == [UUID(uuidString: "D0000000-0000-0000-0000-0000000000A2")!])
+        let saved = String(decoding: try Self.encoder.encode(loaded), as: UTF8.self)
+        for key in ["liveFolder", "pluginFolder", "liveItemURL", "liveSubtitle", "liveGoneAt"] {
+            #expect(!saved.contains("\"\(key)\""), "\(key) isn't saved")
+        }
     }
 
     /// Auto spaces keep both halves through a load (#155). A dark half without its optional fields
@@ -201,9 +180,8 @@ struct ModelFixtureTests {
         let tab = try #require(doc.items.first { $0.isTab }?.tab)
         #expect(tab.savedURL == tab.url && tab.savedTitle.isEmpty && !tab.muted)
         #expect(tab.faviconKey == "Calendar.Example.com", "a missing favicon key is the host as written")
-        let live = try #require(doc.items.first { $0.isLiveFolder }?.liveFolder)
-        #expect(live.lastError == nil, "an error this version doesn't know is dropped, not fatal")
-        #expect(live.filter.attributes == .reviewRequests && live.hiddenItems.isEmpty && live.ssoOrganizations.isEmpty)
+        let live = try #require(doc.items.first { $0.id == UUID(uuidString: "D0000000-0000-0000-0000-000000000002")! })
+        #expect(live.isFolder && live.children.isEmpty, "an old live folder is a plain folder")
         let split = try #require(doc.items.first { $0.isSplit }?.split)
         #expect(split == SplitData())
     }

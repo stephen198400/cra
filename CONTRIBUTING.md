@@ -19,17 +19,15 @@ you can send. Code is welcome too, within the few rules below.
   a good one is under [Features Arc never had](#features-arc-never-had).
 - **No cloud AI.** Arc Max-style cloud features (anything that needs an
   API key or sends pages away) are out of scope. The exception is features powered by the Mac's
-  own on-device Apple Intelligence model (Tidy Tabs, Tidy Tab Titles, Tidy Downloads, 5-Second Previews),
-  which only show when Apple Intelligence is turned on and never send anything off the Mac.
+  own on-device Apple Intelligence model, which only show when Apple Intelligence is turned on and never send anything off the Mac.
 - **English only, for now.** Like Arc, the interface isn't translated: keeping every
   language in step with a UI that changes most days is more than one maintainer can carry.
   Web pages and Chromium's own dialogs already follow the system language. If you'd like
   Cra in your language, upvote the
   [localization idea](https://github.com/VictorKildahl/cra/discussions/240) instead of
   opening an issue or a PR.
-- **No account, and nothing shared without asking.** Everything stays on the user's Mac. The
-  one exception is opt-in: anonymous usage stats and crash reports, off until the user turns
-  them on ([docs/sharing.md](docs/sharing.md)). A feature doesn't add to what they send.
+- **No account, and nothing shared.** Everything stays on the user's Mac: no usage stats, no
+  crash reports, no update checks.
 - **Native first.** The app is AppKit and SwiftUI; web content is Chromium through CEF.
 
 For anything bigger than a bug fix, open an issue or a
@@ -52,7 +50,7 @@ new feature fits when:
   fit.
 - **Nothing leaves the Mac.** No account, server or cloud AI, and no new data in the opt-in
   usage stats. On-device Apple Intelligence is fine, and the feature stays hidden when it's
-  off, like Tidy Tabs.
+  off.
 - **It stays out of the way.** People who never use it don't see new settings, badges or
   prompts.
 - **One person can keep it working.** Cra has one maintainer and a UI that changes most

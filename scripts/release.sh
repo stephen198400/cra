@@ -1,20 +1,17 @@
 #!/bin/bash
-# Full distributable build: build, sign, notarize, package, notarize the DMG, and
-# write the Sparkle appcast for the update archive, once per CPU.
+# Full distributable build: build, sign, notarize, package and notarize the DMG,
+# once per CPU.
 #   CRA_VERSION=0.1.0 CRA_SIGN_IDENTITY="Developer ID Application: …" scripts/release.sh
-# Every release ships Apple silicon (From.dmg, From.zip, appcast.xml) and Intel
-# (From-Intel.dmg, From-Intel.zip, appcast-intel.xml). CRA_ARCHS="arm64" (or "x86_64")
+# Every release ships Apple silicon (From.dmg, From.zip) and Intel
+# (From-Intel.dmg, From-Intel.zip). CRA_ARCHS="arm64" (or "x86_64")
 # builds one; the Release workflow runs one per job and merges them.
 # Without CRA_SIGN_IDENTITY it still produces an ad-hoc build and packages, so
-# the pipeline can be exercised before certificates exist. The appcast needs the
-# update signing key (SPARKLE_PRIVATE_KEY, or the "cra" key in the login keychain).
+# the pipeline can be exercised before certificates exist.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export CRA_VERSION="${CRA_VERSION:-0.1.0}"
 # One build number for both CPUs.
 export CRA_BUILD="${CRA_BUILD:-$(date +%Y%m%d%H%M)}"
-# Release builds carry the update feed (scripts/build.sh drops it otherwise).
-export CRA_RELEASE=1
 IDENTITY="${CRA_SIGN_IDENTITY:--}"
 ARCHS="${CRA_ARCHS:-arm64 x86_64}"
 
@@ -53,8 +50,6 @@ for ARCH in $ARCHS; do
   else
     echo "Ad-hoc build: not notarized. Set CRA_SIGN_IDENTITY and notary credentials for a distributable build." >&2
   fi
-  # Installed copies update from the zip; the appcast must sign the final one.
-  scripts/appcast.sh "build/dist/From$SUFFIX.zip" "$APP" "${CRA_RELEASE_NOTES:-}"
 done
 (cd build/dist && shasum -a 256 From*.zip From*.dmg > SHA256SUMS.txt)
 echo "Release artifacts in build/dist:"

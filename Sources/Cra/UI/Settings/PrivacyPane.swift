@@ -3,11 +3,9 @@ import SwiftUI
 /// Dia's Privacy pane: a "Content blocking" card of switches (Block ads / Block cookie banners /
 /// Block trackers) and a "Data" card, each setting a row with what it does under its name. Cra ships one
 /// ad-and-tracker domain list, so it has one switch. Fingerprinting protection, under them, is Cra's
-/// own (neither Arc nor Dia has it). The Data card's usage-data row ("Share
-/// content data to help improve Dia") is Cra's usage stats, with crash reports under it; "Connections"
-/// is Chrome's "Always use secure connections". "Data" holds Arc's Clear Browsing Data (Arc keeps
-/// it in Settings ▸ Profiles and opens Chrome's Privacy and security page; Cra opens Chrome's
-/// Delete browsing data dialog itself, the step after). "Connections" also holds Chromium's
+/// own (neither Arc nor Dia has it). "Connections" is Chrome's "Always use secure connections".
+/// "Data" holds Arc's Clear Browsing Data (Arc keeps it in Settings ▸ Profiles and opens Chrome's
+/// Privacy and security page; Cra opens Chrome's Delete browsing data dialog itself, the step after). "Connections" also holds Chromium's
 /// secure DNS setting, which Arc and Dia leave to chrome://settings/security (#133).
 struct PrivacyPane: View {
     @Environment(SidebarStore.self) private var store
@@ -48,27 +46,6 @@ struct PrivacyPane: View {
                 SettingsPlainRow("Clear browsing data",
                                    detail: "Delete history, cookies and cached files for the current space’s profile. History you delete also leaves the command bar.",
                                    trailing: { Button("Clear…") { actions.openURL(BrowsingDataClear.pageURL) } })
-                SettingsCardDivider()
-                SettingsToggleRow("Share anonymous usage stats",
-                                  detail: "Once a day: your From and macOS versions, the kind of Mac, rough counts of spaces, tabs and extensions, and which settings you changed. Never the sites you visit, what you search or anything on a page. Each report has a new random ID, so reports can’t be tied together or to you.",
-                                  isOn: $store.settings.shareUsageStats) {
-                    HStack(spacing: 12) {
-                        Button("Show What’s Sent") { SharingService.shared.showStats() }
-                        Link("How From handles your data", destination: URL(string: SiteLinks.tagged("https://crabrowser.app/privacy", from: .privacy))!)
-                    }
-                }
-                SettingsCardDivider()
-                SettingsPlainRow("Crash reports",
-                                   detail: "A report shows what From was doing when it crashed, without your name, file paths or anything that identifies this Mac.",
-                                   trailing: { EmptyView() }) {
-                    Picker("Crash reports", selection: $store.settings.crashReports) {
-                        Text("Ask each time").tag(CrashReportChoice.ask)
-                        Text("Send automatically").tag(CrashReportChoice.send)
-                        Text("Never send").tag(CrashReportChoice.never)
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
             }
         }
     }

@@ -44,7 +44,6 @@ else
 fi
 
 CEF_DIR="$CEF_DIR" CEF_ARCH="$CEF_PLATFORM" scripts/fetch-cef.sh
-scripts/fetch-sparkle.sh
 
 swift build "${SWIFT_ARGS[@]}"
 BIN="$(swift build "${SWIFT_ARGS[@]}" --show-bin-path)"
@@ -60,17 +59,11 @@ cp "$BIN/Cra" "$APP/Contents/MacOS/From"
 # Release builds drop the local symbols (~10 MB of the binary); the dSYM SwiftPM writes next to
 # $BIN keeps them for symbolication. CRA_KEEP_SYMBOLS=1 leaves the binary as built.
 [ "$CONFIG" = release ] && [ -z "${CRA_KEEP_SYMBOLS:-}" ] && strip -x "$APP/Contents/MacOS/From"
-cp "$BIN/CraPluginHost" "$APP/Contents/MacOS/CraPluginHost"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" resources/Info.plist > "$APP/Contents/Info.plist"
 # CRA_BUNDLE_ID builds under another identifier: a test build signed with one's own team and
 # a provisioning profile for it (docs/release.md, "iCloud sync"). The data folder stays Cra's,
 # so run such a build with CRA_DATA_DIR.
 [ -n "${CRA_BUNDLE_ID:-}" ] && /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $CRA_BUNDLE_ID" "$APP/Contents/Info.plist"
-# Only release builds (scripts/release.sh) check the update feed; a dev build would
-# otherwise replace itself with the latest release. Intel copies have their own feed,
-# since each update archive holds one CPU's app (scripts/appcast.sh).
-[ "$ARCH" = x86_64 ] && /usr/libexec/PlistBuddy -c "Set :SUFeedURL https://github.com/VictorKildahl/cra/releases/latest/download/appcast-intel.xml" "$APP/Contents/Info.plist"
-[ "${CRA_RELEASE:-}" = 1 ] || /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist"
 # Google API key for Safe Browsing (docs/release.md); CraCEF hands it to Chromium.
 [ -n "${CRA_GOOGLE_API_KEY:-}" ] && /usr/libexec/PlistBuddy -c "Add :CraGoogleAPIKey string $CRA_GOOGLE_API_KEY" "$APP/Contents/Info.plist"
 echo -n "APPL????" > "$APP/Contents/PkgInfo"
@@ -80,11 +73,9 @@ cp resources/Cra.sdef "$APP/Contents/Resources/Cra.sdef"
 [ -d resources/web ] && cp -R resources/web "$APP/Contents/Resources/web"
 [ -d resources/brand ] && cp -R resources/brand "$APP/Contents/Resources/brand"
 [ -d resources/blocklist ] && cp -R resources/blocklist "$APP/Contents/Resources/blocklist"
-[ -d resources/browsers ] && cp -R resources/browsers "$APP/Contents/Resources/browsers"
 [ -d resources/app-icons ] && cp -R resources/app-icons "$APP/Contents/Resources/app-icons"
 [ -d resources/licenses ] && cp -R resources/licenses "$APP/Contents/Resources/licenses"
 [ -d resources/fonts ] && cp -R resources/fonts "$APP/Contents/Resources/fonts"
-cp -R resources/live-folder-plugins "$APP/Contents/Resources/live-folder-plugins"
 
 FRAMEWORK_SRC="$ROOT/$CEF_DIR/Release/Chromium Embedded Framework.framework"
 cp -R "$FRAMEWORK_SRC" "$APP/Contents/Frameworks/"
@@ -94,9 +85,6 @@ if [ -z "${CRA_ALL_LOCALES:-}" ]; then
   find "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Resources" -maxdepth 1 -name '*.lproj' \
     ! -name 'en.lproj' ! -name 'en_*.lproj' ! -name 'zh_*.lproj' -exec rm -rf {} +
 fi
-# Sparkle's XPC services are only for sandboxed apps; Cra uses Autoupdate and Updater.app.
-ditto "$ROOT/vendor/sparkle/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
-rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
 
 # CEF needs one helper app per process type (see cef_variables.cmake,
 # CEF_HELPER_APP_SUFFIXES). Format: "<name suffix>|<plist suffix>".
@@ -126,11 +114,10 @@ mkdir -p "$DOCK_TILE/Contents/MacOS"
 cp "$BIN/libCraDockTile.dylib" "$DOCK_TILE/Contents/MacOS/CraDockTile"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" resources/DockTile-Info.plist > "$DOCK_TILE/Contents/Info.plist"
 
-# Every executable must run on the CPU this build is for (Sparkle ships universal).
-for exe in "$APP/Contents/MacOS/From" "$APP/Contents/MacOS/CraPluginHost" "$APP"/Contents/Frameworks/*.app/Contents/MacOS/* \
+# Every executable must run on the CPU this build is for.
+for exe in "$APP/Contents/MacOS/From" "$APP"/Contents/Frameworks/*.app/Contents/MacOS/* \
            "$DOCK_TILE/Contents/MacOS/CraDockTile" \
-           "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework" \
-           "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"; do
+           "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"; do
   lipo "$exe" -verify_arch "$ARCH" || { echo "$exe has no $ARCH code: $(lipo -archs "$exe")" >&2; exit 1; }
 done
 
@@ -152,11 +139,6 @@ sign() {  # sign <path> [entitlements]
 FW="$APP/Contents/Frameworks/Chromium Embedded Framework.framework"
 find "$FW/Libraries" -name '*.dylib' -print0 2>/dev/null | while IFS= read -r -d '' lib; do sign "$lib"; done
 sign "$FW"
-SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
-sign "$SPARKLE/Versions/B/Autoupdate"
-sign "$SPARKLE/Versions/B/Updater.app"
-sign "$SPARKLE"
-sign "$APP/Contents/MacOS/CraPluginHost"
 for h in "$APP"/Contents/Frameworks/*.app; do sign "$h" "$ROOT/resources/CraHelper.entitlements"; done
 sign "$DOCK_TILE"
 # Passkeys need entitlements only a provisioning profile can grant: the Touch ID

@@ -4,8 +4,8 @@ import Testing
 /// Visits from the app's buttons showed up as "Direct / None" on the site's analytics.
 struct SiteLinksTests {
     @Test func tagsSiteLinksWithTheButton() {
-        #expect(SiteLinks.tagged("https://crabrowser.app/release-notes", from: .whatsNew)
-            == "https://crabrowser.app/release-notes?utm_source=cra-app&utm_campaign=whats-new")
+        #expect(SiteLinks.tagged("https://crabrowser.app/release-notes", from: .helpMenu)
+            == "https://crabrowser.app/release-notes?utm_source=cra-app&utm_campaign=help-menu")
         #expect(SiteLinks.tagged("https://www.crabrowser.app/help", from: .helpMenu)
             == "https://www.crabrowser.app/help?utm_source=cra-app&utm_campaign=help-menu")
     }

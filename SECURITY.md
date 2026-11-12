@@ -13,7 +13,7 @@ are credited in the release notes unless they'd rather not be.
 
 ## Supported versions
 
-Only the latest release is supported. Cra updates itself, and fixes are not backported.
+Only the latest source is supported: this fork has no updater, so rebuild to get a fix.
 
 ## Scope
 
@@ -21,7 +21,6 @@ In scope: anything Cra adds on top of Chromium, for example
 
 - the `from://` scheme and what pages or other apps can reach through it
 - import from other browsers, and the passwords and cookies it moves
-- the update feed and signature checks (Sparkle)
 - extensions, native messaging hosts and the Chrome Web Store install flow
 - Cra's patches to CEF (`scripts/cef-patches`) and the switches Cra starts Chromium with
 - passkeys, Safe Storage and other Keychain use

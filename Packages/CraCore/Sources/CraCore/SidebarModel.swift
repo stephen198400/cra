@@ -73,12 +73,6 @@ public struct TabData: Codable, Equatable {
     public var customIconKey: String?
     /// Favorite tile background as "#RRGGBB". nil is the theme's tile fill.
     public var tileColor: String?
-    /// The live folder item this tab shows (Arc: liveItemID.url), e.g. a pull request URL.
-    public var liveItemURL: String?
-    /// Line under the title that the live folder writes (a pull request's author).
-    public var liveSubtitle: String?
-    /// When its pull request left the live folder's results; the tab goes after a grace period.
-    public var liveGoneAt: Date?
     /// The page's toolbar colour as last reported (TabRuntime.themeColor). A slept or restored
     /// tab's toolbar keeps it while the page loads again, as Arc's does.
     public var themeColor: String?
@@ -118,12 +112,12 @@ public struct TabData: Codable, Equatable {
 
     /// The line under the tab's title in the sidebar. Arc 1.171 (TabCellState.subtitle) has only
     /// two: the host and port of a site in developer mode (GitHub #88), else a live folder pull
-    /// request's author. A pinned tab that left its page shows Arc's slash, never its host (#139).
+    /// request's author, which Cra doesn't have. A pinned tab that left its page shows Arc's slash,
+    /// never its host (#139).
     public func sidebarSubtitle(developerMode: Bool) -> String? {
         if developerMode, let u = URL(string: url), let host = u.host?.replacingOccurrences(of: "www.", with: "") {
             return u.port.map { "\(host):\($0)" } ?? host
         }
-        if let liveSubtitle, URL(string: url)?.host == "github.com" { return liveSubtitle }
         return nil
     }
 }
@@ -180,14 +174,12 @@ public struct SidebarItem: Identifiable, Codable, Equatable {
     /// The symbol picked with Change Icon… (Arc's folder icon picker). A key of its own, beside
     /// `folderIcon`, so a Cra that predates symbols still reads the file.
     public var folderSymbol: FolderSymbol? = nil
-    /// Set on a folder that fills itself (Arc: list.automaticLiveFolderData).
-    public var liveFolder: LiveFolderData? = nil
-    /// A Today folder shown as a group header, as Tidy Tabs makes them (Arc: SidebarItemData.tabGroup,
+    /// A Today folder shown as a group header, as Arc's Tidy Tabs made them (Arc: SidebarItemData.tabGroup,
     /// its title in `title`). Kept on a folder so a Cra that predates groups still reads the file.
     public var tabGroup: Bool? = nil
 
     public init(id: UUID, parentID: UUID?, title: String?, children: [UUID], isUnread: Bool, createdAt: Date, data: ItemData,
-                folderIcon: FolderIconStyle? = nil, folderSymbol: FolderSymbol? = nil, liveFolder: LiveFolderData? = nil, tabGroup: Bool? = nil) {
+                folderIcon: FolderIconStyle? = nil, folderSymbol: FolderSymbol? = nil, tabGroup: Bool? = nil) {
         self.id = id
         self.parentID = parentID
         self.title = title
@@ -197,12 +189,14 @@ public struct SidebarItem: Identifiable, Codable, Equatable {
         self.data = data
         self.folderIcon = folderIcon
         self.folderSymbol = folderSymbol
-        self.liveFolder = liveFolder
         self.tabGroup = tabGroup
     }
 
+    /// A live folder's `liveFolder` or `pluginFolder` from an older Cra isn't a key here: the
+    /// folder loads as a plain one with its tabs, as do their `liveItemURL`, `liveSubtitle` and
+    /// `liveGoneAt` (TabData).
     private enum CodingKeys: String, CodingKey {
-        case id, parentID, title, children, isUnread, createdAt, data, folderIcon, folderSymbol, liveFolder, pluginFolder, tabGroup
+        case id, parentID, title, children, isUnread, createdAt, data, folderIcon, folderSymbol, tabGroup
     }
 
     public init(from decoder: Decoder) throws {
@@ -216,14 +210,9 @@ public struct SidebarItem: Identifiable, Codable, Equatable {
         data = try c.decode(ItemData.self, forKey: .data)
         folderIcon = try c.decodeIfPresent(FolderIconStyle.self, forKey: .folderIcon)
         folderSymbol = try c.decodeIfPresent(FolderSymbol.self, forKey: .folderSymbol)
-        liveFolder = try c.decodeIfPresent(LiveFolderData.self, forKey: .pluginFolder)
-            ?? c.decodeIfPresent(LiveFolderData.self, forKey: .liveFolder)
         tabGroup = try c.decodeIfPresent(Bool.self, forKey: .tabGroup)
     }
 
-    /// A folder from a plugin with no GitHub or GitLab source of its own (Jira, an installed plugin)
-    /// is saved under `pluginFolder`: Cra 0.1.37 and older fail the whole sidebar.json on a
-    /// `liveFolder` source they don't know, and read this key's folder as a plain one with its tabs.
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
@@ -235,7 +224,6 @@ public struct SidebarItem: Identifiable, Codable, Equatable {
         try c.encode(data, forKey: .data)
         try c.encodeIfPresent(folderIcon, forKey: .folderIcon)
         try c.encodeIfPresent(folderSymbol, forKey: .folderSymbol)
-        try c.encodeIfPresent(liveFolder, forKey: liveFolder?.source == .plugin ? .pluginFolder : .liveFolder)
         try c.encodeIfPresent(tabGroup, forKey: .tabGroup)
     }
 
@@ -245,7 +233,6 @@ public struct SidebarItem: Identifiable, Codable, Equatable {
     }
     public var isTab: Bool { tab != nil }
     public var isFolder: Bool { if case .folder = data { return true }; return false }
-    public var isLiveFolder: Bool { isFolder && liveFolder != nil }
     public var isTabGroup: Bool { isFolder && tabGroup == true }
     public var split: SplitData? {
         if case .split(let s) = data { return s }
@@ -539,7 +526,6 @@ public struct AppSettings: Codable, Equatable {
     /// Chrome's bookmarks bar (View ▸ Show Bookmarks Bar, ⇧⌘B): a row of bookmarks under the toolbar,
     /// or at the top of the page card when the address is in the sidebar. Not in Arc; on by default.
     public var showBookmarksBar: Bool = true
-    public var hasSeenImportPrompt: Bool = false
     /// Arc's per-site Developer Mode (⌃D): the toolbar shows the full URL in
     /// monospace with the developer icons, and the nav buttons move to the sidebar.
     public var developerHosts: Set<String> = []
@@ -634,20 +620,9 @@ public struct AppSettings: Codable, Equatable {
     public var pageTopWindowDrag: Bool = true
     /// Arc's Settings ▸ Advanced "Enable Boosts on websites you visit", on by default.
     public var boostsEnabled: Bool = true
-    /// Arc's Settings ▸ General ▸ Previews: hovering a Gmail favorite shows its unread mail.
-    public var favoritePreviews: Bool = true
     /// Cra's addition (PR #267, Dia-like): the open favorite's rim takes its logo's colours.
     /// Off keeps Arc's neutral 2 pt rim.
     public var favoriteLogoOutline: Bool = false
-    /// Arc's Live Calendar on a Google Calendar favorite (the favorite's menu ▸ Live Calendar), on
-    /// until "Disable Live Calendar".
-    public var liveCalendar: Bool = true
-    /// Live Calendar ▸ Show Hover Preview: today's timeline when the pointer rests on the tile.
-    public var calendarHoverPreview: Bool = true
-    /// Live Calendar ▸ Show Time to Next Meeting: the tile counts down to it.
-    public var calendarTimeToNextMeeting: Bool = true
-    /// Live Calendar ▸ Show Next Meeting Link, Two Minutes Before in Arc.
-    public var calendarMeetingLink: CalendarPreview.LinkTiming = .twoMinutes
     /// Arc's searchSuggestEnabled: the command bar asks the search engine for suggestions
     /// as you type and fills its rows with them.
     public var searchSuggestions: Bool = true
@@ -673,31 +648,9 @@ public struct AppSettings: Codable, Equatable {
     public static let perfRecordingDefault = false
     /// Settings ▸ Performance ▸ "Hide site names": every site in the diagnostics zip becomes site-N.
     public var perfHidesSiteNames: Bool = false
-    /// Arc Max's Tidy Tabs (tidyTabsEnabled), done by the Mac's Apple Intelligence model: the Today
-    /// divider's Tidy button. On by default; the button only shows while Apple Intelligence is on.
-    public var tidyTabs: Bool = true
-    /// Arc Max's Tidy Tab Titles (renamePinnedTabsEnabled): a tab you pin gets a shorter name from the
-    /// Mac's Apple Intelligence model. Off by default: it renames, where Tidy waits for a click.
-    public var tidyTabTitles: Bool = false
-    /// Arc Max's Tidy Downloads (renameDownloadsEnabled): a finished download gets a readable name from
-    /// the Mac's Apple Intelligence model. Off by default, like Arc Max.
-    public var tidyDownloads: Bool = false
-    /// Arc Max's 5-Second Previews (fiveSecondPreviewsEnabled / fiveSecondPreviews): hover or Shift-hover
-    /// on a link generates a summary of the webpage using the Mac's Apple Intelligence model.
-    /// Off by default, like Arc Max.
-    public var fiveSecondPreviews: Bool = false
     /// Arc's per-profile Download location (#190), by DownloadLocation.key(profileID:). A profile
     /// that isn't here saves to the Downloads folder without asking.
     public var downloadLocations: [String: DownloadLocation] = [:]
-    /// Settings ▸ Privacy ▸ "Share anonymous usage stats" and onboarding's Privacy step (Dia's
-    /// "Help improve Dia" row): a daily UsageStats report. Off unless the user turns it on.
-    public var shareUsageStats: Bool = false
-    /// Settings ▸ Privacy ▸ Crash reports: after a crash Cra asks before sending the report
-    /// (CrashReports.reduce), sends it without asking, or never.
-    public var crashReports: CrashReportChoice = .ask
-    /// The sidebar's "Help improve Cra" card was answered (Share, its ✕) or onboarding's Privacy
-    /// step was passed: the card doesn't come back (SharingPrompt).
-    public var askedToShare: Bool = false
 
     public func downloadLocation(profileID: UUID?) -> DownloadLocation {
         downloadLocations[DownloadLocation.key(profileID: profileID)] ?? DownloadLocation()
@@ -888,7 +841,6 @@ extension AppSettings {
         showToolbar = AppSettings.addressBarInToolbar
         toolbarShowsFullURL = try c.decodeIfPresent(Bool.self, forKey: .toolbarShowsFullURL) ?? false
         showBookmarksBar = try c.decodeIfPresent(Bool.self, forKey: .showBookmarksBar) ?? true
-        hasSeenImportPrompt = try c.decodeIfPresent(Bool.self, forKey: .hasSeenImportPrompt) ?? false
         developerHosts = try c.decodeIfPresent(Set<String>.self, forKey: .developerHosts) ?? []
         disabledDefaultDeveloperHosts = try c.decodeIfPresent(Set<String>.self, forKey: .disabledDefaultDeveloperHosts) ?? []
         chromeEngine = try c.decodeIfPresent(Bool.self, forKey: .chromeEngine) ?? true
@@ -931,12 +883,7 @@ extension AppSettings {
         allowAppleEventsJavaScript = try c.decodeIfPresent(Bool.self, forKey: .allowAppleEventsJavaScript) ?? false
         pageTopWindowDrag = try c.decodeIfPresent(Bool.self, forKey: .pageTopWindowDrag) ?? true
         boostsEnabled = try c.decodeIfPresent(Bool.self, forKey: .boostsEnabled) ?? true
-        favoritePreviews = try c.decodeIfPresent(Bool.self, forKey: .favoritePreviews) ?? true
         favoriteLogoOutline = try c.decodeIfPresent(Bool.self, forKey: .favoriteLogoOutline) ?? false
-        liveCalendar = try c.decodeIfPresent(Bool.self, forKey: .liveCalendar) ?? true
-        calendarHoverPreview = try c.decodeIfPresent(Bool.self, forKey: .calendarHoverPreview) ?? true
-        calendarTimeToNextMeeting = try c.decodeIfPresent(Bool.self, forKey: .calendarTimeToNextMeeting) ?? true
-        calendarMeetingLink = (try? c.decodeIfPresent(CalendarPreview.LinkTiming.self, forKey: .calendarMeetingLink)) ?? .twoMinutes
         searchSuggestions = try c.decodeIfPresent(Bool.self, forKey: .searchSuggestions) ?? true
         commandBarCurrentSpaceOnly = try c.decodeIfPresent(Bool.self, forKey: .commandBarCurrentSpaceOnly) ?? false
         editAddressInPlace = try c.decodeIfPresent(Bool.self, forKey: .editAddressInPlace) ?? false
@@ -945,14 +892,7 @@ extension AppSettings {
         edgeToEdgeContent = try c.decodeIfPresent(Bool.self, forKey: .edgeToEdgeContent) ?? false
         perfRecording = try c.decodeIfPresent(Bool.self, forKey: .perfRecording) ?? Self.perfRecordingDefault
         perfHidesSiteNames = try c.decodeIfPresent(Bool.self, forKey: .perfHidesSiteNames) ?? false
-        tidyTabs = try c.decodeIfPresent(Bool.self, forKey: .tidyTabs) ?? true
-        tidyTabTitles = try c.decodeIfPresent(Bool.self, forKey: .tidyTabTitles) ?? false
-        tidyDownloads = try c.decodeIfPresent(Bool.self, forKey: .tidyDownloads) ?? false
-        fiveSecondPreviews = try c.decodeIfPresent(Bool.self, forKey: .fiveSecondPreviews) ?? false
         downloadLocations = (try? c.decodeIfPresent([String: DownloadLocation].self, forKey: .downloadLocations)) ?? [:]
-        shareUsageStats = try c.decodeIfPresent(Bool.self, forKey: .shareUsageStats) ?? false
-        crashReports = (try? c.decodeIfPresent(CrashReportChoice.self, forKey: .crashReports)) ?? .ask
-        askedToShare = try c.decodeIfPresent(Bool.self, forKey: .askedToShare) ?? false
     }
 }
 
@@ -1027,9 +967,6 @@ extension TabData {
         faviconKey = try c.decodeIfPresent(String.self, forKey: .faviconKey) ?? URL(string: url)?.host
         customIconKey = try c.decodeIfPresent(String.self, forKey: .customIconKey)
         tileColor = try c.decodeIfPresent(String.self, forKey: .tileColor)
-        liveItemURL = try c.decodeIfPresent(String.self, forKey: .liveItemURL)
-        liveSubtitle = try c.decodeIfPresent(String.self, forKey: .liveSubtitle)
-        liveGoneAt = try c.decodeIfPresent(Date.self, forKey: .liveGoneAt)
         themeColor = try c.decodeIfPresent(String.self, forKey: .themeColor)
         homeTitle = try c.decodeIfPresent(String.self, forKey: .homeTitle)
     }

@@ -18,7 +18,6 @@
   "edgeToEdgeContent" : false,
   "folderPreviews" : true,
   "hapticFeedbackOnReorder" : true,
-  "hasSeenImportPrompt" : true,
   "httpsOnly" : false,
   "linkRoutes" : [
     {
