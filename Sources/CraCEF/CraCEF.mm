@@ -143,37 +143,63 @@ static NSArray<NSString*>* g_documentStartParams = nil;
 
 /// Page.addScriptToEvaluateOnNewDocument params for an extension side panel's page. Chrome's
 /// panel sits in the window of the page beside it, so to its extension the current window is
-/// that page's, and the panel is no tab of it. Cra's panel page is a Chromium window of its own:
-/// tabs.query({active: true, currentWindow: true}) gave the panel itself, and ChatGPT's panel
-/// then tried to read its own chrome-extension:// page. In the panel, the current window is
-/// the one the user was last in (Cra's panel never becomes Chromium's last active window), and
-/// queries leave the panel's own window out.
+/// that page's, and the panel is no tab of it. Cra's panel page is a Chromium window of its own,
+/// and Chromium's last focused window is often the panel too: tabs.query({active: true,
+/// currentWindow: true}) gave the panel itself, and ChatGPT's panel then tried to read its own
+/// chrome-extension:// page. In the panel, the current (and last focused) window is the one of
+/// the page Cra shows beside it, which Cra hands in by its address
+/// (ExtensionSidePanelController.pageBeside), and queries leave the panel's own window out.
 static NSString* CraSidePanelWindowParams() {
     static NSString* params = nil;
     if (params) return params;
     NSString* source =
         @"(() => {"
-         "const tabs = globalThis.chrome && chrome.tabs, windows = globalThis.chrome && chrome.windows;"
+         "const c = globalThis.chrome, tabs = c && c.tabs, windows = c && c.windows;"
          "if (!tabs || typeof tabs.query !== 'function') return;"
          "const query = tabs.query.bind(tabs);"
-         "let own;"
+         "let page, waiters = [], own;"
+         "Object.defineProperty(globalThis, '__craSidePanelPage', { value: (url) => {"
+         "  page = url; waiters.splice(0).forEach((f) => f()); } });"
+         "const known = () => page !== undefined ? Promise.resolve()"
+         "  : new Promise((r) => { waiters.push(r); setTimeout(r, 2000); });"
          "const ownWindow = () => own || (own = query({ active: true, currentWindow: true })"
          "  .then(([t]) => t ? t.windowId : undefined, () => undefined));"
-         "const current = (q) => q.currentWindow === true || q.windowId === -2;"
+         "const latest = (list) => list.reduce((a, t) => !a || (t.lastAccessed || 0) > (a.lastAccessed || 0) ? t : a, undefined);"
+         "const besideWindow = async () => {"
+         "  await known();"
+         "  const [all, panel] = await Promise.all([query({}), ownWindow()]);"
+         "  const others = all.filter((t) => t.windowId !== panel);"
+         "  const hit = latest(others.filter((t) => page && (t.url === page || t.pendingUrl === page)));"
+         "  if (hit) return hit.windowId;"
+         "  const last = windows && await windows.getLastFocused().catch(() => undefined);"
+         "  if (last && last.id !== panel) return last.id;"
+         "  const any = latest(others);"
+         "  return any && any.windowId;"
+         "};"
          "const fixed = async (info) => {"
          "  const q = Object.assign({}, info);"
-         "  if (current(q)) { delete q.currentWindow; delete q.windowId; q.lastFocusedWindow = true; }"
+         "  if (q.currentWindow === true || q.lastFocusedWindow === true || q.windowId === -2) {"
+         "    delete q.currentWindow; delete q.lastFocusedWindow;"
+         "    const id = await besideWindow();"
+         "    if (id === undefined) return [];"
+         "    q.windowId = id;"
+         "  }"
          "  const [found, panel] = await Promise.all([query(q), ownWindow()]);"
-         "  return panel === undefined ? found : found.filter((t) => t.windowId !== panel);"
+         "  return found.filter((t) => t.windowId !== panel);"
          "};"
          "tabs.query = function (info, callback) {"
          "  const p = fixed(info);"
          "  if (typeof callback !== 'function') return p;"
          "  p.then((r) => callback(r), () => callback([]));"
          "};"
-         "if (windows && typeof windows.getLastFocused === 'function') {"
-         "  const last = windows.getLastFocused.bind(windows);"
-         "  windows.getCurrent = function (a, b) { return last(a, b); };"
+         "if (windows && typeof windows.get === 'function' && typeof windows.getCurrent === 'function') {"
+         "  const get = windows.get.bind(windows), getCurrent = windows.getCurrent.bind(windows);"
+         "  windows.getCurrent = function (a, b) {"
+         "    const options = a && typeof a === 'object' ? a : {}, callback = typeof a === 'function' ? a : b;"
+         "    const p = besideWindow().then((id) => id === undefined ? getCurrent(options) : get(id, options));"
+         "    if (typeof callback !== 'function') return p;"
+         "    p.then((w) => callback(w), () => callback(undefined));"
+         "  };"
          "}"
          "})();";
     NSData* json = [NSJSONSerialization dataWithJSONObject:@{@"source": source, @"runImmediately": @YES} options:0 error:nil];

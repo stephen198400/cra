@@ -30,7 +30,8 @@ function probeTabs() {
     const listed = all.some((t) => kind(t) === 'panel') ? 'panel' : 'none';
     const win = await chrome.windows.getCurrent();
     const windowOf = current && win.id === current.windowId ? 'page' : 'other';
-    tabsSeen = `last-${kind(last)}-current-${kind(current)}-listed-${listed}-window-${windowOf}`;
+    const which = current ? new URL(current.url).searchParams.get('n') : 'none';
+    tabsSeen = `last-${kind(last)}-current-${kind(current)}-${which}-listed-${listed}-window-${windowOf}`;
   })().catch((e) => { tabsSeen = 'error-' + e.message; });
   return 'started';
 }

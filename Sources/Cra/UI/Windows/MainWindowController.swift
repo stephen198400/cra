@@ -764,6 +764,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         let bars = toolbarColors(panes: shell.paneIDs)
         if bars != shell.toolbarColors { shell.toolbarColors = bars }
         if tabID == browsers.visibleTabID { window?.title = store.item(tabID)?.displayTitle ?? "From" }
+        sidePanel.pageBeside(currentBrowser?.currentURL)
     }
 
     /// Each live page's and each pane's bar colour, by PaneToolbarView's rule (ToolbarColor):
@@ -998,6 +999,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         guard let window else { return }
         // A focus still waiting for its page to embed is stale once pages change without one.
         if !focus { embedFocusTab = nil }
+        sidePanel.pageBeside(currentBrowser?.currentURL)
         ensureOverlayPanel()
         let visibleIDs = Set(browsers.visibleTabIDs)
         let focused = browsers.visibleRuntime?.hostWindow

@@ -123,6 +123,10 @@ final class ExtensionSidePanelController: NSObject, @preconcurrency CraBrowserDe
     private var bodyRect: NSRect?
     /// Page windows already made borderless and adopted (weakly keyed by identity; one per browser).
     private var attachedOnce: Set<ObjectIdentifier> = []
+    /// The address of the page beside the panel. The panel page's window script
+    /// (CraSidePanelWindowParams in CraCEF.mm) takes that page's Chromium window for the panel's
+    /// current one, as Chrome's panel shares its page's window.
+    private var pageURL: String?
 
     private static let widthKey = "extensionSidePanelWidth"
     static var savedWidth: CGFloat {
@@ -157,6 +161,7 @@ final class ExtensionSidePanelController: NSObject, @preconcurrency CraBrowserDe
     private func show(_ wanted: ExtensionSidePanelState, profilePath: String?) {
         let sameExtension = state.map { $0.extensionID == wanted.extensionID && $0.profile == wanted.profile } ?? false
         state = wanted
+        pageURL = owner?.currentBrowser?.currentURL
         CraLog.note("side panel shows \(wanted.extensionID) in \(wanted.profile)")
         let entry = ExtensionStore.shared.entries.first { $0.extensionID == wanted.extensionID }
         shell.sidePanel.show(name: entry?.name ?? "Extension", icon: entry?.icon)
@@ -194,6 +199,22 @@ final class ExtensionSidePanelController: NSObject, @preconcurrency CraBrowserDe
             host.orderOut(nil)
         }
         b.close()
+    }
+
+    /// The window shows another page, or its page another address.
+    func pageBeside(_ url: String?) {
+        guard isShowing, url != pageURL else { return }
+        pageURL = url
+        sendPageURL()
+    }
+
+    private func sendPageURL() {
+        guard let browser, let url = pageURL,
+              let quoted = try? JSONSerialization.data(withJSONObject: url, options: .fragmentsAllowed),
+              let literal = String(data: quoted, encoding: .utf8),
+              let data = try? JSONSerialization.data(withJSONObject: ["expression": "globalThis.__craSidePanelPage?.(\(literal))"]),
+              let params = String(data: data, encoding: .utf8) else { return }
+        browser.sendDevToolsMethod("Runtime.evaluate", params: params) { _, _ in }
     }
 
     private func resolvePageTarget(of b: CraBrowser) async {
@@ -296,10 +317,11 @@ final class ExtensionSidePanelController: NSObject, @preconcurrency CraBrowserDe
     // MARK: CraBrowserDelegate
 
     func browser(_ browser: CraBrowser, didChangeTitle title: String) {}
-    func browser(_ browser: CraBrowser, didChangeURL url: String) {}
+    /// A new panel document has the window script, waiting for the page's address.
+    func browser(_ browser: CraBrowser, didChangeURL url: String) { sendPageURL() }
     func browser(_ browser: CraBrowser, didChangeLoading loading: Bool, canGoBack: Bool, canGoForward: Bool) {}
     func browser(_ browser: CraBrowser, didChangeProgress progress: Double) {}
-    func browser(_ browser: CraBrowser, didFinishLoadingURL url: String, title: String, statusCode: Int) {}
+    func browser(_ browser: CraBrowser, didFinishLoadingURL url: String, title: String, statusCode: Int) { sendPageURL() }
     func browser(_ browser: CraBrowser, didLoadFavicon image: NSImage, forURL iconURL: String) {}
     func browser(_ browser: CraBrowser, didChangeStatusMessage message: String) {}
     func browser(_ browser: CraBrowser, didReportThemeColor hex: String) {}
