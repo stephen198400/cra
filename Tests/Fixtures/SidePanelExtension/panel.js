@@ -35,3 +35,19 @@ function probeTabs() {
   })().catch((e) => { tabsSeen = 'error-' + e.message; });
   return 'started';
 }
+
+// Like ChatGPT's panel: the tab it follows is the active one in the window it found at load,
+// and it moves on with tabs.onActivated in that window. `following` names that tab's page.
+var following = 'pending';
+(async () => {
+  const name = (t) => t ? new URL(t.url).searchParams.get('n') : 'none';
+  const [first] = await chrome.tabs.query({ active: true, currentWindow: true });
+  following = name(first);
+  if (!first) return;
+  const windowId = first.windowId;
+  chrome.tabs.onActivated.addListener(async (info) => {
+    if (info.windowId !== windowId) return;
+    const [t] = await chrome.tabs.query({ active: true, windowId });
+    following = name(t);
+  });
+})();
