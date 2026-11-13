@@ -141,6 +141,46 @@ static std::string ChromiumLabel(int ids, const char* fallback) {
 /// (the page's world, then Cra's isolated world).
 static NSArray<NSString*>* g_documentStartParams = nil;
 
+/// Page.addScriptToEvaluateOnNewDocument params for an extension side panel's page. Chrome's
+/// panel sits in the window of the page beside it, so to its extension the current window is
+/// that page's, and the panel is no tab of it. Cra's panel page is a Chromium window of its own:
+/// tabs.query({active: true, currentWindow: true}) gave the panel itself, and ChatGPT's panel
+/// then tried to read its own chrome-extension:// page. In the panel, the current window is
+/// the one the user was last in (Cra's panel never becomes Chromium's last active window), and
+/// queries leave the panel's own window out.
+static NSString* CraSidePanelWindowParams() {
+    static NSString* params = nil;
+    if (params) return params;
+    NSString* source =
+        @"(() => {"
+         "const tabs = globalThis.chrome && chrome.tabs, windows = globalThis.chrome && chrome.windows;"
+         "if (!tabs || typeof tabs.query !== 'function') return;"
+         "const query = tabs.query.bind(tabs);"
+         "let own;"
+         "const ownWindow = () => own || (own = query({ active: true, currentWindow: true })"
+         "  .then(([t]) => t ? t.windowId : undefined, () => undefined));"
+         "const current = (q) => q.currentWindow === true || q.windowId === -2;"
+         "const fixed = async (info) => {"
+         "  const q = Object.assign({}, info);"
+         "  if (current(q)) { delete q.currentWindow; delete q.windowId; q.lastFocusedWindow = true; }"
+         "  const [found, panel] = await Promise.all([query(q), ownWindow()]);"
+         "  return panel === undefined ? found : found.filter((t) => t.windowId !== panel);"
+         "};"
+         "tabs.query = function (info, callback) {"
+         "  const p = fixed(info);"
+         "  if (typeof callback !== 'function') return p;"
+         "  p.then((r) => callback(r), () => callback([]));"
+         "};"
+         "if (windows && typeof windows.getLastFocused === 'function') {"
+         "  const last = windows.getLastFocused.bind(windows);"
+         "  windows.getCurrent = function (a, b) { return last(a, b); };"
+         "}"
+         "})();";
+    NSData* json = [NSJSONSerialization dataWithJSONObject:@{@"source": source, @"runImmediately": @YES} options:0 error:nil];
+    params = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    return params;
+}
+
 /// Removes separators a removed item left at either end or next to another one. Hidden items
 /// don't count: Chrome's model keeps some it doesn't show.
 static void CraTidySeparators(CefRefPtr<CefMenuModel> model) {
@@ -2561,6 +2601,11 @@ class CraDevToolsObserver : public CefDevToolsMessageObserver {
                           if (error) NSLog(@"Cra: document start script not installed: %@", error);
                       }];
     if (_sidePanelURL) {
+        [self sendDevToolsMethod:@"Page.enable" params:@"{}" completion:^(NSString*, NSString*) {}];
+        [self sendDevToolsMethod:@"Page.addScriptToEvaluateOnNewDocument" params:CraSidePanelWindowParams()
+                      completion:^(NSString*, NSString* error) {
+                          if (error) NSLog(@"Cra: side panel window script not installed: %@", error);
+                      }];
         // DevTools messages run in order, so the document start scripts are in place as well.
         __weak CraBrowser* weakSelf = self;
         void (^load)(NSString*) = ^(NSString* why) {

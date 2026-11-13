@@ -14,3 +14,23 @@ var answers = 'pending';
     answers = `current-${current}-message-${message}-port-${portSender}-context-${context}`;
   });
 })();
+
+// Which tab the panel's extension takes for the one the user is looking at (ChatGPT's panel
+// reads chrome.tabs.query({active: true, lastFocusedWindow: true})[0]). In Chrome that is the
+// page beside the panel, never the panel. probeTabs() fills `tabsSeen`.
+var tabsSeen = 'pending';
+function probeTabs() {
+  tabsSeen = 'pending';
+  const kind = (t) => !t ? 'none' : (t.url || t.pendingUrl || '').startsWith(location.origin) ? 'panel'
+    : /^https?:/.test(t.url || t.pendingUrl || '') ? 'page' : 'other';
+  (async () => {
+    const [last] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const [current] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const all = await chrome.tabs.query({});
+    const listed = all.some((t) => kind(t) === 'panel') ? 'panel' : 'none';
+    const win = await chrome.windows.getCurrent();
+    const windowOf = current && win.id === current.windowId ? 'page' : 'other';
+    tabsSeen = `last-${kind(last)}-current-${kind(current)}-listed-${listed}-window-${windowOf}`;
+  })().catch((e) => { tabsSeen = 'error-' + e.message; });
+  return 'started';
+}

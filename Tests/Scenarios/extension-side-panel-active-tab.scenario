@@ -1,0 +1,23 @@
+# An extension's side panel asks which tab the user is looking at, as ChatGPT's panel does
+# before it reads the page: chrome.tabs.query({active: true, lastFocusedWindow: true}). In Chrome
+# that is the page beside the panel. In Cra the panel page sits in a Chromium window of its own,
+# so the query gave the panel itself, and ChatGPT refused to read a chrome-extension:// page.
+budget rss=700 stalls50=5
+from://debug?installExtension=${FIXTURES}/SidePanelExtension
+relaunch
+from://open?url=${PAGE}?n=active
+wait 3
+from://debug?extensionAction=${SIDE_PANEL_EXTENSION_ID}
+expect-log side panel shows ${SIDE_PANEL_EXTENSION_ID} in Default
+wait 2
+from://debug?windowSize=1400x880
+wait 1
+from://debug?clickAt=1300,400
+wait 1
+from://debug?sidePanelJS=probeTabs()
+wait 1
+from://debug?sidePanelJS=tabsSeen
+expect-log side panel evaluates tabsSeen to last-page-current-page-listed-none-window-page$
+from://debug?removeExtension=${SIDE_PANEL_EXTENSION_ID}
+wait 1
+reject-log fault:
