@@ -1,0 +1,75 @@
+# Cra: notes for coding agents
+
+[CONTRIBUTING.md](CONTRIBUTING.md) says what fits (Arc parity by default, no cloud AI,
+nothing leaves the Mac). [docs/development.md](docs/development.md) has the layout and the
+tests, and [docs/testing.md](docs/testing.md) has the test rules. This file holds the layer
+rules. Work lands on `main` directly: no PRs, no review round.
+
+## Layers
+
+| Layer | Where | Imports |
+|---|---|---|
+| Core | `Packages/CraCore` | Foundation, CoreGraphics, Observation |
+| App | `Sources/Cra` | CraCore, AppKit, SwiftUI, CraCEF |
+| Bridge | `Sources/CraCEF` | CEF (Objective-C++, seen by Swift through `include/`) |
+| Helper | `Sources/CraHelper` | CEF (the Chromium subprocess) |
+
+CraCore never imports AppKit, Cocoa, SwiftUI, UIKit or CraCEF. `scripts/lint.py`
+(`core-platform-import`) fails the build when it does. CraCore is a package of its own, so
+`swift test --package-path Packages/CraCore` runs without `vendor/cef`. Every app file sees it
+through `Sources/Cra/App/CraCoreExports.swift`.
+
+1. **Decisions go in CraCore.** Code that decides something without a window or a page (a
+   model, a file format, a layout rule, a policy) goes in CraCore, with a test. Its API is
+   `public` because the app is another package.
+2. **Split a type that needs AppKit for part of its job.** The value goes in CraCore and the
+   AppKit side becomes an extension in the app: `KeyChord` and `Shortcut`, `FaviconKey` and
+   `FaviconCache`.
+3. **A decoder reads only its own file.** A one-time migration that needs anything else
+   (another app's preferences, the disk) takes it as an argument and runs where the file is
+   loaded. Example: `AppSettings.migrateToolbarDefault(arcShowsToolbar:)`, called by
+   `SidebarStore`.
+4. **Data-folder formats don't change by accident.**
+   `Packages/CraCore/Tests/CraCoreTests/Fixtures/Model` holds current and older
+   `sidebar.json`, `settings.json`, `windows.json`, `keybindings.json` and the others. Each
+   comes with what Cra saved after loading it. If a change makes a file load differently,
+   record the new expectation and say why in the commit.
+5. **Test only what the change touches.** Locally, run the smallest set that covers the edited
+   code, not the whole suite:
+   - CraCore: `swift test --package-path Packages/CraCore --filter <TestType>`
+   - a contract area: its own `scripts/test-<area>.sh` (store, policies, key-bindings, ...)
+   - app behaviour: `scripts/build.sh`, then the one or two scenarios for that feature,
+     `scripts/scenario.sh <name>`
+   - always: `python3 scripts/lint.py` (seconds)
+
+   Run the full `scripts/test.sh` or `scripts/scenario.sh all` only when the user asks for it.
+   When a test fails, rerun only that test or group, and first check whether the change could
+   have caused it; report an unrelated failure instead of rerunning the suite.
+6. **Every bug fix comes with a test that fails without it.** That applies whether the bug
+   came from an issue, an X DM, a crash report, a nightly failure or your own testing. Write the
+   test first, see it fail on the unfixed code, then fix. When the bug has an issue, tag the test
+   `.bug(".../issues/<n>")` (`// promise: #<n>` above a harness func, `# promise: #<n>` in a
+   scenario) and run `scripts/promises.py --update`, so it's locked in `Tests/promises.lock`.
+   When the decision can't be reached by a test, move it into CraCore (rule 1) or add the
+   `from://debug` readout a scenario needs as part of the fix. Only what needs a real site, the
+   GPU or a human eye becomes a line in docs/release-checklist.md, and the commit says so.
+   When a locked test fails, the change broke something that shipped: fix the change, not the
+   test. Only Victor decides that a shipped behaviour changes; then run
+   `scripts/promises.py --update` and name the issue in the commit (docs/testing.md rule 8).
+
+## Known exceptions
+
+This logic is pure enough for CraCore but still lives in the app. Move a piece when a change
+touches it anyway, not as a side errand.
+
+- `Services/SuggestionEngine.swift`: the command bar's ranking. It holds `SidebarStore`,
+  `KeyBindingRegistry` and `SearchSuggestions`.
+- `Services/SidebarStore.swift` and `SidebarIntegrity.swift`: tree edits and repair, on
+  `JSONStore` files, the app's clock and `ArcImporter`. Tested by `scripts/test-store.sh`.
+- `App/KeyBindings.swift`: `KeyAction`, `MenuSection` and the default bindings, in a file that
+  imports AppKit for `Shortcut`'s event matching.
+- `Services/Import/`: the parsers for other browsers' files. Tested on `Tests/Fixtures` by
+  `scripts/test-store.sh`.
+- `UI/Windows/ExtensionLaunch.swift`, `Services/DevToolsToggle.swift` and
+  `UI/Windows/FloatingSidebarGeometry.swift`: policies, tested by
+  `scripts/test-policies.sh` and `scripts/test-floating-sidebar.sh`.

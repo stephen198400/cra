@@ -38,12 +38,12 @@ Commands for each piece are in [development.md](development.md#tests).
 
 | Layer | What | Where | Runs |
 |---|---|---|---|
-| L0 static | `scripts/lint.py`: the bug classes below as rules | `scripts/test.sh` | every PR |
-| L1 unit | `Packages/CraCore`: pure types, `swift test` | `scripts/test.sh` | every PR |
-| L2 contract | production files compiled against fakes: browser manager, store and importers on a manual clock, policies | `scripts/test-*.sh` | every PR |
+| L0 static | `scripts/lint.py`: the bug classes below as rules | `scripts/test.sh` | every change |
+| L1 unit | `Packages/CraCore`: pure types, `swift test` | `scripts/test.sh` | the touched types, each change |
+| L2 contract | production files compiled against fakes: browser manager, store and importers on a manual clock, policies | `scripts/test-*.sh` | the touched area, each change |
 | L3 component | Arc-specified views drawn from the running app and compared with `Tests/Snapshots` | `component-snapshots` scenario | nightly |
-| L4 scenario | the real app driven through a journey, invariants only | `scripts/scenario.sh` | one per PR, all nightly |
-| L5 human | the sidebar blur, fullscreen Spaces, GPU, real sites | the PR description | each PR, release |
+| L4 scenario | the real app driven through a journey, invariants only | `scripts/scenario.sh` | the touched feature's, each change; all nightly |
+| L5 human | the sidebar blur, fullscreen Spaces, GPU, real sites | the commit message | each change, release |
 
 L0–L2 need no CEF and finish in about 20 seconds. L3 lives in the running app because Cra's
 views can't be compiled without most of the app; it draws each view's layer tree (no blur,
@@ -51,8 +51,8 @@ no page content), so it checks geometry, ink and fills.
 
 ## Gates and budgets
 
-- **Changed lines under test ≥ 70 %** (`scripts/coverage.py`, posted on the PR). Of the lines a
-  PR adds or changes in files a harness compiles, at least 70 % must run. Changed files no
+- **Changed lines under test ≥ 70 %** (`scripts/coverage.py`). Of the lines a change adds or
+  changes in files a harness compiles, at least 70 % must run. Changed files no
   harness compiles (views, CEF glue) are listed, not counted.
 - **CraCore ≥ 85 % of lines.** There is no target for the whole repo: one would be met by
   testing the easy files.
@@ -142,7 +142,7 @@ compared" and refuses `CRA_SNAPSHOT_RECORD=1`.
 
 A reference is Cra's own drawing, so it can only be as right as Cra was when it was recorded.
 Before recording one again (`CRA_SNAPSHOT_RECORD=1 scripts/scenario.sh component-snapshots`),
-compare that view with Arc 1:1 on screen, and put both in the PR.
+compare that view with Arc 1:1 on screen, and say so in the commit.
 
 ## Nightly
 

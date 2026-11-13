@@ -88,13 +88,13 @@ the save panel.
     scripts/scenario.sh all          # user journeys in build/Cra.app, about 6 minutes
     scripts/scenario.sh sleep-tabs   # one of them (Tests/Scenarios/<name>.scenario)
     scripts/coverage.py              # line coverage, and the changed-lines gate against origin/main
-    scripts/coverage.py --base <ref> # the same against another base (CI passes the PR's)
+    scripts/coverage.py --base <ref> # the same against another base
     scripts/fuzz.sh                  # mutated importer fixtures under AddressSanitizer
     scripts/mutate.py [word]         # mutation testing of the pure code, about an hour; a word limits it
 
 [testing.md](testing.md) has the rules, the layers, the gates and how to write a scenario.
 
-CI runs the same tests on every pull request and push to main (no CEF download), once, through
+CI runs the same tests on every push to main (no CEF download), once, through
 `scripts/coverage.py` plus `scripts/lint.py`, and the smoke test on the app it builds. A change
 to Markdown or `docs/` alone runs nothing.
 
@@ -151,7 +151,7 @@ to Markdown or `docs/` alone runs nothing.
   inside Chromium shows up. Its own data folder lets it run next to your daily Cra.
 
 What none of these see: compositing (the sidebar blur), fullscreen spaces, and how real sites
-behave. Check those by hand, and say how in the PR.
+behave. Check those by hand, and say how in the commit.
 
 Scenario hooks for a command file (`from://debug?…`): `checkStore=1` logs a fault per broken
 sidebar link, `pageJS=<js>` runs script in the focused page, `installExtension=<folder>` and

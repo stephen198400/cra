@@ -6,7 +6,7 @@ window (a real site, the GPU, full-screen Spaces, how something feels), and the 
 waiting for a hook or a move into CraCore before a test can pin them.
 
 Before tagging a release, run through the checks for every area the release touched, on the
-built release app with a test profile. Note anything that fails in the release's issue or PR.
+built release app with a test profile. Note anything that fails in the release's issue.
 
 ## Manual checks
 
