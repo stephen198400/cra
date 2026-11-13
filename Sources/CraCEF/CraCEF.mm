@@ -154,7 +154,9 @@ static NSArray<NSString*>* g_documentStartParams = nil;
 /// and follows tabs.onActivated there (ChatGPT's does) stayed on the first page. The ids the
 /// panel was given for its current window stand for the page beside it from then on, and when
 /// Cra shows another tab the panel's onActivated listeners hear of it in the first of them, as
-/// Chrome's panel hears of a tab switch in its window.
+/// Chrome's panel hears of a tab switch in its window. A panel that took the current tab without
+/// listening is one per tab (ChatGPT's: Chrome shows each tab its own panel page, bound to that
+/// tab when it loads), so it loads again for the tab Cra now shows.
 static NSString* CraSidePanelWindowParams() {
     static NSString* params = nil;
     if (params) return params;
@@ -187,10 +189,11 @@ static NSString* CraSidePanelWindowParams() {
          "  return t.windowId;"
          "};"
          "const follow = async () => {"
-         "  if (!given.size || !heard.size) return;"
+         "  if (!given.size) return;"
          "  const t = await besideTab();"
          "  if (!t || t.id === shown) return;"
          "  shown = t.id;"
+         "  if (!heard.size) { location.reload(); return; }"
          "  const windowId = given.values().next().value;"
          "  for (const f of heard) { try { f({ tabId: t.id, windowId }); } catch (e) { setTimeout(() => { throw e; }); } }"
          "};"

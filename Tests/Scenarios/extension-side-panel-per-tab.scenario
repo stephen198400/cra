@@ -1,0 +1,29 @@
+# ChatGPT's side panel takes the current tab once, when its page loads, and never listens for
+# another: Chrome shows each tab its own panel page. Cra has one panel page per window, so after
+# a tab switch ChatGPT kept reading the first tab. Such a panel now loads again for the tab Cra
+# shows (ChatGPT keeps each tab's conversation, so going back finds it).
+budget rss=700 stalls50=5
+from://debug?installExtension=${FIXTURES}/SidePanelExtension
+relaunch
+from://open?url=${PAGE}?n=first
+wait 2
+from://open?url=${PAGE}?n=second
+wait 2
+from://debug?extensionAction=${SIDE_PANEL_EXTENSION_ID}
+expect-log side panel shows ${SIDE_PANEL_EXTENSION_ID} in Default
+wait 2
+from://debug?sidePanelJS=chrome.storage.session.set({bindOnly:true}).then(()=>location.reload())
+wait 2
+from://debug?sidePanelJS=following
+expect-log side panel evaluates following to second$
+from://action/nextTab
+wait 2
+from://debug?sidePanelJS=following
+expect-log side panel evaluates following to first$
+from://action/nextTab
+wait 2
+from://debug?sidePanelJS=following
+expect-log side panel evaluates following to second$
+from://debug?removeExtension=${SIDE_PANEL_EXTENSION_ID}
+wait 1
+reject-log fault:

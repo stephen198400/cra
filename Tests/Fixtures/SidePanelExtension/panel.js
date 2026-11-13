@@ -36,14 +36,17 @@ function probeTabs() {
   return 'started';
 }
 
-// Like ChatGPT's panel: the tab it follows is the active one in the window it found at load,
-// and it moves on with tabs.onActivated in that window. `following` names that tab's page.
+// The tab the panel follows: the active one in the window it found at load, then (unless
+// session storage says bindOnly) the one tabs.onActivated names there. With bindOnly it is
+// ChatGPT's panel in Chrome: one page per tab, bound to that tab when it loads. `following`
+// names that tab's page.
 var following = 'pending';
 (async () => {
   const name = (t) => t ? new URL(t.url).searchParams.get('n') : 'none';
-  const [first] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [[first], { bindOnly }] = await Promise.all([
+    chrome.tabs.query({ active: true, currentWindow: true }), chrome.storage.session.get('bindOnly')]);
   following = name(first);
-  if (!first) return;
+  if (!first || bindOnly) return;
   const windowId = first.windowId;
   chrome.tabs.onActivated.addListener(async (info) => {
     if (info.windowId !== windowId) return;
