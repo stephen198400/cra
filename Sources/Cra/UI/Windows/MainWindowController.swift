@@ -3651,19 +3651,22 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         return on
     }
 
-    /// A bookmark clicked on the bar: in the pane's tab (the selected one without a pane), or a new tab.
+    /// A bookmark clicked on the bar: in the pane's tab (the selected one without a pane), or a new
+    /// tab (PinnedNavigation.bookmark: a pinned tab keeps its page).
     func openBookmark(_ url: String, newTab: Bool, pane: UUID?) {
-        if newTab {
+        if !newTab, let pane, selectedTabID != pane { store.selectTab(pane, window: windowID) }
+        let selected: PinnedNavigation.SelectedTab = selectedTabID.flatMap { id in
+            store.item(id)?.tab == nil ? nil : store.isPinned(id) ? .pinned : .today
+        } ?? .noTab
+        switch PinnedNavigation.bookmark(newTab: newTab, selected: selected) {
+        case .backgroundTab:
             let tab = store.createTab(url: url, select: false, window: windowID)
             store.markUnread(tab.id, false)
             browsers.ensureRuntime(for: tab.id)
             if !sidebarVisible { showToast("New Tab Created") }
-            return
-        }
-        if let pane, selectedTabID != pane { store.selectTab(pane, window: windowID) }
-        if selectedTabID == nil || store.item(selectedTabID!)?.tab == nil {
+        case .newTab:
             store.createTab(url: url, window: windowID)
-        } else {
+        case .inPlace:
             loadInSelectedTab(url)
         }
     }

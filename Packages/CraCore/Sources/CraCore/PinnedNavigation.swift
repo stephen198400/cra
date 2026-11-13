@@ -15,4 +15,15 @@ public enum PinnedNavigation {
         guard let to = URL(string: link)?.host?.lowercased(), !to.isEmpty else { return false }
         return to != URL(string: page)?.host?.lowercased()
     }
+
+    public enum SelectedTab { case noTab, today, pinned }
+    public enum BookmarkDestination { case inPlace, newTab, backgroundTab }
+
+    /// Where a bookmark clicked on the bar opens. ⌘-click or a middle click: a tab behind. A plain
+    /// click loads in the selected tab, but a pinned tab or favorite keeps its page and the
+    /// bookmark opens as a new Today tab in front.
+    public static func bookmark(newTab: Bool, selected: SelectedTab) -> BookmarkDestination {
+        if newTab { return .backgroundTab }
+        return selected == .today ? .inPlace : .newTab
+    }
 }

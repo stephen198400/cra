@@ -15,4 +15,12 @@ struct PinnedNavigationTests {
         #expect(!PinnedNavigation.linkLeavesHost("http://pin.lvh.me:47139/away1.html", from: "http://pin.lvh.me:47139/c.html"))
         #expect(!PinnedNavigation.linkLeavesHost("mailto:a@b.c", from: "https://github.com/"))
     }
+
+    @Test func aBookmarkLeavesAPinnedTabAlone() {
+        #expect(PinnedNavigation.bookmark(newTab: false, selected: .pinned) == .newTab, "a pinned tab or favorite keeps its page")
+        #expect(PinnedNavigation.bookmark(newTab: false, selected: .today) == .inPlace)
+        #expect(PinnedNavigation.bookmark(newTab: false, selected: .noTab) == .newTab)
+        #expect(PinnedNavigation.bookmark(newTab: true, selected: .pinned) == .backgroundTab, "⌘-click still opens behind")
+        #expect(PinnedNavigation.bookmark(newTab: true, selected: .today) == .backgroundTab)
+    }
 }
