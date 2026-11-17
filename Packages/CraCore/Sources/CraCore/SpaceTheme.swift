@@ -35,6 +35,9 @@ public struct SpaceTheme: Codable, Equatable {
         public var vibrant: Bool = false
         public var accent: String? = nil
         public var solid: Bool = false
+        /// The theme editor's pad colours for this half, when Auto was given its own dark colour;
+        /// nil when the half comes from the theme's `key`.
+        public var key: [String]? = nil
 
         /// A half written without `vibrant` or `solid` (by hand, or by a later Cra that drops them)
         /// reads them as off instead of failing the file.
@@ -46,15 +49,18 @@ public struct SpaceTheme: Codable, Equatable {
             vibrant = try c.decodeIfPresent(Bool.self, forKey: .vibrant) ?? false
             accent = try c.decodeIfPresent(String.self, forKey: .accent)
             solid = try c.decodeIfPresent(Bool.self, forKey: .solid) ?? false
+            key = try c.decodeIfPresent([String].self, forKey: .key)
         }
 
-        public init(colors: [String], intensity: Double, noise: Double, vibrant: Bool = false, accent: String? = nil, solid: Bool = false) {
+        public init(colors: [String], intensity: Double, noise: Double, vibrant: Bool = false, accent: String? = nil, solid: Bool = false,
+                    key: [String]? = nil) {
             self.colors = colors
             self.intensity = intensity
             self.noise = noise
             self.vibrant = vibrant
             self.accent = accent
             self.solid = solid
+            self.key = key
         }
     }
 

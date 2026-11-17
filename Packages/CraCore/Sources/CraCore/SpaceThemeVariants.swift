@@ -7,20 +7,27 @@ public enum SpaceThemeVariants {
     /// Auto always gets both halves, one colour too (#155): Arc saves a swatch picked on Auto as one
     /// `single` theme that never changes with macOS, and copying that (0.1.30–0.1.32) left a space set
     /// to Auto stuck on one side. An imported Arc `single` stays on its side (ArcThemeImport, #171).
-    public static func theme(key: [String], intensity: Double, noise: Double, appearance: String) -> SpaceTheme {
+    /// `darkKey` is the pad's colours for the dark side (the editor keeps one set per side): Dark is
+    /// built from it and Auto's dark half too; nil uses `key` for both, as before it existed.
+    public static func theme(key: [String], darkKey: [String]? = nil, intensity: Double, noise: Double, appearance: String) -> SpaceTheme {
+        let darkKey = darkKey ?? key
         var t: SpaceTheme
-        if key.isEmpty {
-            t = colourless(intensity: intensity, noise: noise, appearance: appearance)
-            t.key = key
-            return t
-        }
         switch appearance {
-        case "light": t = light(key: key, intensity: intensity, noise: noise)
-        case "dark": t = dark(key: key, intensity: intensity, noise: noise)
-        default: t = SpaceTheme(light: light(key: key, intensity: intensity, noise: noise), dark: dark(key: key, intensity: intensity, noise: noise))
+        case "light": t = half(light: true, key: key, intensity: intensity, noise: noise); t.key = key
+        case "dark": t = half(light: false, key: darkKey, intensity: intensity, noise: noise); t.key = darkKey
+        default:
+            t = SpaceTheme(light: half(light: true, key: key, intensity: intensity, noise: noise),
+                           dark: half(light: false, key: darkKey, intensity: intensity, noise: noise))
+            t.key = key
+            if darkKey != key { t.dark?.key = darkKey }
         }
-        t.key = key
         return t
+    }
+
+    /// One side from its pad colours; none is that side of Arc's colourless theme.
+    private static func half(light isLight: Bool, key: [String], intensity: Double, noise: Double) -> SpaceTheme {
+        if key.isEmpty { return colourless(intensity: intensity, noise: noise, appearance: isLight ? "light" : "dark") }
+        return isLight ? light(key: key, intensity: intensity, noise: noise) : dark(key: key, intensity: intensity, noise: noise)
     }
 
     /// Arc's colourless theme, what its editor saves with no colour on the pad ("Tap to pick a color

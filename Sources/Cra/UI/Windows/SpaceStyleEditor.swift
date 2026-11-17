@@ -21,7 +21,8 @@ struct SpaceStyleEditor: View {
         _theme = State(initialValue: theme)
         // A one-colour theme stores its colour twice (a flat fill): one handle on the pad.
         let key = theme.key ?? (theme.solid || Set(theme.colors).count == 1 ? Array(theme.colors.prefix(1)) : theme.colors)
-        _pad = State(initialValue: PadState(key: key, intensity: theme.intensity, noise: theme.noise, appearance: theme.appearance))
+        _pad = State(initialValue: PadState(key: key, darkKey: theme.dark?.key ?? key, intensity: theme.intensity, noise: theme.noise,
+                                            appearance: theme.appearance))
         // The page with the space's colour, else the one shown last (Arc: currentThemeEditorPresetPage).
         let last = UserDefaults.standard.integer(forKey: Self.pageKey)
         _swatchPage = State(initialValue: SpaceColorPresets.page(of: key)
@@ -34,7 +35,7 @@ struct SpaceStyleEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ColorPad(pad: $pad)
+            ColorPad(key: editedKey, appearance: $pad.appearance, side: pad.appearance == "auto" ? (editsDark ? "dark" : "light") : nil)
                 .frame(width: 340, height: 340)
                 .padding(.top, 9)
             HStack(spacing: 0) {
@@ -42,7 +43,7 @@ struct SpaceStyleEditor: View {
                 HStack(spacing: 5.5) {
                     let page = SpaceColorPresets.pages[swatchPage]
                     ForEach(Array(page.swatches.enumerated()), id: \.offset) { i, colors in
-                        Button { pad.key = colors } label: {
+                        Button { editedKey.wrappedValue = colors } label: {
                             Circle()
                                 .fill(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
                                 .frame(width: 24, height: 24)
@@ -79,9 +80,21 @@ struct SpaceStyleEditor: View {
         .environment(\.colorScheme, .dark)
         // Opening the editor leaves the theme as it is; the first change rebuilds it from the pad.
         .onChange(of: pad) { _, p in
-            theme = SpaceThemeVariants.theme(key: p.key, intensity: p.intensity, noise: p.noise, appearance: p.appearance)
+            theme = SpaceThemeVariants.theme(key: p.key, darkKey: p.darkKey, intensity: p.intensity, noise: p.noise, appearance: p.appearance)
             onChange(theme)
         }
+    }
+
+    /// The pad edits the dark side's colours on Dark, and on Auto while macOS is dark (the side the
+    /// space shows, so every change is seen); the light side's otherwise.
+    private var editsDark: Bool {
+        pad.appearance == "dark" || (pad.appearance == "auto" && SystemAppearance.shared.isDark)
+    }
+
+    private var editedKey: Binding<[String]> {
+        let dark = editsDark
+        return Binding(get: { dark ? pad.darkKey : pad.key },
+                       set: { if dark { pad.darkKey = $0 } else { pad.key = $0 } })
     }
 
     private func pageArrow(_ symbol: String, to page: Int, label: String) -> some View {
@@ -122,7 +135,10 @@ private struct PageArrow: View {
 
 /// What the editor's controls set (Arc: SpaceStyleEditor.State's colours, factors and darkModeBiasSetting).
 struct PadState: Equatable {
+    /// The light side's colours (Light, and Auto while macOS is light).
     var key: [String]
+    /// The dark side's colours (Dark, and Auto while macOS is dark).
+    var darkKey: [String]
     var intensity: Double
     var noise: Double
     /// "auto", "light" or "dark".
@@ -133,7 +149,10 @@ struct PadState: Equatable {
 /// distance from the centre its saturation (full at 153 pt), brightness 0.95. A second and third
 /// colour follow the first 40° either side; dragging any handle turns the set.
 private struct ColorPad: View {
-    @Binding var pad: PadState
+    @Binding var key: [String]
+    @Binding var appearance: String
+    /// On Auto, which side's colours the pad shows ("light" or "dark"); nil on Light or Dark.
+    let side: String?
     @State private var hoveredKnob: Int?
     @State private var draggingKnob: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -156,13 +175,13 @@ private struct ColorPad: View {
                 .contentShape(Rectangle())
                 // Arc: pressing anywhere on the pad brings the main colour there, and it follows the drag.
                 .gesture(DragGesture(minimumDistance: 0).onChanged { g in place(handle: 0, at: g.location, centre: centre) })
-                if pad.key.isEmpty {
+                if key.isEmpty {
                     Text("Tap to pick a color for this space")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                         .allowsHitTesting(false)
                 }
-                ForEach(Array(pad.key.prefix(3).enumerated()), id: \.offset) { i, hex in
+                ForEach(Array(key.prefix(3).enumerated()), id: \.offset) { i, hex in
                     let main = i == 0
                     Circle()
                         .fill(Color(hex: hex))
@@ -190,12 +209,19 @@ private struct ColorPad: View {
                             .onEnded { _ in draggingKnob = nil })
                 }
                 VStack {
-                    AppearanceToggles(appearance: $pad.appearance).padding(.top, 24)
+                    AppearanceToggles(appearance: $appearance).padding(.top, 24)
+                    if let side {
+                        Text(side == "dark" ? "Colors for dark mode" : "Colors for light mode")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .padding(.top, 6)
+                            .allowsHitTesting(false)
+                    }
                     Spacer()
                     HStack(spacing: 16) {
                         // − takes the last colour too: an empty pad is Arc's colourless theme (#300).
-                        padButton("minus", label: "Remove a color", enabled: SpaceColorWheel.canRemove(pad.key.count)) { pad.key.removeLast() }
-                        padButton("plus", label: "Add a color", enabled: SpaceColorWheel.canAdd(pad.key.count)) { addColor() }
+                        padButton("minus", label: "Remove a color", enabled: SpaceColorWheel.canRemove(key.count)) { key.removeLast() }
+                        padButton("plus", label: "Add a color", enabled: SpaceColorWheel.canAdd(key.count)) { addColor() }
                     }
                     .padding(.bottom, 20)
                 }
@@ -219,14 +245,14 @@ private struct ColorPad: View {
         var angle = atan2(dy, dx) * 180 / .pi - Self.offset(i)
         angle = (angle.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
         let sat = min(1, hypot(dx, dy) / Self.reach)
-        let count = max(1, pad.key.count)
-        pad.key = (0..<count).map { Self.hex(hue: angle + Self.offset($0), saturation: sat) }
+        let count = max(1, key.count)
+        key = (0..<count).map { Self.hex(hue: angle + Self.offset($0), saturation: sat) }
     }
 
     private func addColor() {
-        guard let first = pad.key.first else { return }
+        guard let first = key.first else { return }
         let (h, s) = Self.wheel(first)
-        pad.key.append(Self.hex(hue: h + Self.offset(pad.key.count), saturation: s))
+        key.append(Self.hex(hue: h + Self.offset(key.count), saturation: s))
     }
 
     private static func offset(_ i: Int) -> CGFloat { CGFloat(SpaceColorWheel.offset(i)) }
