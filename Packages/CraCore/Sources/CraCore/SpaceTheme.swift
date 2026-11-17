@@ -138,6 +138,13 @@ public struct SpaceTheme: Codable, Equatable {
         SpaceTheme(colors: ["#F4F1EA", "#E6DCC8"], intensity: 0.6, noise: 0.15, appearance: "light"),  // Parchment
     ]
 
+    /// Dia's sidebar, sampled from its screenshots (17 Nov 2026): a cool light grey while macOS is
+    /// light and a blue-black while it is dark, opaque and without grain. The theme editor's Dia
+    /// button sets it, and a new space starts with it.
+    public static let dia = SpaceTheme(
+        light: SpaceTheme(colors: ["#DFE6EE", "#E5E9EE"], intensity: 1, noise: 0, appearance: "light", accent: "#DFE6EE"),
+        dark: SpaceTheme(colors: ["#22262D", "#262B31"], intensity: 1, noise: 0, appearance: "dark", accent: "#22262D"))
+
     /// Incognito windows: near-black with a cool violet cast, so they never pass for a space.
     public static let incognito = SpaceTheme(colors: ["#141318", "#2B2638"], intensity: 0.9, noise: 0.14, appearance: "dark")
 

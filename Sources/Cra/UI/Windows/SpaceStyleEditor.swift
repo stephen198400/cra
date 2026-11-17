@@ -35,7 +35,11 @@ struct SpaceStyleEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ColorPad(key: editedKey, appearance: $pad.appearance, side: pad.appearance == "auto" ? (editsDark ? "dark" : "light") : nil)
+            ColorPad(key: editedKey, appearance: appearance, side: theme == .dia ? nil : pad.appearance == "auto" ? (editsDark ? "dark" : "light") : nil,
+                     isDia: theme == .dia) {
+                theme = .dia
+                onChange(theme)
+            }
                 .frame(width: 340, height: 340)
                 .padding(.top, 9)
             HStack(spacing: 0) {
@@ -79,10 +83,19 @@ struct SpaceStyleEditor: View {
         )
         .environment(\.colorScheme, .dark)
         // Opening the editor leaves the theme as it is; the first change rebuilds it from the pad.
-        .onChange(of: pad) { _, p in
-            theme = SpaceThemeVariants.theme(key: p.key, darkKey: p.darkKey, intensity: p.intensity, noise: p.noise, appearance: p.appearance)
-            onChange(theme)
-        }
+        .onChange(of: pad) { _, p in rebuild(p) }
+    }
+
+    private func rebuild(_ p: PadState) {
+        theme = SpaceThemeVariants.theme(key: p.key, darkKey: p.darkKey, intensity: p.intensity, noise: p.noise, appearance: p.appearance)
+        onChange(theme)
+    }
+
+    /// On Dia's theme, pressing the Auto / Light / Dark already set leaves Dia for the pad's theme.
+    private var appearance: Binding<String> {
+        Binding(get: { pad.appearance }, set: { v in
+            if v == pad.appearance { if theme == .dia { rebuild(pad) } } else { pad.appearance = v }
+        })
     }
 
     /// The pad edits the dark side's colours on Dark, and on Auto while macOS is dark (the side the
@@ -153,6 +166,9 @@ private struct ColorPad: View {
     @Binding var appearance: String
     /// On Auto, which side's colours the pad shows ("light" or "dark"); nil on Light or Dark.
     let side: String?
+    /// Whether the theme is Dia's (SpaceTheme.dia), which the pad's Dia button sets in one press.
+    let isDia: Bool
+    let onDia: () -> Void
     @State private var hoveredKnob: Int?
     @State private var draggingKnob: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -209,7 +225,19 @@ private struct ColorPad: View {
                             .onEnded { _ in draggingKnob = nil })
                 }
                 VStack {
-                    AppearanceToggles(appearance: $appearance).padding(.top, 24)
+                    HStack(spacing: 7.5) {
+                        AppearanceToggles(appearance: $appearance, dimmed: isDia)
+                        Button(action: onDia) {
+                            Text("Dia")
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(width: 40, height: 32)
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(isDia ? 0.12 : 0)))
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(SpaceStyleButtonStyle(opacity: isDia ? 0.8 : 0.55, enabled: !isDia))
+                        .accessibilityLabel("Use Dia's colors")
+                    }
+                    .padding(.top, 24)
                     if let side {
                         Text(side == "dark" ? "Colors for dark mode" : "Colors for light mode")
                             .font(.system(size: 11, weight: .medium))
@@ -276,6 +304,8 @@ private struct ColorPad: View {
 /// Auto (sparkles), Light (sun) and Dark (moon) over the pad; the chosen one on a 32 pt tile.
 private struct AppearanceToggles: View {
     @Binding var appearance: String
+    /// On Dia's theme no toggle shows as chosen: the next press rebuilds the theme from the pad.
+    var dimmed = false
 
     var body: some View {
         HStack(spacing: 7.5) {
@@ -286,14 +316,15 @@ private struct AppearanceToggles: View {
     }
 
     private func toggle(_ value: String, symbol: String) -> some View {
-        Button { appearance = value } label: {
+        let chosen = !dimmed && appearance == value
+        return Button { appearance = value } label: {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .medium))
                 .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(appearance == value ? 0.12 : 0)))
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(chosen ? 0.12 : 0)))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(SpaceStyleButtonStyle(opacity: appearance == value ? 0.8 : 0.55, enabled: appearance != value))
+        .buttonStyle(SpaceStyleButtonStyle(opacity: chosen ? 0.8 : 0.55, enabled: !chosen))
     }
 }
 

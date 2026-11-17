@@ -36,3 +36,17 @@ struct SpaceThemeVariantsTests {
         #expect(t.dark?.key == nil)
     }
 }
+
+struct DiaThemeTests {
+    /// Dia's sidebar, measured from its screenshots (17 Nov): a cool light grey while macOS is
+    /// light, a blue-black while it is dark, both opaque and without grain.
+    @Test func diaFollowsMacOSWithItsTwoGreys() throws {
+        let dia = SpaceTheme.dia
+        #expect(dia.followsSystem)
+        let light = dia.resolved(systemDark: false), dark = dia.resolved(systemDark: true)
+        #expect(light.colors == ["#DFE6EE", "#E5E9EE"] && !light.isDark)
+        #expect(dark.colors == ["#22262D", "#262B31"] && dark.isDark)
+        for half in [light, dark] { #expect(!half.vibrant && !half.solid && half.intensity == 1 && half.noise == 0) }
+        #expect(try JSONDecoder().decode(SpaceTheme.self, from: JSONEncoder().encode(dia)) == dia)
+    }
+}

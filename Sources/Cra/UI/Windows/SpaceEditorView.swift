@@ -54,7 +54,7 @@ struct SpaceEditorView: View {
         self.onPreview = onPreview
         _title = State(initialValue: existing?.title ?? "")
         _icon = State(initialValue: existing?.icon ?? .newSpace)
-        _theme = State(initialValue: existing?.theme ?? SpaceColorPresets.newSpaceTheme())
+        _theme = State(initialValue: existing?.theme ?? .dia)
     }
 
     var body: some View {
