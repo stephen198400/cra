@@ -138,11 +138,13 @@ public struct SpaceTheme: Codable, Equatable {
         SpaceTheme(colors: ["#F4F1EA", "#E6DCC8"], intensity: 0.6, noise: 0.15, appearance: "light"),  // Parchment
     ]
 
-    /// Dia's sidebar, sampled from its screenshots (17 Nov 2026): a cool light grey while macOS is
-    /// light and a blue-black while it is dark, opaque and without grain. The theme editor's Dia
-    /// button sets it, and a new space starts with it.
+    /// Dia's sidebar, sampled from its screenshots (17 Nov 2026), without grain. Light: #F7F7F7 at
+    /// about 0.9 over the blurred desktop (#F7F7F7 over a light window, #E2E8EF over a blue
+    /// wallpaper), which is Cra's vibrant light path at intensity 0.53. Dark: an opaque blue-black.
+    /// The theme editor's Dia button sets it, and a new space starts with it.
     public static let dia = SpaceTheme(
-        light: SpaceTheme(colors: ["#DFE6EE", "#E5E9EE"], intensity: 1, noise: 0, appearance: "light", accent: "#DFE6EE"),
+        light: SpaceTheme(colors: ["#F7F7F7", "#F7F7F7"], intensity: 0.53, noise: 0, appearance: "light", vibrant: true,
+                          accent: "#F7F7F7"),
         dark: SpaceTheme(colors: ["#22262D", "#262B31"], intensity: 1, noise: 0, appearance: "dark", accent: "#22262D"))
 
     /// Incognito windows: near-black with a cool violet cast, so they never pass for a space.
