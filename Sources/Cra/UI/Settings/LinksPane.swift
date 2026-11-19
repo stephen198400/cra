@@ -22,6 +22,10 @@ struct LinksPane: View {
                                   detail: "Press \(newLittleWindow) wherever you are to open a Little Window, even while From isn’t in front.",
                                   isOn: $store.settings.littleWindowShortcutEverywhere)
                 SettingsCardDivider()
+                SettingsToggleRow("Open Little Window with ⌥⌘-click", detail: "", isOn: $store.settings.littleWindowOnOptionCommandClick)
+                SettingsCardDivider()
+                SettingsToggleRow("Auto-hide the Little Window toolbar", detail: "", isOn: $store.settings.autoHideLittleWindowToolbar)
+                SettingsCardDivider()
                 // Arc: "Archive Little Arcs after:" 1 hour, 6 hours (default), 12 hours.
                 SettingsPlainRow("Archive Little Windows",
                                  detail: "A Little Window you leave alone closes into the archive, where you can find it again.") {
@@ -46,6 +50,10 @@ struct LinksPane: View {
                 SettingsToggleRow("Peek with ⇧-click",
                                   detail: "Hold ⇧ while you click any link to open it in a Peek.",
                                   isOn: $store.settings.peekOnShiftClick)
+                SettingsCardDivider()
+                SettingsToggleRow("Expand Peek in its original tab", detail: "", isOn: $store.settings.peekExpandInSourceTab)
+                SettingsCardDivider()
+                SettingsToggleRow("Auto-hide the Peek toolbar", detail: "", isOn: $store.settings.autoHidePeekToolbar)
             }
 
             SettingsHeader("New tabs").padding(.top, 20)
@@ -54,6 +62,12 @@ struct LinksPane: View {
                 SettingsToggleRow("Switch to links opened in new tabs",
                                   detail: "“Open Link in New Tab” brings the new tab to the front. Off, the page you’re reading stays in front, as in Arc. ⌘-click opens a link behind the page and ⇧⌘-click switches to it either way.",
                                   isOn: $store.settings.openLinksInForeground)
+                SettingsCardDivider()
+                SettingsToggleRow("Open background tabs below the current tab", detail: "", isOn: $store.settings.backgroundTabsBelowCurrent)
+                SettingsCardDivider()
+                SettingsToggleRow("Allow up to eight Split View panes", detail: "", isOn: $store.settings.splitMorePanes)
+                SettingsCardDivider()
+                SettingsToggleRow("Add middle-clicked links to Split View", detail: "", isOn: $store.settings.splitMiddleClickAddsPane)
                 SettingsCardDivider()
                 SettingsPlainRow("Air Traffic Control", detail: routesDetail) {
                     Button("Edit Routes…") { showsAirTrafficControl = true }

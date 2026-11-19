@@ -1,0 +1,68 @@
+# promise: #520
+# Escape closes a Peek, as Arc's "Exit the current context" does. The key is typed into the Peek's page:
+# one the page leaves alone closes the Peek at once. A page that keeps every Escape (Gmail cancels each
+# one) turns Close into Arc's red Confirm pill for 1 s, and the next Escape closes the Peek before the
+# page sees it; without one, the pill gives up and the Peek stays. A double Escape closes it without
+# waiting for the pill (GitHub #520).
+budget rss=900 stalls50=40
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false, "peekInEveryTab": true}
+
+from://open?url=${PAGE}?n=hub
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+wait 1
+from://action/pinTab
+wait 0.5
+
+# A page that leaves Escape alone: the Peek closes at once.
+from://debug?cdp=Runtime.evaluate&params={"expression":"String(!!window.open('${PAGE}?n=peeked'))","userGesture":true}
+expect-log peek: from
+wait 1.5
+from://debug?peeks=open
+expect-log Cra peeks open: .*peeked
+from://debug?key=%1B,53,0&page=1&target=little
+wait 1.5
+from://debug?peeks=escaped
+expect-log Cra peeks escaped: none$
+
+# A page that cancels every Escape, as Gmail does.
+from://debug?cdp=Runtime.evaluate&params={"expression":"String(!!window.open('${PAGE}?n=keeps-escape'))","userGesture":true}
+expect-log peek: from
+wait 1.5
+from://debug?target=little&cdp=Runtime.evaluate&params={"expression":"addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();window.__escapes=(window.__escapes||0)+1}},true);'kept'","returnByValue":true}
+wait 0.5
+# The first Escape is the page's, and Close asks.
+from://debug?key=%1B,53,0&page=1&target=little
+wait 0.8
+expect-log peek: the page kept Esc, Close asks
+from://debug?peekClose=kept
+expect-log peek close kept: open=1 capturing=0 hold=escape close=\d+x33 fill=F53714 text=1
+# Unanswered, the pill gives up after 1 s and the Peek stays.
+wait 1.5
+from://debug?peekClose=gaveUp
+expect-log peek close gaveUp: open=1 capturing=0 hold=none close=34x33
+from://debug?peeks=stays
+expect-log Cra peeks stays: shown .*keeps-escape
+# Escape again, then again while Close asks: the Peek closes.
+from://debug?key=%1B,53,0&page=1&target=little
+wait 0.8
+from://debug?peekClose=askedAgain
+expect-log peek close askedAgain: open=1 capturing=0 hold=escape
+from://debug?key=%1B,53,0&page=1&target=little
+wait 1.5
+expect-log peek: Esc closes before the page \(Close asked\)
+from://debug?peeks=closed
+expect-log Cra peeks closed: none$
+
+# A double Escape on such a page.
+from://debug?cdp=Runtime.evaluate&params={"expression":"String(!!window.open('${PAGE}?n=double-escape'))","userGesture":true}
+wait 1.5
+from://debug?target=little&cdp=Runtime.evaluate&params={"expression":"addEventListener('keydown',e=>{if(e.key==='Escape')e.preventDefault()},true);'kept'","returnByValue":true}
+wait 0.5
+from://debug?peeks=double
+expect-log Cra peeks double: shown .*double-escape
+from://debug?key=%1B,53,0&page=1&target=little
+from://debug?key=%1B,53,0&page=1&target=little
+wait 1.5
+expect-log peek: Esc closes before the page \(the page kept the last one\)
+from://debug?peeks=doubled
+expect-log Cra peeks doubled: none$

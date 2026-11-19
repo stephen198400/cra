@@ -97,8 +97,17 @@ enum FloatingSidebarTests {
                "an uninterrupted hide still reattaches the sidebar normally")
 
         onlyTheKeyWindowReveals(window: window, sidebar: sidebar, panel: panel)
+        pointerPastTheLeftEdge(window: window, sidebar: sidebar)
+        theRevealSwingsPastItsEdge(window: window, sidebar: sidebar, panel: panel)
+        thePanelsStayInsideTheWindow(window: window, sidebar: sidebar, panel: panel)
         noStandInLightsInFullScreen(sidebar: sidebar, panel: panel)
         staysInsideTheWindowsCorners(window: window, sidebar: sidebar, panel: panel)
+        theShadowStaysUnderTheSidebar(window: window, sidebar: sidebar, panel: panel)
+        anEmptyWindowKeepsItOut(window: window, sidebar: sidebar)
+        heldOpenComesOutInPlace(window: window, sidebar: sidebar, panel: panel)
+        dockingFromHeldOpenHasOneOwner(window: window, sidebar: sidebar, panel: panel)
+        dockingARevealedSidebarCanBeSuperseded(window: window, sidebar: sidebar, panel: panel)
+        comesOutOnTheRight(window: window, sidebar: sidebar, shell: shell)
 
         // #136: the pointer is sampled only while Cra is the active app.
         sidebar.install()
@@ -107,18 +116,45 @@ enum FloatingSidebarTests {
         expect(sidebar.isPolling, "becoming active starts the pointer timer")
         NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
         expect(!sidebar.isPolling, "leaving the app stops it")
-        // A shown sidebar has nothing to reveal: no timer while the app is active either.
-        sidebar.sidebarHidden = { false }
+
+        // With the sidebar anchored there is nothing to float: no timer, so an idle Cra in front
+        // doesn't wake 30 times a second for it.
+        var hidden = false
+        sidebar.sidebarHidden = { hidden }
         NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
-        expect(!sidebar.isPolling, "a shown sidebar installs no pointer timer")
-        sidebar.sidebarHidden = { true }
-        sidebar.updatePolling()
+        expect(!sidebar.isPolling, "an anchored sidebar installs no pointer timer")
+        hidden = true
+        sidebar.sidebarVisibilityChanged()
         expect(sidebar.isPolling, "hiding the sidebar starts the pointer timer")
-        sidebar.sidebarHidden = { false }
-        sidebar.updatePolling()
-        expect(!sidebar.isPolling, "showing it again stops the timer")
+        hidden = false
+        sidebar.sidebarVisibilityChanged()
+        expect(!sidebar.isPolling, "showing it again stops it")
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
         window.close()
         print("Floating sidebar: \(checks) checks passed")
+    }
+
+    /// GitHub #464: with the sidebar on the right, its panel stands on the window's right edge, the
+    /// sidebar rests Arc's 5 pt in from it, and its resize strip is the edge beside the page, its left.
+    // promise: #464
+    @MainActor
+    private static func comesOutOnTheRight(window: NSWindow, sidebar: FloatingSidebarController, shell: ShellView) {
+        shell.sidebarSide = .right
+        sidebar.show()
+        drainAnimations()
+        let panel = window.childWindows!.first { $0 is FloatingSidebarPanel }!
+        let w = window.frame
+        let body = panel.convertToScreen(shell.sidebarHost.convert(shell.sidebarHost.bounds, to: nil))
+        expect(abs(panel.frame.maxX - w.maxX) < 0.5 && panel.frame.minX > w.midX, "on the right the panel stands on the window's right edge")
+        expect(abs(w.maxX - body.maxX - FloatingSidebarGeometry.margin) < 0.5, "and the sidebar rests 5 pt in from it")
+        expect(sidebar.edgeReadout == "right 5", "the readout says so (\(sidebar.edgeReadout))")
+        let edge = shell.sidebarHost.superview?.subviews.compactMap { $0 as? ResizeHandleView }.first
+        expect(edge.map { abs($0.frame.minX - shell.sidebarHost.frame.minX) < 0.5 && $0.side == .right } == true,
+               "its resize strip is its left edge, and a drag leftward widens it")
+        sidebar.hide(animated: true)
+        drainAnimations()
+        expect(!sidebar.isShown && !shell.sidebarDetached, "it goes home from the right as from the left")
+        shell.sidebarSide = .left
     }
 
     /// GitHub #82: like Arc, only the key window's hidden sidebar comes out on hover, so a window
@@ -176,14 +212,183 @@ enum FloatingSidebarTests {
                "panel margin and leave slack are included in the retention boundary")
         expect(FloatingSidebarGeometry.shouldHide(at: CGPoint(x: 429.1, y: 100), in: bounds, sidebarWidth: 328, pressedMouseButtons: 0),
                "leaving the shared retention boundary hides after release")
-        expect(FloatingSidebarGeometry.shouldHide(at: CGPoint(x: 15.9, y: 100), in: bounds, sidebarWidth: 328, pressedMouseButtons: 0),
+        // Beside the window, left of it, the sidebar stays out since #350; above, below and further left it goes.
+        expect(FloatingSidebarGeometry.shouldHide(at: CGPoint(x: 22, y: 9.9), in: bounds, sidebarWidth: 328, pressedMouseButtons: 0)
+               && FloatingSidebarGeometry.shouldHide(at: CGPoint(x: -300.1, y: 100), in: bounds, sidebarWidth: 328, pressedMouseButtons: 0),
                "leaving the window hides after release")
         for button in [1, 2, 4] {
             expect(!FloatingSidebarGeometry.shouldHide(at: CGPoint(x: 429.1, y: 100), in: bounds, sidebarWidth: 328, pressedMouseButtons: button),
                    "button mask \(button) preserves the sidebar beyond the leave slack during a gesture")
-            expect(!FloatingSidebarGeometry.shouldHide(at: CGPoint(x: 15.9, y: 100), in: bounds, sidebarWidth: 328, pressedMouseButtons: button),
+            expect(!FloatingSidebarGeometry.shouldHide(at: CGPoint(x: 22, y: 9.9), in: bounds, sidebarWidth: 328, pressedMouseButtons: button),
                    "button mask \(button) preserves the sidebar outside the moving window during a gesture")
         }
+    }
+
+    // promise: #350
+    /// GitHub #350: a pointer thrown past the window's left edge brings the hidden sidebar out, and it
+    /// stays out while the pointer is beside the window, as in Arc 1.172.2 (the reporter's recording,
+    /// and Arc driven at 120 fps, 11 Nov 2026). Cra revealed only in a 14 pt strip at the edge, so a
+    /// hand that overshot a window standing clear of the screen's edge got nothing.
+    @MainActor
+    private static func pointerPastTheLeftEdge(window: NSWindow, sidebar: FloatingSidebarController) {
+        // Arc's zone for a 264 pt sidebar: out at 250 pt left of the window, not at 270; a sidebar
+        // that is out leaves at 252-257. The strip's own 4 pt outside the window are not part of it.
+        let bounds = CGRect(x: 20, y: 10, width: 1400, height: 880)
+        func off(_ x: CGFloat, _ y: CGFloat = 100) -> Bool {
+            FloatingSidebarGeometry.isOffLeftEdge(CGPoint(x: x, y: y), in: bounds, sidebarWidth: 264)
+        }
+        expect(off(15.9) && off(-80) && off(-230), "beside the window, left of it, is off the edge")
+        expect(off(-236) && !off(-236.1), "as far out as the sidebar is wide, less its margin (256 pt for 264)")
+        expect(!off(16) && !off(20) && !off(300), "the strip and the window are not")
+        expect(!off(-80, 9.9) && !off(-80, 890.1), "nor is anything above or below the window")
+        expect(!FloatingSidebarGeometry.shouldHide(at: CGPoint(x: -80, y: 100), in: bounds, sidebarWidth: 264, pressedMouseButtons: 0),
+               "a sidebar that is out stays out with the pointer beside the window")
+        expect(FloatingSidebarGeometry.shouldHide(at: CGPoint(x: -236.1, y: 100), in: bounds, sidebarWidth: 264, pressedMouseButtons: 0),
+               "further left than that it goes")
+        expect(FloatingSidebarGeometry.shouldHide(at: CGPoint(x: -80, y: 890.1), in: bounds, sidebarWidth: 264, pressedMouseButtons: 0),
+               "above the window it goes")
+
+        // The poll's samples, in the shell's coordinates (328 pt sidebar: 320 pt of room).
+        let shell = sidebar.shell
+        var clock: TimeInterval = 500
+        sidebar.now = { clock }
+        sidebar.keyWindow = { window }
+        sidebar.hide(animated: false)
+        let mid = shell.bounds.midY
+        func sample(_ x: CGFloat, _ y: CGFloat, at t: TimeInterval) {
+            clock = t
+            sidebar.pointerSample(at: CGPoint(x: x, y: y))
+        }
+        // A throw from the page to 100 pt outside the window, then at rest.
+        sample(300, mid, at: 500)
+        expect(!sidebar.isShown && !sidebar.staged, "the pointer over the page leaves the sidebar in")
+        sample(-100, mid, at: 500.033)
+        expect(!sidebar.isShown && sidebar.staged, "past the left edge the wait starts, as it does in the strip")
+        sample(-100, mid, at: 500.1)
+        expect(!sidebar.isShown, "it waits for the pointer to rest out there")
+        sample(-100, mid, at: 500.133)
+        expect(sidebar.isShown, "then the sidebar comes out with the pointer 100 pt outside the window")
+        sample(-100, mid + 150, at: 501)
+        expect(sidebar.isShown, "and stays out while the pointer is beside the window")
+        sample(120, mid, at: 501.1)
+        expect(sidebar.isShown, "coming back in over the sidebar keeps it")
+        sample(-100, mid, at: 501.2)
+        sample(-100, shell.bounds.maxY + 30, at: 501.3)
+        expect(!sidebar.isShown, "above the window's top it goes, as in Arc")
+        sidebar.hide(animated: false)
+        // Arc: a pointer that arrives beside the window from outside brings nothing out.
+        for (i, t) in [502.0, 502.2, 502.5].enumerated() { sample(-100 - CGFloat(i), mid, at: t) }
+        expect(!sidebar.isShown && !sidebar.staged, "coming back down beside the window brings nothing out")
+        sample(-400, mid, at: 503)
+        for (i, t) in [503.1, 503.3, 503.6].enumerated() { sample(-60 - CGFloat(i), mid, at: t) }
+        expect(!sidebar.isShown && !sidebar.staged, "nor does a pointer that comes from further left")
+        // Still moving out there: Arc starts ~70 ms later than for a pointer at rest.
+        sample(300, mid, at: 510)
+        for (i, t) in [510.033, 510.067, 510.1, 510.133, 510.167].enumerated() { sample(-20 - 15 * CGFloat(i), mid, at: t) }
+        expect(!sidebar.isShown && sidebar.staged, "a pointer that keeps moving waits longer than one at rest")
+        sample(-100, mid, at: 510.2)
+        expect(sidebar.isShown, "and brings it out 0.15 s after it left the window")
+        sidebar.hide(animated: false)
+        // Out 40 pt and straight back over the page: nothing (Arc, out and in within 30 ms).
+        sample(300, mid, at: 520)
+        sample(-40, mid, at: 520.02)
+        expect(sidebar.staged, "out past the edge")
+        sample(60, mid, at: 520.05)
+        sample(60, mid, at: 520.3)
+        expect(!sidebar.isShown && !sidebar.staged, "a pointer that is back over the page before the wait ends shows nothing")
+        // A slow exit goes through the strip; the wait carries on outside.
+        sample(300, mid, at: 530)
+        sample(4, mid, at: 530.03)
+        sample(-10, mid, at: 530.06)
+        expect(sidebar.staged && !sidebar.isShown, "through the strip and out: still waiting")
+        sample(-10, mid, at: 530.15)
+        expect(sidebar.isShown, "at rest 10 pt outside the window it comes out")
+        sample(700, mid, at: 531)
+        expect(!sidebar.isShown, "on to the page sends it away")
+        sidebar.hide(animated: false)
+        // Another app comes to the front with the pointer beside the window: the sidebar goes (Arc: 85 ms
+        // later). Cra's poll stops then, so nothing else would send it away.
+        sample(300, mid, at: 535)
+        for t in [535.03, 535.2] { sample(-100, mid, at: t) }
+        expect(sidebar.isShown, "out, the pointer beside the window")
+        sidebar.resignedActive(pointerAt: CGPoint(x: -100, y: mid))
+        expect(!sidebar.isShown, "Cra no longer the active app: it goes")
+        sidebar.hide(animated: false)
+        sidebar.show()
+        sidebar.resignedActive(pointerAt: CGPoint(x: 120, y: mid))
+        expect(sidebar.isShown, "with the pointer over the window it stays, as before")
+        sidebar.hide(animated: false)
+        // Only the key window's sidebar comes out, out there as at the edge (#82).
+        sidebar.keyWindow = { nil }
+        sample(300, mid, at: 540)
+        for t in [540.03, 540.2, 540.4] { sample(-100, mid, at: t) }
+        expect(!sidebar.isShown && !sidebar.staged, "a window that isn't key brings nothing out")
+        sidebar.keyWindow = { window }
+        sidebar.now = { ProcessInfo.processInfo.systemUptime }
+    }
+
+    // promise: #350
+    /// GitHub #350, seen by Victor in the fixed build: the reveal's spring swings past the sidebar's
+    /// resting place (Arc 1.172.2: 274 for 270). Cra's panel ended at the resting edge, so the
+    /// sidebar's right side was cut off there while its shadow swung on, and its left side, resting 8 pt
+    /// in, uncovered 2-3 pt of the page. The panel has room for the swing while the spring runs, and
+    /// the sidebar rests 5 pt in, as Arc's does.
+    @MainActor
+    private static func theRevealSwingsPastItsEdge(window: NSWindow, sidebar: FloatingSidebarController, panel: NSWindow) {
+        let shell = sidebar.shell
+        sidebar.hide(animated: false)
+        sidebar.show()
+        let resting = shell.sidebarHost.superview!.frame.maxX
+        expect(shell.sidebarHost.superview!.frame.minX == 5, "the floating sidebar rests 5 pt inside the window, as in Arc")
+        expect(panel.frame.width >= resting + FloatingSidebarGeometry.revealOvershoot(sidebarWidth: shell.sidebarWidth),
+               "while the spring runs the panel reaches past the sidebar's resting edge, so the swing isn't cut off")
+        drainAnimations()
+        expect(sidebar.isShown && panel.frame.width == resting, "once it has settled the panel ends at the sidebar's edge again")
+        // A hide that interrupts the spring leaves nothing behind for the next reveal.
+        sidebar.hide(animated: false)
+        sidebar.show()
+        sidebar.hide(animated: true)
+        drainAnimations()
+        sidebar.show()
+        drainAnimations()
+        expect(sidebar.isShown && panel.frame.width == resting, "a reveal after an interrupted one settles the same way")
+        sidebar.hide(animated: false)
+    }
+
+    // promise: #350
+    /// GitHub #350, seen by Victor with the window zoomed to the screen: as the hidden sidebar came out,
+    /// the window's shadow and its dark outline went away along its whole top edge, and came back when
+    /// the sidebar left. The click-through panel that carries the sidebar's shadow reached 11 pt above
+    /// the window (8 before the sidebar moved 3 pt out), under the menu bar, and macOS gives the menu
+    /// bar its frosted backing over any window that lies under it, which covers the shadow behind it.
+    /// What reaches past the window is cut off by the window's outline anyway (#341).
+    @MainActor
+    private static func thePanelsStayInsideTheWindow(window: NSWindow, sidebar: FloatingSidebarController, panel: NSWindow) {
+        sidebar.hide(animated: false)
+        sidebar.show()
+        let shadow = window.childWindows!.first { $0 !== panel && $0.ignoresMouseEvents }!
+        for (name, p) in [("sidebar", panel), ("shadow", shadow)] {
+            expect(window.frame.contains(p.frame), "the \(name) panel stays inside the window's frame while the sidebar comes out")
+        }
+        drainAnimations()
+        for (name, p) in [("sidebar", panel), ("shadow", shadow)] {
+            expect(window.frame.contains(p.frame), "the \(name) panel stays inside the window's frame at rest")
+        }
+        let slider = shell_slider(panel)!, carrier = shadow.contentView!.subviews.first!
+        let body = panel.convertToScreen(slider.convert(slider.bounds, to: nil))
+        let cast = shadow.convertToScreen(carrier.convert(carrier.bounds, to: nil))
+        expect(abs(body.minX - cast.minX) < 0.01 && abs(body.minY - cast.minY) < 0.01 && body.size == cast.size,
+               "the shadow still sits under the sidebar")
+        expect(shadow.frame.maxX > panel.frame.maxX && shadow.frame.maxX <= window.frame.maxX,
+               "with room for it beside the sidebar, inside the window")
+        // A window barely wider than its sidebar: neither panel passes its right edge.
+        let wide = sidebar.shell.sidebarWidth
+        sidebar.hide(animated: false)
+        sidebar.shell.sidebarWidth = window.frame.width - 6
+        sidebar.show()
+        expect(window.frame.contains(panel.frame) && window.frame.contains(shadow.frame), "nor in a window as narrow as its sidebar")
+        sidebar.hide(animated: false)
+        sidebar.shell.sidebarWidth = wide
     }
 
     // promise: #315
@@ -238,8 +443,13 @@ enum FloatingSidebarTests {
                "the shadow is a soft layer shadow with the sidebar cut out of it")
         let slider = shell_slider(panel)
         let spring = slider?.layer?.animation(forKey: "slide") as? CASpringAnimation
-        expect(spring.map { $0.stiffness == 759 && $0.damping == 46.3 && $0.initialVelocity == 23.3 && $0.isAdditive } == true,
+        // Arc's spring, refitted on 11 Nov (#350): the 9 Nov one (759, 46.3, 23.3) swung 2 % past, Arc's 1.5 %.
+        let arc = FloatingSidebarSpring.reveal(travel: Double(sidebar.shell.sidebarWidth + FloatingSidebarGeometry.margin))
+        expect(spring.map { $0.stiffness == CGFloat(arc.stiffness) && $0.damping == CGFloat(arc.damping)
+                   && $0.initialVelocity == CGFloat(arc.initialVelocity) && $0.isAdditive } == true,
                "the reveal is Arc's spring")
+        expect(arc.stiffness == 1134 && arc.initialVelocity == 9.1 && arc.damping > 54 && arc.damping < 58,
+               "Arc's stiffness and start, damped a little more for a sidebar wider than Arc's 264 pt")
         sidebar.hide(animated: true)
         let ease = slider?.layer?.animation(forKey: "slide")
         expect(ease.map { !($0 is CASpringAnimation) && abs($0.duration - 0.102) < 0.001 } == true, "the hide is Arc's 0.1 s ease")
@@ -320,6 +530,148 @@ enum FloatingSidebarTests {
         sidebar.windowFullScreen = { false }
     }
 
+    // promise: #550
+    /// GitHub #550 (macOS 27.2, full screen): a translucent halo round the floating sidebar's top, the page's
+    /// colour. AppKit's constraint keeps a window clear of the menu bar: it moves a borderless panel 5 pt in
+    /// from the screen's bottom and 10 pt shorter than it (the sidebar's panel in full screen) down 5 pt,
+    /// while the shadow's full-height panel stays. The shadow then sat 5 pt above the sidebar and the page
+    /// showed between them. Both panels stay where they are put, and the shadow follows the sidebar's
+    /// panel wherever it is.
+    @MainActor
+    private static func theShadowStaysUnderTheSidebar(window: NSWindow, sidebar: FloatingSidebarController, panel: NSWindow) {
+        sidebar.hide(animated: false)
+        sidebar.show()
+        drainAnimations()
+        let shadow = window.childWindows!.first { $0 !== panel && $0.ignoresMouseEvents }!
+        if let screen = NSScreen.screens.first {
+            let s = screen.frame
+            let fullScreenSidebar = NSRect(x: s.minX, y: s.minY + 5, width: 305, height: s.height - 10)
+            for (name, p) in [("sidebar", panel), ("shadow", shadow)] {
+                for r in [fullScreenSidebar, s, NSRect(x: s.minX, y: s.maxY - 300, width: 305, height: 600)] {
+                    expect(p.constrainFrameRect(r, to: screen) == r, "the \(name) panel stays where it is put, clear of the menu bar or not: \(r)")
+                }
+            }
+        }
+        let slider = shell_slider(panel)!, carrier = shadow.contentView!.subviews.first!
+        func under() -> Bool {
+            let body = panel.convertToScreen(slider.convert(slider.bounds, to: nil))
+            let cast = shadow.convertToScreen(carrier.convert(carrier.bounds, to: nil))
+            return abs(body.minX - cast.minX) < 0.01 && abs(body.minY - cast.minY) < 0.01 && body.size == cast.size
+        }
+        expect(under(), "out, the shadow lies under the sidebar")
+        panel.setFrame(panel.frame.offsetBy(dx: 0, dy: -5), display: false)
+        expect(under(), "the sidebar's panel moved 5 pt down by someone else: the shadow follows it")
+        shadow.setFrame(shadow.frame.offsetBy(dx: 0, dy: 5).insetBy(dx: 0, dy: 2), display: false)
+        expect(under(), "the shadow's panel moved or resized: the shadow still lies under the sidebar")
+        sidebar.reposition()
+        expect(under(), "and after the window puts both panels back")
+        sidebar.hide(animated: false)
+    }
+
+    // promise: #483
+    /// GitHub #483: in a window with no tab the floating sidebar went in whenever the pointer left it, so
+    /// the next tab meant bringing it out again; Arc keeps it out. The poll, the shell's own tracking and
+    /// another app coming to the front all ask the window's SidebarPresentation; an explicit hide doesn't,
+    /// and with a tab it goes as it always did.
+    @MainActor
+    private static func anEmptyWindowKeepsItOut(window: NSWindow, sidebar: FloatingSidebarController) {
+        var hasSelectedTab = false
+        sidebar.staysShown = { !SidebarPresentation(sidebarVisible: false, hasSelectedTab: hasSelectedTab).mayRetract }
+        sidebar.keyWindow = { window }
+        let mid = sidebar.shell.bounds.midY
+        sidebar.hide(animated: false)
+        sidebar.show()
+        sidebar.pointerSample(at: CGPoint(x: 700, y: mid))
+        expect(sidebar.isShown, "with no tab, the pointer moving off over the window leaves the sidebar out")
+        sidebar.edgeLeft()
+        expect(sidebar.isShown, "with no tab, the shell's own tracking leaves it out too")
+        sidebar.resignedActive(pointerAt: CGPoint(x: -400, y: mid))
+        expect(sidebar.isShown, "with no tab, another app coming to the front leaves it out")
+        sidebar.hide(animated: false)
+        expect(!sidebar.isShown, "an explicit hide still sends it away")
+        hasSelectedTab = true
+        sidebar.show()
+        sidebar.edgeLeft()
+        expect(!sidebar.isShown, "with a tab, the shell's tracking sends it in as before")
+        sidebar.hide(animated: false)
+        sidebar.show()
+        sidebar.pointerSample(at: CGPoint(x: 700, y: mid))
+        expect(!sidebar.isShown, "with a tab, so does the poll")
+        sidebar.hide(animated: false)
+        sidebar.staysShown = { false }
+    }
+
+    // promise: #483
+    /// GitHub #483: an empty window's hidden sidebar comes out by itself, at once rather than with the edge
+    /// reveal's spring, and sits in its panel the way the shell expects of a floating sidebar.
+    @MainActor
+    private static func heldOpenComesOutInPlace(window: NSWindow, sidebar: FloatingSidebarController, panel: NSWindow) {
+        sidebar.hide(animated: false)
+        sidebar.showInPlace()
+        expect(sidebar.isShown && sidebar.shell.sidebarDetached && sidebar.shell.floatingSidebar,
+               "held open, the sidebar is out in its panel at once")
+        expect(shell_slider(panel)?.layer?.animation(forKey: "slide") == nil, "without the edge reveal's spring")
+        expect(panel.parent === window && panel.isVisible, "its panel rides on the browser window")
+        sidebar.showInPlace()
+        expect(sidebar.isShown, "asking again while it is out changes nothing")
+        // A tab opens and the sidebar starts to go, then the window is empty again before it has gone.
+        sidebar.hide(animated: true)
+        sidebar.showInPlace()
+        let shadow = window.childWindows?.first { $0 !== panel && $0.ignoresMouseEvents }?.contentView?.subviews.first?.layer
+        expect(shell_slider(panel)?.layer?.animation(forKey: "slide") == nil && shadow?.animation(forKey: "slide") == nil,
+               "held open again mid-hide, the hide's slide stops at once")
+        drainAnimations()
+        expect(sidebar.isShown && sidebar.shell.sidebarDetached && sidebar.shell.floatingSidebar && panel.parent === window,
+               "and it stays out, floating, in its panel on the browser window")
+        sidebar.hide(animated: false)
+        expect(!sidebar.isShown && !sidebar.shell.floatingSidebar, "an explicit hide still puts it away")
+    }
+
+    // promise: #483
+    /// GitHub #483: the sidebar button docks a held-open sidebar in place. Its panel grows to the docked
+    /// place while its corners square and its shadow fades, driven frame by frame by the window's own
+    /// slide, and only at the end is the sidebar handed back to the window, once.
+    @MainActor
+    private static func dockingFromHeldOpenHasOneOwner(window: NSWindow, sidebar: FloatingSidebarController, panel: NSWindow) {
+        let slider = shell_slider(panel)!
+        sidebar.hide(animated: false)
+        expect(!sidebar.beginDock(), "a sidebar that isn't out has nothing to dock in place")
+        sidebar.showInPlace()
+        let shadowPanel = window.childWindows!.first { $0 !== panel && $0.ignoresMouseEvents }!
+        expect(sidebar.beginDock(), "a held-open sidebar docks in place")
+        expect(!sidebar.isShown && sidebar.shell.sidebarDetached && panel.parent === window,
+               "while it docks the sidebar stays in its panel, no longer out")
+        sidebar.dockProgress(0.5)
+        expect(slider.layer!.cornerRadius > 0 && slider.layer!.cornerRadius < 12 && abs(shadowPanel.alphaValue - 0.5) < 0.01,
+               "halfway, its corners are half square and its shadow half gone")
+        sidebar.dockProgress(1)
+        expect(sidebar.finishDock(), "the dock hands the sidebar back once")
+        expect(!sidebar.shell.sidebarDetached && !sidebar.shell.floatingSidebar && panel.parent == nil && !panel.isVisible,
+               "at the end the window has the sidebar back, docked, and the panel is gone")
+        expect(slider.layer!.cornerRadius == 12 && shadowPanel.alphaValue == 1,
+               "the panel is ready for the next reveal: round corners, its shadow back")
+        expect(!sidebar.finishDock(), "finishing the same dock twice has no second owner")
+        expect(!sidebar.shell.sidebarDetached && sidebar.shell.sidebarHost.superview === sidebar.shell,
+               "finishing twice changes nothing")
+    }
+
+    // promise: #483
+    /// A hover-revealed sidebar uses the same dock, and a newer reveal owns the panel if it arrives
+    /// before that dock finishes.
+    @MainActor
+    private static func dockingARevealedSidebarCanBeSuperseded(window: NSWindow, sidebar: FloatingSidebarController, panel: NSWindow) {
+        sidebar.hide(animated: false)
+        sidebar.show()
+        drainAnimations()
+        expect(sidebar.beginDock(), "a hover-revealed sidebar docks in place too")
+        sidebar.show()
+        expect(!sidebar.finishDock(), "a newer reveal supersedes the dock")
+        drainAnimations()
+        expect(sidebar.isShown && sidebar.shell.sidebarDetached && panel.parent === window && panel.isVisible,
+               "the newer reveal keeps the sidebar in its panel")
+        sidebar.hide(animated: false)
+    }
+
     /// Whether a mask layer with a rounded rect (circular corners, as near as matters) lets a point through.
     private static func shows(_ p: NSPoint, through mask: CALayer) -> Bool {
         let f = mask.frame, r = mask.cornerRadius
@@ -378,6 +730,7 @@ final class ResizeHandleView: NSView {
     var onBegin: (() -> Void)?
     var onResize: ((_ translation: CGFloat, _ speed: CGFloat) -> Void)?
     var onEnd: (() -> Void)?
+    var side: SidebarSide = .left
 }
 
 final class ShellView: NSView {
@@ -391,6 +744,7 @@ final class ShellView: NSView {
     var fillsWindow: Bool { edgeToEdge }
     var sidebarDetached = false
     var floatingSidebar = false
+    var sidebarSide: SidebarSide = .left
     struct Frames { let sidebar: NSRect }
 
     override init(frame: NSRect) {
@@ -403,6 +757,7 @@ final class ShellView: NSView {
 
     func frames(sidebarVisible: Bool, floating: Bool, fullscreen: Bool, width: CGFloat) -> Frames {
         let margin = FloatingSidebarGeometry.margin
-        return Frames(sidebar: NSRect(x: margin, y: margin, width: width, height: bounds.height - 2 * margin))
+        let left = NSRect(x: margin, y: margin, width: width, height: bounds.height - 2 * margin)
+        return Frames(sidebar: sidebarSide.place(left, in: bounds))
     }
 }

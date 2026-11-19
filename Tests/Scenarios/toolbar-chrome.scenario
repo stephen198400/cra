@@ -4,7 +4,7 @@
 # with Arc's Copy URL glyph as a button of its own (#88). With the sidebar hidden the toggle comes
 # back first in the bar, 21 pt from the card edge like the first glyph before it (#50).
 budget rss=600 stalls50=10
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": true}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": true}
 from://debug?windowSize=1280x800
 from://open?url=${PAGE}?n=toolbar
 wait 3

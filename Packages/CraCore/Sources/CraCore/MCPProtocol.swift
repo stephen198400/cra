@@ -10,7 +10,8 @@ public enum MCPProtocol {
     /// Input tools whose result says what the action changed (MCPChanges), unless changes=false.
     public static let changeTools: Set<String> = ["page_click", "page_type", "page_fill", "page_press", "page_select", "page_drag", "page_upload"]
     /// Input tools that may act on a point of the last screenshot (x, y) instead of an element.
-    public static let pointTools: Set<String> = ["page_click", "page_hover", "page_scroll"]
+    /// page_upload takes the element there (a label's text, a drop zone) as its target.
+    public static let pointTools: Set<String> = ["page_click", "page_hover", "page_scroll", "page_upload"]
     /// Input tools that may omit a target: they act on what has focus (or the viewport's middle).
     public static let untargetedTools: Set<String> = ["page_press", "page_type", "page_scroll"]
     public static let tools: [[String: Any]] = [
@@ -33,7 +34,7 @@ public enum MCPProtocol {
         tool("page_fill", "Replace a field's or editor's content: click, Select All, Backspace, then type. Date, time, month, week, colour and range inputs take their value directly (2026-11-09, 14:30 or 2:30 PM, 2026-11, 2026-W45, #3b82f6, 40). Empty text clears. Up to 20,000 characters. Exactly one ref or selector.", target.merging(["text": "string"].merging(acting) { _, v in v }) { _, v in v }, ["tabId", "text"]),
         tool("page_press", "Press a key with optional modifiers (Shift, Control, Alt, Meta joined by +): Enter, Tab, Escape, arrows, Backspace, Delete, Home, End, PageUp, PageDown, Space, F1-F12, or one character, so key k with Meta is ⌘K. Editing shortcuts (⌘A, ⌘Z, ⌥⌫) run as the Mac does. Omit ref/selector to use current focus.", target.merging(["key": "string", "modifiers": "string"].merging(acting) { _, v in v }) { _, v in v }, ["tabId", "key"]),
         tool("page_drag", "Drag from one ref/selector to targetSelector using paced native pointer or HTML drag events. Both targets must be visible in the viewport. No local file drag; use page_upload.", target.merging(["targetSelector": "string"].merging(acting) { _, v in v }) { _, v in v }, ["tabId", "targetSelector"]),
-        tool("page_upload", "Select 1–8 absolute local regular files in an exact file-input ref/selector using Chromium. Hidden file inputs supported. Files are privately staged: 16 MiB each, 64 MiB per tab; the file itself cannot be a symlink. Does not submit the form.", target.merging(["paths": "array", "changes": "boolean"]) { _, v in v }, ["tabId", "paths"]),
+        tool("page_upload", "Select 1–8 absolute local regular files in a file input using Chromium, not JavaScript. Pass the input's ref/selector, or its uploader's button, label, drop zone or component host: a hidden input behind it is found, in open shadow roots and same-site iframes too. Text without a ref (a label in a shadow root) works by x/y from page_screenshot. Files are privately staged: 16 MiB each, 64 MiB per tab; the file itself cannot be a symlink. Does not submit the form.", point.merging(["paths": "array", "changes": "boolean"]) { _, v in v }, ["tabId", "paths"]),
         tool("page_download", "Download an HTTP(S) URL through a windowless tab's signed-in Chromium session (tab_open windowless=true). Returns downloadId; poll download_status. One active download per tab, 64 MiB and 60 seconds maximum; eight downloads per tab. Completed private files persist after disconnect.", ["tabId": "string", "url": "string"], ["tabId", "url"]),
         tool("download_status", "Inspect a windowless tab's download. Only completed files expose a local path; failed/cancelled partial files are removed.", ["tabId": "string", "downloadId": "string"], ["tabId", "downloadId"]),
         tool("download_cancel", "Cancel a windowless tab's active download and remove its partial file. Completed downloads are retained.", ["tabId": "string", "downloadId": "string"], ["tabId", "downloadId"]),
@@ -172,6 +173,29 @@ public enum MCPProtocol {
         guard let url = URL(string: value), let scheme = url.scheme?.lowercased(),
               ["http", "https"].contains(scheme), url.host != nil else { return false }
         return true
+    }
+
+    /// Agent connections open at once. Each agent session holds one for as long as it runs,
+    /// mostly idle (a Claude Code session from launch, Codex two per process), so eight
+    /// turned away the ninth session of an ordinary day (#459).
+    public static let clientLimit = 32
+    /// JSON-RPC error code of the answer that turns a connection away past clientLimit.
+    public static let fullCode = -32001
+    public static let fullMessage = "Cra already has \(clientLimit) agent connections open. Close an agent session you aren't using, then reconnect."
+
+    /// What a connection past clientLimit gets for its first message: an error that says why,
+    /// with that request's id so the agent shows it (null when the message had none).
+    public static func fullReply(to line: Data) -> Data {
+        let request = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any]
+        let id = request?["id"].flatMap { $0 is NSNull ? nil : $0 } ?? NSNull()
+        return (try? JSONSerialization.data(withJSONObject: error(id: id, code: fullCode, message: fullMessage), options: [.sortedKeys])) ?? Data()
+    }
+
+    /// The message of a fullReply, so the bridge can also say it on stderr; nil for any other line.
+    public static func fullMessage(in line: Data) -> String? {
+        guard let reply = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
+              let error = reply["error"] as? [String: Any], error["code"] as? Int == fullCode else { return nil }
+        return error["message"] as? String
     }
 
     public static func error(id: Any, code: Int, message: String) -> [String: Any] {

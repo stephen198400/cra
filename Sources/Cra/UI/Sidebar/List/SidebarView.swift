@@ -16,6 +16,8 @@ final class SidebarView: NSView {
     var siteControlsButtonFrameOnScreen: NSRect? { topBar.siteControlsButtonFrameOnScreen }
     /// The URL field's "Translation Available" (screen rect), nil while it isn't shown (#310).
     var translateFrameOnScreen: NSRect? { topBar.translateFrameOnScreen }
+    /// The URL field's "Pop-ups Blocked" (#357), on the translate line's place.
+    var blockedPopupsFrameOnScreen: NSRect? { topBar.translateFrameOnScreen }
     /// Scenario hook (#310): what the URL field's translate line says, nil while it isn't shown.
     var debugTranslateLine: String? { topBar.debugTranslateLine }
     /// Scenario hooks (#226): the URL field as if the pointer were over the header, and a press on
@@ -35,7 +37,102 @@ final class SidebarView: NSView {
     private let player: NowPlayingTrayView
     private let bannerHost = UpdateBannerView()
     private let dock: SpaceDockView
+    /// Arc's "+" past the last space, over the column (NewSpaceSwipe).
+    private let newSpacePlus = NewSpacePlusView()
+    /// How far left of its page the shown space's column stands, for a scenario's reading.
+    var debugSpaceColumnShift: CGFloat { pager.debugShift }
+    /// The "+" as it rests for what it was last asked to show, for a scenario's reading.
+    var debugNewSpacePlus: String {
+        newSpacePlus.settleNow()
+        return newSpacePlus.debugLine
+    }
     private var libraryHost: LibraryView?
+    /// Arc's Create a Space page, over the space's column while one is being made.
+    private func observeCreation() {
+        observeChanges(of: { [ui] in ui.spaceCreation != nil }) { [weak self] on in self?.showCreation(on) }
+    }
+
+    /// Where the page goes: the room between the top row and the dock (Arc's ends 50 pt above the
+    /// sidebar's bottom).
+    private var creationFrame: NSRect {
+        let b = tabs.bounds, top = topBar.preferredHeight
+        return NSRect(x: 0, y: top, width: b.width, height: max(0, b.height - 50 - top))
+    }
+
+    private var creationClip: NSView?
+    private func showCreation(_ on: Bool) {
+        if on, creationHost == nil {
+            let v = SpaceCreationView(store: store, ui: ui, actions: actions, palette: palette)
+            let clip = NSView(frame: creationFrame)
+            clip.clipsToBounds = true
+            tabs.addSubview(clip)
+            clip.addSubview(v)
+            creationClip = clip
+            creationHost = v
+            let f = clip.bounds, was = pager.frame
+            v.frame = f.offsetBy(dx: f.width, dy: 0)
+            v.layoutSubtreeIfNeeded()
+            for other in [player] as [NSView] { other.alphaValue = 0 }
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.2
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                v.animator().frame = f
+                pager.animator().frame = was.offsetBy(dx: -was.width, dy: 0)
+            }
+            v.focusName()
+        } else if !on, let v = creationHost {
+            creationHost = nil
+            let clip = creationClip
+            creationClip = nil
+            // From wherever a swipe left it.
+            creationPull = 0
+            let f = NSRect(origin: .zero, size: creationFrame.size), home = NSRect(x: 0, y: pager.frame.minY, width: pager.frame.width, height: pager.frame.height)
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.12
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                v.animator().frame = f.offsetBy(dx: f.width, dy: 0)
+                v.animator().alphaValue = 0
+                pager.animator().frame = home
+                for other in [player] as [NSView] { other.animator().alphaValue = 1 }
+            } completionHandler: {
+                clip?.removeFromSuperview()
+            }
+            needsLayout = true
+        }
+    }
+
+    private(set) var creationPull: CGFloat = 0
+    func setCreationPull(_ pull: CGFloat, animated: Bool = false) {
+        guard let v = creationHost, pull != creationPull else { return }
+        creationPull = pull
+        let f = NSRect(origin: .zero, size: creationFrame.size).offsetBy(dx: pull * tabs.bounds.width, dy: 0)
+        var column = pager.frame
+        column.origin.x = -tabs.bounds.width * (1 - pull)
+        guard animated else {
+            v.frame = f
+            pager.frame = column
+            return
+        }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.2
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            v.animator().frame = f
+            pager.animator().frame = column
+        }
+    }
+
+    private var creationHost: SpaceCreationView?
+    var debugSpaceCreation: String { creationHost?.debugLine ?? "none" }
+    var debugDockLine: String { dock.debugLine }
+    func debugTypeSpaceName(_ text: String) { creationHost?.debugType(text) }
+    func debugSpaceCreationTip(_ row: String) -> String { creationHost?.debugTip(row) ?? "none" }
+    func closeSpaceCreationPopovers() { creationHost?.closeIconPicker() }
+    func focusSpaceCreationName() { creationHost?.focusName() }
+    /// The creation animation, then `done`; at once when the page isn't up.
+    func playSpaceCreation(icon: SpaceIcon, done: @escaping () -> Void) {
+        guard let host = creationHost else { return done() }
+        host.playCreation(icon: icon, done: done)
+    }
     /// The palette drawn now; the theme-shown scenario hook reads it (#155).
     private(set) var palette: SpacePalette
     private var lastSpaceID: UUID?
@@ -57,9 +154,17 @@ final class SidebarView: NSView {
         pager.wantsLayer = true
         for v in [topBar, pager, player, bannerHost, dock] as [NSView] { tabs.addSubview(v) }
         addSubview(tabs)
+        newSpacePlus.ink = SidebarColors(palette).textPrimary
+        ui.observeNewSpacePull { [weak self] in
+            guard let self else { return }
+            // Arc's disc takes the app's appearance, not the space's (NewSpaceSwipe.look).
+            self.newSpacePlus.isDark = SystemAppearance.shared.isDark
+            self.newSpacePlus.show(overscroll: self.ui.newSpacePull)
+        }
         player.onCountChange = { [weak self] in self?.needsLayout = true }
         ui.observeLibraryReveal { [weak self] in self?.applyLibraryReveal() }
         observe()
+        observeCreation()
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -90,6 +195,8 @@ final class SidebarView: NSView {
             bannerHost.themeColor = shown.accent ?? shown.colors.first
             player.setTheme(shown.accent ?? shown.colors.first, dark: palette.isDark)
             libraryHost?.palette = palette
+            creationHost?.palette = palette
+            newSpacePlus.ink = SidebarColors(palette).textPrimary
         }
         self.bannerHeight = bannerHeight
         showLibrary(library)
@@ -142,6 +249,27 @@ final class SidebarView: NSView {
         }
     }
 
+    /// The Library for a swipe that brings it in from a hidden sidebar: the window shows it under
+    /// the floating sidebar until it lands, then `adoptLibrary` takes it in here.
+    func makeDetachedLibrary(_ page: LibraryPage) -> LibraryView {
+        LibraryView(page: page, palette: palette, store: store, ui: ui, actions: actions, favicons: favicons)
+    }
+
+    /// The Library that came in from a hidden sidebar is this column's now, shown as it landed.
+    func adoptLibrary(_ host: LibraryView, page: LibraryPage) {
+        libraryHost?.removeFromSuperview()
+        host.removeFromSuperview()
+        host.page = page
+        host.alphaValue = 1
+        host.frame = bounds
+        addSubview(host)
+        libraryHost = host
+        shownLibrary = page
+        tabs.alphaValue = 0
+        tabs.isHidden = true
+        host.focusSearch()
+    }
+
     private func makeLibraryHost(_ page: LibraryPage) -> LibraryView {
         let h = LibraryView(page: page, palette: palette, store: store, ui: ui, actions: actions, favicons: favicons)
         addSubview(h)
@@ -188,7 +316,11 @@ final class SidebarView: NSView {
         layer?.masksToBounds = true
         let base = ui.libraryRevealBase, library = ui.libraryRevealWidth
         host.frame = NSRect(x: LibrarySwipe.libraryX(reveal: r, base: base, library: library), y: 0, width: library, height: bounds.height)
-        tabs.frame = NSRect(x: LibrarySwipe.spaceX(reveal: r, base: base, library: library), y: 0, width: base, height: bounds.height)
+        // Out to a hidden sidebar (base 0) no tab list follows the Library.
+        tabs.isHidden = base <= 0
+        if base > 0 {
+            tabs.frame = NSRect(x: LibrarySwipe.spaceX(reveal: r, base: base, library: library), y: 0, width: base, height: bounds.height)
+        }
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -373,6 +505,11 @@ final class SidebarTopBarView: NSView {
                 }
             }
             let translation = tab.flatMap { ui.navState(for: $0.id).translation }
+            // Blocked pop-ups (#357) take the translate line while they wait: they go with the
+            // page's next navigation.
+            let popups = tab.map { ui.navState(for: $0.id).blockedPopups } ?? 0
+            let line = popups > 0 ? BlockedPopups.buttonTitle(count: popups)
+                : translation?.offersTranslation == true ? (SidebarHeaderLayout.isNarrow(width: Double(bounds.width)) ? "Translate" : "Translation Available") : nil
             pill.show(text: text, url: url, hasTab: tab != nil, colors: colors, active: active,
                       pinned: pinned, protectedMedia: tab.flatMap { ui.navState(for: $0.id).protectedMedia },
                       translate: translation?.offersTranslation == true
@@ -383,7 +520,8 @@ final class SidebarTopBarView: NSView {
             let tabID = tab?.id
             pill.onTranslate = { [weak self] in
                 guard let self, let tabID else { return }
-                self.actions.showTranslate(tabID, self.translateFrameOnScreen)
+                if popups > 0 { self.actions.showBlockedPopups(tabID, self.translateFrameOnScreen) }
+                else { self.actions.showTranslate(tabID, self.translateFrameOnScreen) }
             }
         }
         needsLayout = true
@@ -407,7 +545,7 @@ final class SidebarTopBarView: NSView {
     // A double click on the empty strip does the title bar's double-click action; a drag moves
     // the window (from the floating sidebar too, without tearing its panel off).
     override var mouseDownCanMoveWindow: Bool { false }
-    private var press = WindowDragGesture()
+    private var press = WindowDragGesture(source: "sidebar top")
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2, convert(event.locationInWindow, from: nil).y < CraMetrics.titleAreaHeight {
             _ = press.finish()
@@ -427,6 +565,23 @@ final class SidebarTopBarView: NSView {
     override func mouseEntered(with event: NSEvent) { hoverHeader = true }
     override func mouseExited(with event: NSEvent) { hoverHeader = false }
 }
+
+/// Arc's menu (Reload ✓ ⌘R, Refresh (Ignore Cache) ⇧⌘R | Clear Cookies and Refresh) in the
+/// registry's words, with Clear Cache beside Clear Cookies and Cra's developer items under
+/// them (#89). Developer Mode's ⌄ after ↻ opens it, and so does a right-click on the toolbar's ↻.
+@MainActor
+enum ReloadMenu {
+    static func make(_ actions: SidebarActions) -> NSMenu {
+        let m = NSMenu()
+        m.autoenablesItems = false
+        for group in [["reload", "hardReload"], ["clearCookies", "clearCache"], ["viewSource", "devTools"]] {
+            if m.numberOfItems > 0 { m.addItem(.separator()) }
+            for id in group { MenuItems.add(m, action: id, on: id == "reload" ? true : nil) { actions.performAction(id) } }
+        }
+        return m
+    }
+}
+
 
 /// The URL pill on the sidebar's second row while the toolbar is hidden.
 final class SidebarURLPill: NSView, NSTextFieldDelegate {
@@ -541,7 +696,12 @@ final class SidebarURLPill: NSView, NSTextFieldDelegate {
                 b.menuProvider = { ExtensionStore.shared.entries.first { $0.extensionID == id }.map(ExtensionsMenu.iconMenu) }
                 accessories.append(b)
             case .copyURL:
-                let copy = SidebarGlyphButton(symbol: "link", size: 28, height: 28, iconSize: 14, weight: .regular, help: "Copy URL (⇧⌘C)", colors: colors) { actions.performAction("copyURL") }
+                let copy = SidebarGlyphButton(symbol: "link", size: 28, height: 28, iconSize: 14, weight: .regular, help: "Copy URL (⇧⌘C)", colors: colors) {}
+                // Arc confirms a click here in place as well as with the toast; ⇧⌘C only toasts (#361).
+                copy.action = { [weak copy] in
+                    actions.performAction("copyURL")
+                    copy?.playCopyCheck(glyphSize: 14)
+                }
                 copy.active = m.active
                 accessories.append(copy)
             case .extensions:
@@ -786,6 +946,9 @@ final class SpaceDockView: NSView {
     private var hovered: UUID? { didSet { if hovered != oldValue { hoverChanged() } } }
     private var reorder: (id: UUID, from: Int, to: Int, start: NSPoint, moved: Bool)?
     private var syncQueued = false
+    /// The new space's item while Arc's Create a Space page is up; not a space of the store's.
+    private static let pendingID = UUID()
+    private var creating = false
 
     init(store: SidebarStore, ui: SidebarUIState, actions: SidebarActions) {
         self.store = store
@@ -820,7 +983,7 @@ final class SpaceDockView: NSView {
         let selected = store.selectedTabID(window: ui.windowID)
         let url = selected.flatMap { store.item($0)?.tab?.url }.flatMap(URL.init(string:))
         let canBoost = ["http", "https"].contains(url?.scheme?.lowercased() ?? "") && url?.host != nil
-        let canSplit = selected.map { store.paneTabIDs(for: $0).count < 4 } ?? false
+        let canSplit = selected.map { store.paneTabIDs(for: $0).count < store.splitPaneLimit } ?? false
         let entries: [(String, String, String, Bool)] = [
             ("newSpace", "New Space", "plus.rectangle.on.rectangle", true),
             ("newFolder", "New Folder", "folder", true),
@@ -846,6 +1009,7 @@ final class SpaceDockView: NSView {
     private func sync() {
         syncQueued = false
         var spaces: [Space] = []
+        var pending: SpaceCreationDraft?
         withObservationTracking {
             colors = SidebarColors(store.focusedSpace(window: ui.windowID).theme.palette)
             incognito = store.window(ui.windowID).isIncognito
@@ -854,6 +1018,7 @@ final class SpaceDockView: NSView {
             // Arc's single-space mode drops the lone space icon along with the header; incognito and
             // Blank Windows show no space icons (Arc 1.172 keeps the + in a Blank Window).
             spaces = store.isStandalone(window: ui.windowID) || store.hidesSpaceHeader(f) ? [] : store.orderedSpaces
+            pending = ui.spaceCreation
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, !self.syncQueued else { return }
@@ -864,11 +1029,30 @@ final class SpaceDockView: NSView {
         library.colors = colors
         settings.colors = colors
         plus.colors = colors
-        plus.isHidden = incognito
-        let ids = spaces.map(\.id)
+        // Arc's dock while a space is being made: no Library or "+" button, and one more item at
+        // the end for the new space, lit in place of the open one.
+        creating = pending != nil
+        library.isHidden = creating
+        plus.isHidden = incognito || creating
+        var ids = spaces.map(\.id)
+        if creating {
+            ids.append(Self.pendingID)
+            focused = Self.pendingID
+            hovered = nil
+        }
         for (id, c) in cells where !ids.contains(id) {
             c.removeFromSuperview()
             cells[id] = nil
+        }
+        if let pending {
+            let c = cells[Self.pendingID] ?? {
+                let c = SpaceCellView(spaceID: Self.pendingID, store: store, ui: ui)
+                cells[Self.pendingID] = c
+                addSubview(c)
+                return c
+            }()
+            // A dot until a theme is chosen, then the picked icon (SpaceCreationDraft.dockMark).
+            c.show(icon: pending.themeChosen ? pending.icon : .none, title: "Create Space")
         }
         for s in spaces {
             let c = cells[s.id] ?? {
@@ -882,6 +1066,13 @@ final class SpaceDockView: NSView {
         order = ids
         refreshCells()
         needsLayout = true
+    }
+
+    /// What each cell draws and how wide, and whether the Library and "+" buttons show, for a scenario.
+    var debugLine: String {
+        let ws = cellWidths
+        let drawn = order.enumerated().map { i, id in "\(cells[id]?.markLabel ?? "?")@\(String(format: "%g", ws[i]))" }
+        return "\(drawn.joined(separator: " ")) buttons=\(library.isHidden ? 0 : 1)\(plus.isHidden ? 0 : 1)"
     }
 
     /// Scenarios (from://debug?hover=SpaceCellView,n): that space hovered as if the pointer were on
@@ -932,7 +1123,8 @@ final class SpaceDockView: NSView {
     /// (or the hovered one, #252) keeps 22 and the others split the rest. The strip stays centred,
     /// so it never runs past the buttons.
     private var cellWidths: [CGFloat] {
-        SpaceDock.widths(count: order.count, open: wide.flatMap { order.firstIndex(of: $0) }, room: room)
+        if creating { return SpaceDock.widthsWhileCreating(count: order.count - 1, room: max(0, bounds.width - 20)) }
+        return SpaceDock.widths(count: order.count, open: wide.flatMap { order.firstIndex(of: $0) }, room: room)
     }
 
     /// Left edges of the cells, in order.
@@ -1017,6 +1209,13 @@ final class SpaceDockView: NSView {
     override func mouseDown(with event: NSEvent) {
         let p = point(event)
         guard let i = index(at: p) else { return }
+        // While a space is being made nothing is dragged: a click on a space leaves the page for it.
+        if creating {
+            guard order[i] != Self.pendingID else { return }
+            actions.cancelSpaceCreation()
+            store.focusSpace(order[i], window: ui.windowID)
+            return
+        }
         reorder = (order[i], i, i, p, false)
         refreshCells()
     }
@@ -1083,7 +1282,7 @@ final class SpaceDockView: NSView {
     /// Arc 1.172.2: the header's whole space menu, for the space whose icon was clicked (#339).
     /// Change Space Icon… points its popover down at that icon.
     override func menu(for event: NSEvent) -> NSMenu? {
-        guard let i = index(at: point(event)), let cell = cells[order[i]] else { return nil }
+        guard !creating, let i = index(at: point(event)), let cell = cells[order[i]] else { return nil }
         let id = order[i], ui = self.ui
         return SpaceMenu.make(spaceID: id, store: store, ui: ui, actions: actions, anchor: cell, from: .dock) {
             ui.renamingSpaceID = id
@@ -1100,11 +1299,16 @@ final class SpaceCellView: NSView, ArcTooltipTarget {
     private let spaceID: UUID
     private let store: SidebarStore
     private let ui: SidebarUIState
-    private let emoji = NSTextField.sidebarLabel(size: 13)
+    private let emoji = EmojiLabel.sidebar(size: 13)
     private let emojiHolder = NSView()
     /// An Icon-tab glyph (Space.symbol) in the emoji's place.
     private let symbol = NSImageView()
     private var symbolName: String?
+    /// A picture the user chose (Space.iconImage) in the emoji's place. It sits in `emojiHolder`, so
+    /// it gets the same dimming and desaturation as an emoji while the cell isn't lit, and shows in
+    /// its own colours while it is.
+    private let picture = NSImageView()
+    private var pictureData: Data?
     /// Arc's dot, outside `emojiHolder` so its own ink sets how faint it is.
     private let dot = CALayer()
     private var icon = SpaceIcon.none
@@ -1114,6 +1318,7 @@ final class SpaceCellView: NSView, ArcTooltipTarget {
         switch mark {
         case .emoji(let e): return e
         case .symbol(let s): return s
+        case .image: return "image"
         case .dot(let d): return "dot\(Int(d))"
         }
     }
@@ -1177,12 +1382,19 @@ final class SpaceCellView: NSView, ArcTooltipTarget {
         case .emoji(let e):
             emoji.stringValue = e
             showSymbol(nil)
+            showPicture(nil)
         case .symbol(let name):
             emoji.stringValue = ""
             showSymbol(name)
+            showPicture(nil)
+        case .image(let data):
+            emoji.stringValue = ""
+            showSymbol(nil)
+            showPicture(data)
         case .dot:
             emoji.stringValue = ""
             showSymbol(nil)
+            showPicture(nil)
         }
         emojiHolder.isHidden = { if case .dot = mark { return true } else { return false } }()
         dot.isHidden = !emojiHolder.isHidden
@@ -1203,6 +1415,14 @@ final class SpaceCellView: NSView, ArcTooltipTarget {
         if symbol.superview == nil { symbol.imageScaling = .scaleNone; emojiHolder.addSubview(symbol) }
     }
 
+    private func showPicture(_ data: Data?) {
+        guard pictureData != data else { return }
+        pictureData = data
+        picture.image = data.flatMap { SpaceIconImage.image($0, points: 16) }
+        picture.isHidden = data == nil
+        if picture.superview == nil { picture.imageScaling = .scaleNone; emojiHolder.addSubview(picture) }
+    }
+
     /// Arc's hovered/pressed cell on a dark space: white at ~7.8%, 6 pt corners.
     private func refreshFill(_ on: Bool? = nil) {
         let fill = colors.isDark ? NSColor.white.withAlphaComponent(0.078) : NSColor.black.withAlphaComponent(0.05)
@@ -1217,8 +1437,9 @@ final class SpaceCellView: NSView, ArcTooltipTarget {
         let size: CGFloat = 13
         if emoji.font?.pointSize != size { emoji.font = .systemFont(ofSize: size) }
         let h = emoji.intrinsicContentSize.height
-        emoji.frame = NSRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h)
+        emoji.frame = emoji.frameHoldingInk(NSRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h))
         symbol.frame = bounds
+        picture.frame = bounds
         symbol.symbolConfiguration = .init(pointSize: size - 2, weight: .medium)
         if case .dot(let d) = mark {
             dot.bounds = CGRect(x: 0, y: 0, width: d, height: d)
@@ -1326,6 +1547,9 @@ final class LibraryButtonView: NSView {
         glyph.frame = bounds
         tip.frame = bounds
     }
+
+    /// For `from://debug?downloadState`: whether the bin is up, and what a press on its right edge
+    /// (outside the Library button) lands on, as the window's hit test finds it (#491).
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

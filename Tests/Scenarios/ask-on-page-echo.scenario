@@ -1,0 +1,18 @@
+# promise: #417
+# The on-device model sometimes answers with the request's page block copied back ("<url>…
+# <current-date>…"): Wikipedia's Bauhaus page, cut to 18 %, 1 run in 10 and 2 of 2 in the 0.1.43
+# release clips. The card never shows it; Cra asks again and shows that answer. The test model
+# echoes once when asked to "repeat the page".
+pace 0.5
+env CRA_ASK_FAKE_MODEL=1
+seed settings.json {"toolbarDefaultMigrated": true, "askOnPage": true}
+
+from://open?url=${ORIGIN}/ask.html
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+wait 1
+from://action/find
+from://debug?ask=Please repeat the page, then tell me about StandBy.
+wait 4
+expect-log Ask on Page: the answer repeated the page; asking again
+from://debug?askOnPage=echo
+expect-log ask echo: enabled=true canAsk=true messages=1 finished=true quotes=1 .*height=[0-9]+$

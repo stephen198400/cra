@@ -1,0 +1,72 @@
+# promise: #393
+# Ask on Page over HTTP with the test model: find, Return asking after the count says 0, a quote found
+# on the page, ordinary find again, a long page, a new document and closing. The selection the quote
+# makes and the model's real answers are release-checklist lines (#393), not this scenario's.
+pace 0.5
+env CRA_ASK_FAKE_MODEL=1
+seed settings.json {"toolbarDefaultMigrated": true, "askOnPage": true}
+
+from://open?url=${ORIGIN}/ask.html
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+wait 1
+from://action/find
+from://debug?askOnPage=open
+expect-log ask open: enabled=true canAsk=true messages=0$
+
+# Native ordinary Find remains ordinary. Counts attest this command path, not literal selection.
+from://debug?findQuery=StandBy
+expect-log find generation=[0-9A-F-]+ identifier=[0-9]+ count=1 ordinal=1 final=true purpose=ordinary
+from://debug?askOnPage=found
+expect-log ask found: enabled=true canAsk=true messages=0$
+
+# Set the absent query first and wait for its final ordinary zero. Re-submit unchanged input
+# through the existing Return policy; nil/pending counts must not be used as auto-Ask evidence.
+from://debug?findQuery=How%20do%20reactions%20work%3F
+expect-log find generation=[0-9A-F-]+ identifier=[0-9]+ count=0 ordinal=0 final=true purpose=ordinary
+from://debug?askQuery=How%20do%20reactions%20work%3F
+wait 2
+from://debug?askOnPage=asked
+expect-log ask asked: enabled=true canAsk=true messages=1 finished=true quotes=1 read=- search=\[\] height=[0-9]+$
+reject-log ask asked: .*height=48$
+
+# Find the complete verified plain quote and preserve the conversation. The found status is
+# from the current guarded DOM operation. CEF native Find clears window.getSelection(); the
+# separate full-literal native highlight/selection gate must remain open until observed.
+from://debug?askFindQuote=1
+expect-log find generation=[0-9A-F-]+ identifier=[0-9]+ count=1 ordinal=1 final=true purpose=quote
+wait 1
+from://debug?askOnPage=quote
+expect-log ask quote: enabled=true canAsk=true messages=1 finished=true quotes=1 read=- search=\[found\] height=[0-9]+$
+
+# Explicit ordinary next restores its own input/query after quote purpose without closing chat.
+from://debug?findQuery=StandBy&findStep=next
+expect-log find generation=[0-9A-F-]+ identifier=[0-9]+ count=1 ordinal=1 final=true purpose=ordinary
+wait 0.5
+from://debug?askOnPage=restored
+expect-log ask restored: enabled=true canAsk=true messages=1 finished=true quotes=1
+
+# Keep the actual DOM under the bounded extraction ceiling, but above the local fitted budget,
+# so the fraction has a known denominator. Do not expect the old server's 16k-token allowance.
+from://debug?cdp=Runtime.evaluate&params=%7B%22expression%22%3A%22%28%28%29%3D%3E%7Bconst%20a%3Ddocument.querySelector%28%27article%27%29%3Bfor%28let%20i%3D0%3Bi%3C140%3Bi%2B%2B%29%7Bconst%20p%3Ddocument.createElement%28%27p%27%29%3Bp.textContent%3D%27Padding%20%27%2Bi%2B%27%3A%20the%20measured%20record%20describes%20the%20quiet%20room%2C%20its%20shelves%2C%20and%20afternoon%20light.%27%3Ba.append%28p%29%7Dconst%20n%3Da.innerText.length%3Breturn%20%27ask-long-fixture%20bounded%3D%27%2B%28n%3E11000%26%26n%3C16000%29%7D%29%28%29%22%2C%22returnByValue%22%3Atrue%7D
+expect-log Cra cdp Runtime.evaluate .*"value":"ask-long-fixture bounded=true"
+from://debug?ask=What%20is%20StandBy%3F
+wait 2
+from://debug?askOnPage=long
+expect-log ask long: enabled=true canAsk=true messages=2 finished=true quotes=1 read=This page was long, so I read the first [0-9]+%\.
+
+# A genuine new document clears the captured owner and completed conversation.
+from://navigate?url=${ORIGIN}/ask.html?n=2
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+wait 1
+from://debug?askOnPage=navigated
+expect-log ask navigated: enabled=true canAsk=true messages=0$
+
+# Close uses the production close/reset route; reopening begins with an empty conversation.
+from://debug?ask=What%20is%20StandBy%3F
+wait 2
+from://debug?askOnPage=before-close
+expect-log ask before-close: enabled=true canAsk=true messages=1 finished=true quotes=1
+from://debug?findStep=close
+from://action/find
+from://debug?askOnPage=again
+expect-log ask again: enabled=true canAsk=true messages=0$

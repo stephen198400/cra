@@ -84,8 +84,12 @@ final class AppDialog {
             return
         }
         self.completion = completion
+        Self.presented = self
         prepareWindow(over: parent).show()
     }
+
+    /// The dialog last presented as a sheet, for `from://debug?answerDialog=`.
+    static weak var presented: AppDialog?
 
     /// Takes a presented sheet down as if nothing was chosen: its completion gets `.abort`.
     func close() { presentedWindow?.close() }

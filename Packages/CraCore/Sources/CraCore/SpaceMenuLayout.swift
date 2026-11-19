@@ -21,8 +21,9 @@ public enum SpaceMenuLayout {
 
     /// The menu's groups, a separator between two. Arc offers Hide Space Header only while there
     /// is one space; Show Space Header brings it back.
-    public static func sections(spaceCount: Int) -> [[Item]] {
-        [
+    public static func sections(spaceCount: Int, incognito: Bool = false) -> [[Item]] {
+        if incognito { return [[.rename, .editTheme, .searchEngine], [.newFolder]] }
+        return [
             [.rename, .editTheme, .setProfile, .searchEngine],
             [.newFolder],
             [.export],

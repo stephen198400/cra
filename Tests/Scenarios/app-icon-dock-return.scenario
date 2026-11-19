@@ -4,7 +4,7 @@
 # What ⌘-Tab draws can't be read here (docs/release-checklist.md), so this pins that Cra sets the
 # icon again on the way back.
 # promise: #319
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "keepInMenuBar": true}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false, "keepInMenuBar": true}
 from://open?url=${PAGE}?n=icon
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 reject-log app icon: \S+ set again

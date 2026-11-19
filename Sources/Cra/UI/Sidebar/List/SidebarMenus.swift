@@ -14,6 +14,12 @@ enum SidebarMenus {
         MenuItems.add(menu, title, enabled: enabled, on: on, run)
     }
 
+    @discardableResult
+    private static func add(_ menu: NSMenu, _ title: SpaceMenuTitle.Value, enabled: Bool = true, on: Bool? = nil,
+                            _ run: @escaping () -> Void) -> NSMenuItem {
+        MenuItems.add(menu, title, enabled: enabled, on: on, run)
+    }
+
     /// A row for a KeyBindings command, with its shortcut (MenuItems.add(_:action:)).
     @discardableResult
     private static func add(_ menu: NSMenu, action id: String, _ title: String? = nil, enabled: Bool = true, on: Bool? = nil,
@@ -60,22 +66,19 @@ enum SidebarMenus {
         let store = list.store, ui = list.ui, actions = list.actions
         let id = m.id
         let menu = menu()
-        let group = list.closeGroup(for: id)
-        if group.count > 1 {
-            folderItems(menu, ui.group(for: id, in: store), list: list)
-            menu.addItem(.separator())
-            add(menu, "Close \(group.count) Tabs") { list.closeTabs(group) }
-            add(menu, "Deselect All") { ui.clearPicks() }
-            return menu
-        }
+        if list.closeGroup(for: id).count > 1 { return picked(ui.group(for: id, in: store), clicked: id, list: list) }
         guard let item = store.item(id), let tab = item.tab else { return menu }
         if m.pinned {
             add(menu, action: "pinTab", "Unpin Tab") { store.unpinTab(id) }
         } else {
-            add(menu, action: "pinTab", "Pin Tab") { store.pinTab(id) }
+            add(menu, action: "pinTab", "Pin Tab") {
+                store.pinTab(id)
+            }
         }
         if store.isFavorite(id) {
-            add(menu, action: "favoriteTab", "Remove from Favorites") { store.removeFromFavorites(id) }
+            add(menu, action: "favoriteTab", "Remove from Favorites") {
+                store.removeFromFavorites(id)
+            }
         } else {
             add(menu, action: "favoriteTab", "Add to Favorites") { store.addToFavorites(id) }
         }
@@ -124,7 +127,9 @@ enum SidebarMenus {
         menu.addItem(.separator())
         let spaces = submenu(menu, "Move to Space")
         for s in store.orderedSpaces {
-            add(spaces, s.labeled, enabled: !store.isInSpace(id, s.id)) { store.moveTab(id, toSpace: s.id, window: ui.windowID) }
+            add(spaces, SpaceMenuTitle.plain(s.labeled), enabled: !store.isInSpace(id, s.id)) {
+                store.moveTab(id, toSpace: s.id, window: ui.windowID)
+            }
         }
         folderItems(menu, [id], list: list)
         menu.addItem(.separator())
@@ -139,6 +144,79 @@ enum SidebarMenus {
             if let parent = item.parentID, let rows = store.item(parent)?.children, rows.last != id,
                store.spaceID(ofItem: id).flatMap(store.space)?.todayContainerID == parent {
                 add(menu, "Archive Tabs Below") { store.archiveTabsBelow(id) }
+            }
+        }
+        return menu
+    }
+
+    /// The menu on a tab that is one of several picked with ⌘/⇧-click (#356): Arc's rows for every
+    /// pick at once, from PickedTabsMenu. `ids` are the picks in sidebar order, `clicked` the row.
+    static func picked(_ ids: [UUID], clicked: UUID, list: SpaceListView) -> NSMenu {
+        let store = list.store, ui = list.ui, actions = list.actions
+        let menu = menu()
+        let tabs = ids.compactMap { id in store.item(id)?.tab.map { (id, $0) } }
+        let picks = PickedTabsMenu.Picks(count: ids.count, anyEasel: tabs.contains { Easel.id(fromURL: $0.1.url) != nil },
+                                         clickedInToday: !store.isPinned(clicked),
+                                         allMuted: !tabs.isEmpty && tabs.allSatisfy { $0.1.muted },
+                                         anySound: tabs.contains { $0.1.muted || ui.audibleTabIDs.contains($0.0) },
+                                         anyInSplit: ids.contains { store.splitContaining($0) != nil },
+                                         paneLimit: store.splitPaneLimit)
+        for (i, section) in PickedTabsMenu.shown(for: picks).enumerated() {
+            if i > 0 { menu.addItem(.separator()) }
+            for row in section {
+                let title = PickedTabsMenu.title(row, for: picks), enabled = PickedTabsMenu.isEnabled(row, for: picks)
+                switch row {
+                case "copyLinks":
+                    // What ⇧⌘C copies with tabs picked (#322): each link without trackers, one per line.
+                    add(menu, title) {
+                        copy(CleanURL.links(tabs.map { $0.1.url }))
+                        actions.showToast("Copied item links")
+                    }
+                case "mute":
+                    add(menu, title, enabled: enabled) {
+                        for (id, _) in tabs {
+                            store.setMuted(id, !picks.allMuted)
+                            actions.performAction("muteTab:\(id)")
+                        }
+                    }
+                case "openInSplitView":
+                    add(menu, title, enabled: enabled) {
+                        guard let split = store.createSplit(with: ids) else { return }
+                        ui.clearPicks()
+                        store.selectTab(store.paneID(for: ids[0], in: split) ?? ids[0], window: ui.windowID)
+                    }
+                case "duplicate":
+                    add(menu, title) { for id in ids { _ = store.duplicateTab(id) } }
+                case "moveTo":
+                    // Arc: the spaces, the picks' own checked, then New Space… (which takes them along).
+                    let sub = submenu(menu, title)
+                    let own = store.spaceID(ofItem: ids[0])
+                    for s in store.orderedSpaces {
+                        add(sub, SpaceMenuTitle.plain(s.labeled), on: s.id == own) {
+                            guard s.id != own else { return }
+                            for id in ids { store.moveTab(id, toSpace: s.id, window: ui.windowID) }
+                            ui.clearPicks()
+                        }
+                    }
+                    sub.addItem(.separator())
+                    add(sub, "New Space…") { actions.newSpaceWith(ids) }
+                case "newFolder":
+                    add(menu, title) {
+                        ui.renamingID = store.createFolder(with: ids).id
+                    }
+                case "archive":
+                    // Arc archives every pick, pinned ones too, without asking; a Today tab goes as ⌘W does.
+                    add(menu, title) {
+                        let open = store.selectedTabID(window: ui.windowID)
+                        for id in ids.filter({ $0 != open }) + ids.filter({ $0 == open }) {
+                            if store.isPinned(id) { store.archiveTab(id, reason: .manual) } else { actions.closeTab(id) }
+                        }
+                        ui.clearPicks()
+                    }
+                default:
+                    // Change Icon… and Archive Tabs Below: dimmed, as Arc draws them for several tabs.
+                    add(menu, title, enabled: enabled) {}
+                }
             }
         }
         return menu
@@ -211,7 +289,7 @@ enum SidebarMenus {
         let children = panes.map(\.id)
         add(menu, "Separate All Tabs") { store.separateAll(id) }
         // Arc greys it out while the split is closed (no pane to add next to).
-        add(menu, action: "addSplitView", "Add Tab…", enabled: open && children.count < 4) {
+        add(menu, action: "addSplitView", "Add Tab…", enabled: open && children.count < store.splitPaneLimit) {
             if let first = children.first {
                 actions.focusPane(first)
                 actions.performAction("addSplitView")
@@ -234,7 +312,9 @@ enum SidebarMenus {
         let spaces = submenu(menu, "Move to")
         for s in store.orderedSpaces {
             let current = store.isInSpace(id, s.id)
-            add(spaces, s.labeled, on: current) { if !current { store.moveTab(id, toSpace: s.id, window: ui.windowID) } }
+            add(spaces, SpaceMenuTitle.plain(s.labeled), on: current) {
+                if !current { store.moveTab(id, toSpace: s.id, window: ui.windowID) }
+            }
         }
         menu.addItem(.separator())
         add(menu, "Archive Item") { for c in children { store.archiveTab(c, reason: .manual) } }
@@ -275,7 +355,7 @@ enum SidebarMenus {
         add(menu, action: "newFolder") { actions.performAction("newFolder") }
         menu.addItem(.separator())
         if let s = store.space(space), !store.children(of: s.todayContainerID).isEmpty {
-            add(menu, action: "clearToday") { store.clearToday(space) }
+            add(menu, action: "clearToday") { store.clearToday(space, playing: list.ui.audibleTabIDs) }
         }
         if let s = store.space(space) {
             add(menu, action: "editSpace") { actions.editSpace(s) }

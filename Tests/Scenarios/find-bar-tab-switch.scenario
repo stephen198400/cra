@@ -1,0 +1,29 @@
+# Arc keeps the find bar (⌘F) with its tab: it goes when you switch tabs and comes back when you return
+# (checked in Arc 1.17x on 16 Nov 2026). Cra kept it open over the next tab's page.
+seed settings.json {"toolbarDefaultMigrated": true}
+from://open?url=${PAGE}?n=find-a
+wait 2
+from://open?url=${PAGE}?n=find-b
+wait 2
+from://action/find
+wait 1
+from://debug?findBar=open
+expect-log findBar open: visible=1
+from://action/previousTab
+wait 1
+from://debug?findBar=switched
+expect-log findBar switched: visible=0
+# Back on the tab it was opened on, the bar is there again.
+from://action/nextTab
+wait 1
+from://debug?findBar=back
+expect-log findBar back: visible=1
+# Closed by hand, it stays closed across switches.
+from://dismiss
+wait 1
+from://action/previousTab
+wait 1
+from://action/nextTab
+wait 1
+from://debug?findBar=dismissed
+expect-log findBar dismissed: visible=0

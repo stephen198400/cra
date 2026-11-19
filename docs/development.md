@@ -6,10 +6,10 @@ Notes for working on the code. How to send a change is in
 
 ## Build
 
-    scripts/build.sh          # fetches CEF on first run, builds build/Cra.app
+    scripts/build.sh          # fetches the Chromium engine and builds build/From.app
     scripts/build.sh debug    # debug build
     scripts/run.sh            # build if needed, then open; --rebuild [debug] forces a build
-    scripts/dev.sh            # dev loop: debug CraDev.app, rebuilds + relaunches on save (~4 s)
+    scripts/dev.sh            # legacy CEF dev loop: debug CraDev.app, rebuilds + relaunches on save (~4 s)
     scripts/dev.sh --once     # build and launch CraDev.app once, logs in this terminal
 
 `just` lists all of the scripts below with what each does (`brew install just`; the
@@ -17,30 +17,24 @@ Notes for working on the code. How to send a change is in
 `just build debug` runs `scripts/build.sh debug`. CI calls the scripts directly, and so can
 you.
 
-Requirements: macOS 14+ on Apple silicon, Xcode 16+, CMake (`brew install cmake`), about
-1 GB of disk for CEF and the build products. `CRA_ARCH=x86_64 scripts/build.sh` cross-compiles the
-Intel app into `build/x86_64/Cra.app` (another ~1 GB); every release ships both.
-
-`scripts/fetch-cef.sh` pins the CEF version and downloads it into `vendor/cef` (not
-committed). It fetches Cra's own CEF build, made by `scripts/build-cef.sh` with H.264/AAC
-and the patches in `scripts/cef-patches` and published as a `cef-*` release by
-`scripts/publish-cef.sh`; `CEF_URL` points it at Spotify's stock build instead. A daily workflow (`.github/workflows/cef-updates.yml`) opens an
-issue when a newer stable CEF is out; `scripts/update-cef.sh` moves the pin.
-If the release download fails, `scripts/download-cef.py` retrieves the same Cra asset
-through GitHub's public API and verifies its published SHA-256 before unpacking.
-Custom `CEF_URL` downloads never fall back to a different Cra build.
+The app targets macOS 14+. The default build downloads the pinned framework with
+`scripts/fetch-engine.sh` into `vendor/engine`. To build the Intel app on Apple silicon,
+run `CRA_ARCH=x86_64 scripts/build.sh`. Its output is `build/x86_64/From.app`.
+See [Chromium engine](chromium-engine.md) for the layer and patches, or use
+`CRA_ENGINE=cef scripts/build.sh` to build with the legacy CEF bridge and CMake.
 
 ## Layout
 
 - `Sources/Cra` — the app: `App` (delegate, key bindings), `Services` (sidebar store,
-  persistence, import, updates, extensions, live folders), `UI` (sidebar, command bar, split
+  persistence, bookmarks, extensions), `UI` (sidebar, command bar, split
   view, windows, settings, onboarding)
-- `Sources/CraCEF` — Objective-C++ bridge between Swift and CEF
+- `Sources/CraCEF` — Swift-facing bridge header and the legacy CEF implementation
+- `engine/chromium/cra` — the bridge implementation built into Chrome’s framework
 - `Sources/CraHelper` — Chromium subprocess executable
 - `Sources/Cra/Services/WebKit` — the WebKit page that DRM services open in
   ([protected-media.md](protected-media.md))
 - `Packages/CraCore` — models and decisions with no AppKit or Chromium (the sidebar model,
-  settings and the other data-folder files, Air Traffic Control, live folder data, key chords,
+  settings and the other data-folder files, Air Traffic Control, key chords,
   space themes, Arc theme import, the favorites grid), visible in every `Sources/Cra` file.
   The layer rules are in [CLAUDE.md](../CLAUDE.md)
 - `Tests/` — the harnesses that compile production files against fakes, and the smoke test
@@ -48,7 +42,8 @@ Custom `CEF_URL` downloads never fall back to a different Cra build.
 - `scripts/` — build, release, CEF and test tooling; `scripts/clips` records release clips
 - `docs/arc-reverse-engineering.md` — what was learned from Arc and how
 - `docs/release.md` — signing, notarization and the release workflow
-- `vendor/cef` — CEF binary distribution (fetched, not committed)
+- `vendor/engine` — downloaded Chromium framework and helpers
+- `vendor/cef` — optional CEF distribution for legacy builds
 
 Data lives in `~/Library/Application Support/Cra`: the sidebar and archive as JSON,
 `keybindings.json`, each tab's back and forward list in `PageHistory/`, cached favicons, the logs
@@ -117,20 +112,10 @@ to Markdown or `docs/` alone runs nothing.
 - `scripts/test-folder-glyph.sh`: the standalone folder component's real AppKit layers and image
   pixels: emblems follow the front panel's perspective, keep their colors and proportions, and
   update at 1x/Retina. No CEF or visible window; coverage uses the same harness as `scripts/test.sh`.
-- `scripts/test-link-summary-share.sh`: 5-Second Previews' Copy as Image (`LinkSummaryShareImage`)
-  against Arc's own copy of a card: size at 3x, the picture's inset, the dashed line's pattern and place,
-  the footer colour.
-- `scripts/test-link-summary-panel.sh`: 5-Second Previews' card window (`LinkSummaryPanel`) off screen with
-  a stub service: the loading card, the answer growing in under the link, the small card above its link, closing.
-- `scripts/test-music-notes.sh`: the production note sprites over fixed white and black backgrounds
-  at 1x and 2x, checking light-theme contrast and the dark-theme tint without CEF or a visible window.
-- `scripts/test-live-folder-plugins.sh`: the real `CraPluginHost` (sandboxed JavaScriptCore) and
-  the bundled GitHub, GitLab and Jira providers in `resources/live-folder-plugins`, through
-  `LiveFolderPluginProcess` with made-up session responses: permissions, timeouts, and each
-  provider's parsing and sign-in cases (`Tests/LiveFolderProviderTests.swift`).
-- `scripts/test-key-bindings.sh`: `KeyBindingRegistry`'s command list on a `keybindings.json` of its
-  own: the live folder plugins' commands after New Folder, and shortcuts kept through a synced file,
-  a reset and Reset All.
+- `scripts/test-ask-on-page-content.sh`, `scripts/test-ask-on-page-quotes.sh`,
+  `scripts/test-ask-on-page-service.sh` and `scripts/test-ask-on-page-lifecycle.sh` cover
+  page extraction, quotes, the model boundary and ownership across navigation and profile changes.
+- `scripts/test-key-bindings.sh` covers the command list, synced shortcuts and resets.
 - `scripts/test-sidebar-creation-menu.sh`: the sidebar + menu's real window and view off screen:
   rows and keys, clicks on enabled and disabled rows, Arc's open and close timings, and the +
   turning into an × on its spring.
@@ -172,16 +157,13 @@ on stdout; `&label=` tells checks apart).
 
 ## Running a test instance
 
-`scripts/dev.sh` builds a separate `CraDev.app`, including Sparkle, without a production
-update feed or URL registrations. The script runs it on `build/dev-data` (set `CRA_DATA_DIR`
+`scripts/dev.sh` builds a separate `CraDev.app`, using CEF, with its own bundle ID and no URL registrations. The script runs it on `build/dev-data` (set `CRA_DATA_DIR`
 for another profile); opened directly from Finder, CraDev uses `~/Library/Application
 Support/CraDev`, never the installed Cra's profile. Ad-hoc development builds use a mock
 encryption key for fresh profiles; use test data and do not copy a daily browser profile
 or real credentials into them.
 
-The dev bundle records the CEF download source and Sparkle version. Changing either
-pin refreshes the bundled frameworks, including an engine rebuild with the same CEF
-version but a new release suffix. The watcher notices changes to both fetch scripts.
+The dev bundle records the legacy CEF download source and refreshes the framework when its pin changes.
 Compilation happens before the running dev instance stops; bundle replacement happens
 only after it has quit. Quit any separately launched CraDev before starting another dev
 script, so it cannot overwrite a framework still in use.
@@ -217,13 +199,10 @@ Settings ▸ Displays shows it (part of it is enough when only one display match
 one screen. Saved window frames keep their place relative to their display; `clip.sh` ignores it.
 Unset, or naming no connected display, windows open as usual.
 
-Tidy Tabs needs Apple Intelligence. `CRA_TIDY_FAKE_MODEL=1` stands in a model that groups by
-site (after a 1.6 s pause), so a test instance on any Mac shows the button, the squiggle and the
-groups, Tidy Tab Titles names a pinned tab after its title's first part and Tidy Downloads tidies a
-download's file name by hand; `CRA_TIDY_FAKE_MODEL=off` (or `preparing`, `ineligible`) shows Settings ▸ Max as a Mac
-without Apple Intelligence would. `from://debug?tidy=1` runs Tidy on the window's space without
-hovering the divider, `from://debug?undoTidy=1` is ⌘Z's undo and `from://debug?settingsPane=max`
-opens Settings on a pane.
+Ask on Page uses the on-device Apple Intelligence model. Enable it in Settings ▸ Advanced ▸
+Search and open Find with ⌘F. The Ask scenarios use `CRA_ASK_FAKE_MODEL=1` for a controlled
+answer on any test Mac. `scripts/test-ask-on-page-service.sh --real-model` requires Apple
+Intelligence to be available.
 
 `from://debug?dragEnd=<text>` ends a drag of the window's tab whose URL holds the text, let go
 with nothing taking it, the way a drag out of the sidebar ends: outside every Cra window it opens

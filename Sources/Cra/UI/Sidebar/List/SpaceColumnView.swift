@@ -39,6 +39,15 @@ final class SpaceColumnView: NSView {
 
     override var isFlipped: Bool { true }
 
+    // A press between the favorites, the header and the list (or in the favorites' gaps, which pass
+    // it on) moves the window once it moves 3 pt, as the list's empty space does (#547).
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    private var press = WindowDragGesture(source: "sidebar column")
+    override func mouseDown(with event: NSEvent) { press.begin(event) }
+    override func mouseDragged(with event: NSEvent) { press.drag(event) }
+    override func mouseUp(with event: NSEvent) { _ = press.finish() }
+
     private func relayout(animated: Bool) {
         guard animated, window != nil else { needsLayout = true; return }
         NSAnimationContext.runAnimationGroup { ctx in
@@ -111,7 +120,7 @@ final class SpaceHeaderView: NSView, NSTextFieldDelegate {
     private let store: SidebarStore
     private let ui: SidebarUIState
     private let actions: SidebarActions
-    private let emoji = NSTextField.sidebarLabel(size: 14)
+    private let emoji = EmojiLabel.sidebar(size: 14)
     private let title = NSTextField.sidebarLabel(size: 13, weight: .semibold)
     /// An Icon-tab glyph in the emoji's place.
     private let symbol = NSImageView()
@@ -196,7 +205,7 @@ final class SpaceHeaderView: NSView, NSTextFieldDelegate {
         withObservationTracking {
             guard let space = store.space(spaceID) else { return }
             emoji.stringValue = space.emoji
-            symbol.image = space.symbol.flatMap { SidebarSymbols.image($0, size: 13, weight: .medium) }
+            symbol.image = SpaceIconImage.glyph(for: space, points: 13)
             title.stringValue = space.title
             blank = space.standaloneWindowID != nil
             colors = SidebarColors(space.theme.palette)
@@ -286,7 +295,8 @@ final class SpaceHeaderView: NSView, NSTextFieldDelegate {
         let h = bounds.height, w = bounds.width
         let es = emoji.intrinsicContentSize
         let ew = emoji.attributedStringValue.size().width
-        emoji.frame = NSRect(x: 18.25 - ew / 2 - SidebarText.inset, y: (h - es.height) / 2 - 1.25, width: ew + 2 * SidebarText.inset, height: es.height)
+        emoji.frame = emoji.frameHoldingInk(NSRect(x: 18.25 - ew / 2 - SidebarText.inset, y: (h - es.height) / 2 - 1.25,
+                                                   width: ew + 2 * SidebarText.inset, height: es.height))
         symbol.frame = iconRect
         // Turned right, Arc's chevron sits a little higher than chevron.down turned about its centre.
         let (cx, cy): (CGFloat, CGFloat) = collapsed ? (18.5, h / 2 - 0.25) : (18.25, h / 2 + 0.5)
@@ -368,17 +378,20 @@ final class SpaceHeaderView: NSView, NSTextFieldDelegate {
     private func moveToMenu() -> NSMenu {
         let m = NSMenu()
         for space in store.orderedSpaces {
-            let item = BlockMenuItem(title: space.emoji.isEmpty ? space.title : "\(space.emoji)  \(space.title)") { [store, actions, spaceID] in
+            let title = SpaceMenuTitle.plain(space.emoji.isEmpty ? space.title : "\(space.emoji)  \(space.title)")
+            let item = BlockMenuItem(title: title.title) { [store, actions, spaceID] in
                 guard store.isBlank(space: spaceID) else { return }
                 actions.moveBlankWindow(space.id)
             }
-            if let sym = space.symbol { item.image = SidebarSymbols.image(sym, size: 13, weight: .medium) }
+            SpaceMenuTitle.apply(title, to: item)
+            item.image = SpaceIconImage.glyph(for: space, points: 13)
             m.addItem(item)
         }
         return m
     }
 
-    private func makeSpaceMenu() -> NSMenu? {
+    /// The menu a right-click or the ••• opens; also `from://debug?spaceMenu=` (#413).
+    func makeSpaceMenu() -> NSMenu? {
         if blank { return moveToMenu() }
         return SpaceMenu.make(spaceID: spaceID, store: store, ui: ui, actions: actions, anchor: self) { [weak self] in self?.beginRename() }
     }
@@ -401,6 +414,9 @@ final class SpaceHeaderView: NSView, NSTextFieldDelegate {
         refresh()
         DispatchQueue.main.async { [weak self, weak f] in
             guard let f, let w = self?.window else { return }
+            // The sidebar sliding out at the edge is a panel that becomes key only when a click needs
+            // it, and a click on a row doesn't: the field showed selected while keys went to the page (#424).
+            w.makeKey()
             w.makeFirstResponder(f)
             f.currentEditor()?.selectAll(nil)
         }
@@ -422,8 +438,14 @@ final class SpaceHeaderView: NSView, NSTextFieldDelegate {
         let name = f.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         endRename()
         guard !name.isEmpty, name != space.title else { return }
-        space.title = name
+        space.rename(to: name)
         store.updateSpace(space)
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, shouldChangeCharactersIn range: NSRange,
+                 replacementString string: String?) -> Bool {
+        let next = (textView.string as NSString).replacingCharacters(in: range, with: string ?? "")
+        return next.count <= Space.maximumTitleLength
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
@@ -445,7 +467,7 @@ enum SpaceMenu {
         let isOpen = store.focusedSpaceID(window: ui.windowID) == id
         let m = NSMenu()
         m.autoenablesItems = false
-        for (i, section) in SpaceMenuLayout.sections(spaceCount: store.orderedSpaces.count).enumerated() {
+        for (i, section) in SpaceMenuLayout.sections(spaceCount: store.orderedSpaces.count, incognito: store.isIncognito(space: id)).enumerated() {
             if i > 0 { m.addItem(.separator()) }
             for item in section {
                 // From the dock, a space that isn't open opens first for what shows in its sidebar.
@@ -481,9 +503,12 @@ enum SpaceMenu {
                 ui.renamingID = store.createFolder(named: "New Folder", in: space.pinnedContainerID, index: 0).id
             }
         case .export:
-            let export = MenuItems.submenu(m, "Export “\(space.title)” into Folder")
+            let title = SpaceMenuTitle.named(space.title, prefix: "Export “", suffix: "” into Folder")
+            let export = MenuItems.submenu(m, title)
             for s in store.orderedSpaces {
-                MenuItems.add(export, s.title, enabled: s.id != id) { store.exportSpace(id, intoFolderIn: s.id) }
+                MenuItems.add(export, SpaceMenuTitle.plain(s.title), enabled: s.id != id) {
+                    store.exportSpace(id, intoFolderIn: s.id)
+                }
             }
         case .manageSpaces:
             MenuItems.add(m, action: "manageSpaces") { actions.manageSpaces() }
@@ -533,6 +558,14 @@ enum MenuItems {
         return item
     }
 
+    @discardableResult
+    static func add(_ menu: NSMenu, _ title: SpaceMenuTitle.Value, enabled: Bool = true, on: Bool? = nil,
+                    image: NSImage? = nil, _ run: @escaping () -> Void) -> NSMenuItem {
+        let item = add(menu, title.title, enabled: enabled, on: on, image: image, run)
+        SpaceMenuTitle.apply(title, to: item)
+        return item
+    }
+
     /// A row for a KeyBindings command: its name, unless the menu words it its own way (Arc's
     /// "Pin Tab" for pinTab), and its shortcut on the right, as in the menu bar (#89).
     @discardableResult
@@ -547,6 +580,16 @@ enum MenuItems {
         let sub = NSMenu()
         sub.autoenablesItems = false
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.submenu = sub
+        menu.addItem(item)
+        return sub
+    }
+
+    static func submenu(_ menu: NSMenu, _ title: SpaceMenuTitle.Value) -> NSMenu {
+        let sub = NSMenu()
+        sub.autoenablesItems = false
+        let item = NSMenuItem(title: title.title, action: nil, keyEquivalent: "")
+        SpaceMenuTitle.apply(title, to: item)
         item.submenu = sub
         menu.addItem(item)
         return sub
@@ -657,11 +700,15 @@ final class FavoritesGridView: NSView {
                                                   selectionColors: logoOutline ? favicons.selectionColors(forKey: key) : nil)
                 }
                 let open = panes.first { store.isSelected($0.id, inSpace: spaceID, window: ui.windowID) }?.id
+                let peek = panes.lazy.compactMap { self.ui.peekBadges[$0.id] }.first.map { badge -> FavoriteTileModel.Peek in
+                    let icon = favicons.image(forKey: badge.iconKey)
+                    return .init(icon: icon, flip: icon != nil && favicons.glyphIsDark(forKey: badge.iconKey) == space.theme.palette.isDark)
+                }
                 let title = item.isSplit && item.title == nil ? panes.map(\.displayTitle).joined(separator: " | ") : item.displayTitle
                 models.append((item.id, FavoriteTileModel(title: title, cells: cells, vertical: item.split?.orientation == .vertical,
                                                           tileColor: item.tab?.tileColor, selected: open != nil, openCell: open,
                                                           unread: panes.contains(where: \.isUnread), focus: ui.keyboardFocusID == item.id,
-                                                          logoOutline: logoOutline)))
+                                                          logoOutline: logoOutline, peek: peek)))
             }
         } onChange: { [weak self] in
             Task { @MainActor in
@@ -1130,6 +1177,99 @@ struct FavoriteTileModel: Equatable {
     var focus: Bool
     /// Settings ▸ Tabs "Outline the open favorite in its logo’s colors" (off: Arc's neutral rim).
     var logoOutline = false
+    /// A Peek open or waiting on one of the favorite's panes: the peeked page's favicon, worn as
+    /// a badge on the tile's top right corner (Arc's AppItem.badgeIcon, GitHub #381).
+    var peek: Peek?
+    struct Peek: Equatable {
+        var icon: NSImage?
+        /// A one-colour glyph that would vanish into the badge's fill is drawn in the other tone.
+        var flip: Bool
+    }
+}
+
+/// The Peek's favicon on a favorite's tile (GitHub #381), Arc 1.172.2's AppTrayItemBadgeView as its
+/// code sets it up (12 Nov 2026): a 20 pt square 16 pt in from the tile's right edge and 4 pt above
+/// its top, so it sticks out 4 pt past the corner; 6 pt continuous corners filled with
+/// FullOpacityBackgroundPrimary (white, black in dark), a black shadow at 0.25, 4 pt blur, 1.5 pt
+/// offset, and the 16 pt favicon centred. It springs in from scale 0.1 and opacity 0 (response
+/// 0.4 s, damping ratio 0.6) and back out the same way.
+final class FavoritePeekBadge: NSView {
+    static let side: CGFloat = 20
+    static func frame(inTile tile: CGRect) -> CGRect {
+        CGRect(x: tile.width - 16, y: -4, width: side, height: side)
+    }
+
+    private let icon = SidebarFaviconView(size: FavoriteTileMetrics.favicon)
+    private(set) var hasIcon = false
+
+    init() {
+        super.init(frame: CGRect(x: 0, y: 0, width: Self.side, height: Self.side))
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.cornerCurve = .continuous
+        // Not clipped, so the shadow shows (a layer corner radius turns clipping on, macOS 26).
+        clipsToBounds = false
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.25
+        layer?.shadowRadius = 4
+        layer?.shadowOffset = CGSize(width: 0, height: 1.5)
+        layer?.zPosition = 20
+        addSubview(icon)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func show(_ image: NSImage?, flip: Bool, dark: Bool, colors: SidebarColors) {
+        hasIcon = image != nil
+        layer?.backgroundColor = (dark ? NSColor.black : NSColor.white).cgColor
+        icon.show(image, flip: flip, colors: colors)
+    }
+
+    override func layout() {
+        super.layout()
+        let side = FavoriteTileMetrics.favicon
+        icon.frame = backingAlignedRect(CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side),
+                                        options: .alignAllEdgesNearest)
+        layer?.shadowPath = CGPath(roundedRect: bounds, cornerWidth: 6, cornerHeight: 6, transform: nil)
+    }
+
+    func enter() { spring(in: true) }
+
+    /// Springs out, then goes.
+    func leave(then done: @escaping () -> Void) {
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            self?.removeFromSuperview()
+            done()
+        }
+        spring(in: false)
+        CATransaction.commit()
+    }
+
+    private func spring(in entering: Bool) {
+        guard let layer else { return }
+        let c = CGPoint(x: bounds.width * (0.5 - layer.anchorPoint.x), y: bounds.height * (0.5 - layer.anchorPoint.y))
+        let small = CATransform3DTranslate(CATransform3DScale(CATransform3DMakeTranslation(c.x, c.y, 0), 0.1, 0.1, 1), -c.x, -c.y, 0)
+        let (from, to) = entering ? (small, CATransform3DIdentity) : (layer.presentation()?.transform ?? CATransform3DIdentity, small)
+        let fromOpacity = entering ? 0 : layer.presentation()?.opacity ?? 1
+        let toOpacity: Float = entering ? 1 : 0
+        layer.transform = to
+        layer.opacity = toOpacity
+        for (key, a, b) in [("transform", NSValue(caTransform3D: from), NSValue(caTransform3D: to)),
+                            ("opacity", NSNumber(value: fromOpacity), NSNumber(value: toOpacity))] as [(String, Any, Any)] {
+            let spring = CASpringAnimation(keyPath: key)
+            spring.fromValue = a
+            spring.toValue = b
+            spring.mass = 1
+            spring.stiffness = pow(2 * .pi / 0.4, 2)
+            spring.damping = 4 * .pi * 0.6 / 0.4
+            spring.duration = spring.settlingDuration
+            layer.add(spring, forKey: "peek_badge_" + key)
+        }
+    }
 }
 
 enum FavoriteTileMetrics {
@@ -1170,6 +1310,14 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
     private var favicons: [SidebarFaviconView] = []
     /// Cuts a split's tile into its cells.
     private let cutMask = CAShapeLayer()
+    /// The tile's mask while it is cut: the cut shape, and room for the Peek badge and its
+    /// shadow past the tile's corner.
+    private let tileMask = CALayer()
+    private let badgeRoom = CALayer()
+    private var peekBadge: FavoritePeekBadge?
+    /// The tile's own clipping while a badge sticks out past it (a layer corner radius turns
+    /// clipping on, macOS 26), put back once the badge has gone.
+    private var clipsWithoutBadge: Bool?
     private let unreadDot = CALayer()
     private var focusRing: FocusRingLayer?
     private var model: FavoriteTileModel?
@@ -1177,8 +1325,19 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
     private var hoveredCell: Int? { didSet { if hoveredCell != oldValue { ArcTooltipController.shared.mouseExited(self) } } }
     private var hovering = false { didSet { if hovering != oldValue { refresh() } } }
     private var press: NSEvent?
+    private var pushedIn = false
     /// Scenarios (from://debug?hover=FavoriteTileView,n): the tile as the pointer leaves it hovered (#293).
     func debugHover() { hovering = true }
+    /// Scenarios (from://debug?favoriteBadges=): the Peek badge's frame in the tile, nil without one (#381).
+    var peekBadgeReadout: String? {
+        guard let b = peekBadge else { return nil }
+        let f = b.frame
+        // Anything clipping the tile or the badge cuts the badge (or its shadow) at the tile's edge.
+        let clipped = clipsToBounds || layer?.masksToBounds == true || (layer?.mask != nil && badgeRoom.isHidden)
+            || b.clipsToBounds || b.layer?.masksToBounds == true
+        return String(format: "frame=%.0f,%.0f,%.0fx%.0f inset=%.0f icon=%d clipped=%d", f.minX, f.minY, f.width, f.height,
+                      f.maxX - bounds.maxX, b.hasIcon ? 1 : 0, clipped ? 1 : 0)
+    }
 
     init(itemID: UUID, spaceID: UUID, grid: FavoritesGridView) {
         self.itemID = itemID
@@ -1199,6 +1358,10 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
         rim.zPosition = 5
         layer?.addSublayer(rim)
         cutMask.fillRule = .evenOdd
+        tileMask.addSublayer(cutMask)
+        badgeRoom.backgroundColor = NSColor.black.cgColor
+        badgeRoom.isHidden = true
+        tileMask.addSublayer(badgeRoom)
         unreadDot.cornerRadius = 3
         layer?.addSublayer(unreadDot)
         setAccessibilityElement(true)
@@ -1301,12 +1464,49 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
                 path.addRect(vertical ? CGRect(x: 0, y: a.maxY, width: bounds.width, height: b.minY - a.maxY)
                                       : CGRect(x: a.maxX, y: 0, width: b.minX - a.maxX, height: bounds.height))
             }
+            tileMask.frame = bounds
             cutMask.frame = bounds
             cutMask.path = path
         }
+        if let b = peekBadge {
+            b.frame = FavoritePeekBadge.frame(inTile: bounds)
+            badgeRoom.frame = b.frame.insetBy(dx: -8, dy: -8)
+        }
+        badgeRoom.isHidden = peekBadge == nil
         unreadDot.frame = CGRect(x: bounds.width - 5 - 6, y: 5, width: 6, height: 6)
         focusRing?.frame = bounds
         CATransaction.commit()
+    }
+
+    /// Arc puts the badge on when a Peek starts from the favorite and takes it off when the
+    /// Peek ends, springing it in from and out to a tenth of its size.
+    private func showPeekBadge(_ peek: FavoriteTileModel.Peek?, dark: Bool, colors: SidebarColors) {
+        guard let peek else {
+            guard let b = peekBadge else { return }
+            peekBadge = nil
+            badgeRoom.isHidden = true
+            b.leave { [weak self] in
+                guard let self, self.peekBadge == nil, let clips = self.clipsWithoutBadge else { return }
+                self.clipsToBounds = clips
+                self.clipsWithoutBadge = nil
+            }
+            return
+        }
+        let b = peekBadge ?? {
+            let b = FavoritePeekBadge()
+            peekBadge = b
+            if clipsWithoutBadge == nil { clipsWithoutBadge = clipsToBounds }
+            clipsToBounds = false
+            addSubview(b)
+            b.frame = FavoritePeekBadge.frame(inTile: bounds)
+            badgeRoom.frame = b.frame.insetBy(dx: -8, dy: -8)
+            badgeRoom.isHidden = false
+            b.enter()
+            return b
+        }()
+        var iconColors = colors
+        iconColors.isDark = dark
+        b.show(peek.icon, flip: peek.flip, dark: dark, colors: iconColors)
     }
 
     // MARK: Pointer
@@ -1332,24 +1532,42 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
         ArcTooltipController.shared.mouseMoved(in: self)
     }
 
-    override func mouseEntered(with event: NSEvent) {
+    override func mouseEntered(with event: NSEvent) { pointerAt(event) }
+    override func mouseMoved(with event: NSEvent) { pointerAt(event) }
+
+    /// The tracking area covers the visible rect, which for another space's tile on the strip lies
+    /// beside the sidebar, under the page: a pointer there is not on the tile (#527).
+    private func pointerAt(_ event: NSEvent) {
+        guard shows(event) else {
+            if hovering { mouseExited(with: event) }
+            return
+        }
+        let entering = !hovering
         hovering = true
         trackPointer(event)
     }
-    override func mouseMoved(with event: NSEvent) { trackPointer(event) }
+
     override func mouseExited(with event: NSEvent) {
         hovering = false
         hoveredCell = nil
         ArcTooltipController.shared.mouseExited(self)
     }
 
+    private func push(in down: Bool) {
+        guard down != pushedIn else { return }
+        pushedIn = down
+        springPress(down, scale: SidebarRowPress.scale(.favorite))
+    }
+
     override func mouseDown(with event: NSEvent) {
         press = event
+        if SidebarRowPress.pushesIn(.favorite, clickCount: event.clickCount) { push(in: true) }
     }
     override func mouseDragged(with event: NSEvent) {
         guard let p = press, let grid else { return }
         guard hypot(event.locationInWindow.x - p.locationInWindow.x, event.locationInWindow.y - p.locationInWindow.y) > 3 else { return }
         press = nil
+        push(in: false)
         grid.ui.draggingID = itemID
         let pb = NSPasteboardItem()
         if let data = try? JSONEncoder().encode(SidebarDragItem(id: itemID)) { pb.setData(data, forType: .craSidebarItem) }
@@ -1358,6 +1576,7 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
         beginDraggingSession(with: [item], event: p, source: self)
     }
     override func mouseUp(with event: NSEvent) {
+        push(in: false)
         guard let p = press, let grid else { return }
         press = nil
         grid.ui.keyboardFocusID = nil
@@ -1423,7 +1642,10 @@ final class FavoriteTileView: NSView, ArcTooltipTarget, NSDraggingSource {
 
     // MARK: Menu
 
-    override func menu(for event: NSEvent) -> NSMenu? {
+    override func menu(for event: NSEvent) -> NSMenu? { contextMenu() }
+
+    /// The tile's right-click menu, also read by `from://debug?favoriteMenu=` (#387).
+    func contextMenu() -> NSMenu? {
         guard let grid, let item = grid.store.item(itemID) else { return nil }
         let store = grid.store, ui = grid.ui, actions = grid.actions, favicons = grid.favicons
         let id = itemID

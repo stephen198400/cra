@@ -2,7 +2,7 @@
 # to 98.5 % around its centre; it comes back whole however the Peek goes, closed or expanded (PR #221).
 budget rss=900 stalls50=40
 pace 0.5
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "peekInEveryTab": true}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false, "peekInEveryTab": true}
 
 from://open?url=${PAGE}?n=under
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)

@@ -15,6 +15,8 @@ NAME=CraDev
 APP="$ROOT/build/$NAME.app"
 SCRATCH="$ROOT/.build/dev"
 STAMP="$SCRATCH/.dev-stamp"
+# This loop packages CEF helpers. The Chromium debug build uses scripts/build.sh debug.
+export CRA_ENGINE=cef
 export CRA_DATA_DIR="${CRA_DATA_DIR:-$ROOT/build/dev-data}"
 PB=/usr/libexec/PlistBuddy
 PID=""

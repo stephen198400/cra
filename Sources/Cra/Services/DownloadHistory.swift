@@ -74,6 +74,8 @@ final class DownloadHistory {
             (l.sampleBytes, l.sampleAt) = (received, now)
         }
         l.updated = now
+        // Paused or resumed: the wait for bytes starts again.
+        if received != l.received || (paused && !failed && !cancelled) != l.paused { l.moved = now }
         l.name = name
         if !path.isEmpty { l.path = path }
         l.received = received
@@ -127,8 +129,16 @@ final class DownloadHistory {
     }
 
     /// A renamed (or reverted) file keeps its place in the list.
-    func move(from old: String, to new: String) {
-        guard let i = entries.lastIndex(where: { $0.path == old }) else { return }
+    func move(from old: String, to new: String, id: UUID? = nil) {
+        guard let i = entries.lastIndex(where: { $0.path == old && (id == nil || $0.id == id) }) else { return }
+        entries[i].path = new
+        thumbnails[new] = thumbnails.removeValue(forKey: old)
+        file.save(entries)
+    }
+
+    /// Async renames retain the original row's identity, never whichever row now owns its path.
+    func move(id: UUID, from old: String, to new: String) {
+        guard let i = entries.firstIndex(where: { $0.id == id && $0.path == old }) else { return }
         entries[i].path = new
         thumbnails[new] = thumbnails.removeValue(forKey: old)
         file.save(entries)

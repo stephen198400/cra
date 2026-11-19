@@ -32,6 +32,12 @@ struct AdvancedPane: View {
 
             SettingsHeader("Search").padding(.top, 20)
             SettingsFeatureCard {
+                SettingsToggleRow("Ask on Page",
+                                  detail: AskOnPageModelAvailability.shared.modelAvailable
+                                    ? "Use ⌘F to ask about the current page with Apple Intelligence on this Mac."
+                                    : "Requires Apple Intelligence on this Mac. ⌘F opens Find while the model is unavailable.",
+                                  isOn: $store.settings.askOnPage)
+                SettingsCardDivider()
                 SettingsPlainRow("Search engine",
                                    detail: "What you type in the command bar that isn’t an address is searched for here.",
                                    trailing: { EmptyView() }) {

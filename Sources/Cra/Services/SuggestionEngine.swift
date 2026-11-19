@@ -1,12 +1,5 @@
 import Foundation
 
-enum CommandBarMode: Equatable {
-    /// ⌘T: commit creates a new tab in the current space.
-    case newTab
-    /// ⌘L: commit navigates the current tab.
-    case editURL
-}
-
 enum SuggestionKind: Equatable {
     case switchToTab(UUID)
     case archived(UUID)
@@ -357,8 +350,16 @@ final class SuggestionEngine {
 
     private var enginesRead: (default: ChromiumSearchEngine, keywords: [ChromiumSearchEngine])?
 
+    func watchSearchEngines(onChange: @escaping @MainActor () -> Void) -> DispatchSourceFileSystemObject? {
+        SearchEngines.shared.watchKeywords(profilePath: store.profilePath(space: store.focusedSpaceID)) { [weak self] in
+            guard let self, let previous = self.enginesRead else { return }
+            self.enginesRead = nil
+            if self.engines != previous { onChange() }
+        }
+    }
+
     /// Chromium's, in the window's space's profile (an incognito window's are its Default's),
-    /// read when the bar opens. The default is the space's own engine where it has one (#306).
+    /// cached while the bar is open. The default is the space's own engine where it has one (#306).
     private var engines: (default: ChromiumSearchEngine, keywords: [ChromiumSearchEngine]) {
         if let enginesRead { return enginesRead }
         let space = store.focusedSpaceID
@@ -423,6 +424,11 @@ final class SuggestionEngine {
 
     /// The command bar is open in an incognito window (it acts on the window in use).
     private var incognito: Bool { store.window().isIncognito }
+
+    /// The "New …" command the bar offers: the focused space's profile's choice (#375).
+    var newDocumentApp: NewDocumentApp? {
+        store.settings.newDocumentCommand(profileID: store.profileID(space: store.focusedSpaceID), incognito: incognito)
+    }
 
     private func tabSuggestions(_ q: String, excluding current: UUID?) -> [Suggestion] {
         var out: [Suggestion] = []
@@ -518,6 +524,16 @@ final class SuggestionEngine {
             out.append((Suggestion(id: "cmd:\(a.id)", kind: .command(a.id), title: a.name, subtitle: "Command",
                                    url: nil, faviconKey: nil, symbol: a.symbol ?? "command", trailing: a.primary?.display, score: s),
                         store.ranking.commandUsage[a.id] ?? 0))
+        }
+        // The profile's "New documents" app as one command, "New Google Doc" (Arc, #375); none while it's "——".
+        if let doc = newDocumentApp {
+            let s = nameScore(doc.commandName, triggers: doc.triggers)
+            if s > 0 {
+                let id = NewDocumentApp.commandID
+                out.append((Suggestion(id: "cmd:\(id)", kind: .command(id), title: doc.commandName, subtitle: "Command",
+                                       url: nil, faviconKey: nil, symbol: "doc.badge.plus", trailing: nil, score: s),
+                            store.ranking.commandUsage[id] ?? 0))
+            }
         }
         for space in incognito ? [] : store.orderedSpaces {
             let s = nameScore("Switch to \(space.title)", triggers: [space.title.lowercased()])

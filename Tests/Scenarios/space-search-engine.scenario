@@ -4,7 +4,7 @@
 # promise: #306
 budget rss=700 stalls50=10
 home
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false}
 
 from://debug?windowSize=1200x800
 wait 2

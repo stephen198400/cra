@@ -4,15 +4,31 @@ import AppKit
 
 public protocol CraBrowserDelegate: AnyObject {
     func browserDidClose(_ browser: CraBrowser)
+    func browser(_ browser: CraBrowser, didUpdateDownload download: CraDownloadInfo)
     func browser(_ browser: CraBrowser, requestsPermissionForOrigin origin: String, kinds: UInt, completion: @escaping (Bool) -> Void)
     func browser(_ browser: CraBrowser, didChangeURL url: String)
     func browser(_ browser: CraBrowser, didChangeTitle title: String)
     func browser(_ browser: CraBrowser, didChangeLoading loading: Bool, canGoBack: Bool, canGoForward: Bool)
 }
 
-public final class CraDownloadInfo {}
+extension CraBrowserDelegate {
+    public func browser(_ browser: CraBrowser, didUpdateDownload download: CraDownloadInfo) {}
+}
+public final class CraDownloadInfo { public init() {} }
+
+/// CraCEF.h's media session states (#411).
+@objc public enum CraMediaSessionState: Int { case inactive, active, ducking, suspended }
+
+/// The runtime switches BrowserManager's helpers read.
+@MainActor
+public enum CraCEFRuntime {
+    public static var hosting = true
+    public static func chromeHosting() -> Bool { hosting }
+    public static func supportsSparePages() -> Bool { hosting }
+}
 
 @objc public enum CraLinkWindow: Int { case new, incognito, little }
+@objc public enum CraFindAction: Int { case show, next, previous }
 
 /// `open`: the app subclasses it (WebKitBrowser, faked in AppServices.swift).
 @MainActor
@@ -29,6 +45,11 @@ open class CraBrowser {
     public var isPictureInPicturePlaying = false
     public var isCapturingMedia = false
     public var isAudible = false
+    public var hasUncontrollableSound = false
+    public var reportsMediaSession = false
+    /// Chrome's pop-up site setting (#357).
+    public private(set) var popupsAllowed = false
+    public func setPopupsAllowed(_ allowed: Bool) { popupsAllowed = allowed }
     public var hasDevTools = false
     public var closedByPage = false
     public let isIncognito: Bool
@@ -54,6 +75,20 @@ open class CraBrowser {
         restoredHistory = history
     }
 
+    /// A page made ahead for the next tab (SparePages); `takenURL` is what the tab that took it loads.
+    public private(set) var isSpare = false
+    public private(set) var takenURL: String?
+    public convenience init(spareWithFrame frame: NSRect, profilePath: String?) {
+        self.init(frame: frame, url: "", delegate: nil, incognito: false, profilePath: profilePath)
+        isSpare = true
+    }
+    public func takeSpare(withURL url: String, history: [String: Any]?) {
+        isSpare = false
+        takenURL = url
+        currentURL = url
+        restoredHistory = history
+    }
+
     public func close() { closeRequested = true; onClose?() }
     public func finishClose() { isClosed = true; delegate?.browserDidClose(self) }
     /// "show" / "close" / "apply <action>", in the order Cra asked.
@@ -67,6 +102,8 @@ open class CraBrowser {
     public private(set) var backgroundProbes = 0
     public func probeBackgroundColor() { backgroundProbes += 1 }
     public func setFocused(_ focused: Bool) {}
+    public func findText(_ text: String, forward: Bool, matchCase: Bool, findNext: Bool, generation: UUID, quote: Bool) {}
+    public func stopFinding(_ clearSelection: Bool) {}
     public private(set) var pictureInPictureRequests = 0
     public private(set) var automaticPictureInPictureRequests = 0
     public func requestPictureInPicture(automatic: Bool) {
@@ -78,6 +115,7 @@ open class CraBrowser {
     public func closePictureInPicture() { pictureInPictureCloses += 1; isInPictureInPicture = false }
     public func togglePictureInPicturePlayback() {}
     public func skipPictureInPicture(by seconds: Double) {}
+    public func seekPictureInPicture(to seconds: Double) {}
     public private(set) var lastParams = ""
     public func sendDevToolsMethod(_ method: String, params: String, completion: @escaping (String?, String?) -> Void) {
         lastParams = params
@@ -91,6 +129,15 @@ open class CraBrowser {
     public func evaluate(inIsolatedWorld world: String, params: String, completion: @escaping (String?, String?) -> Void) {
         lastIsolatedParams = params
         replies.append(("\(world):Runtime.evaluate", completion))
+    }
+    public var guardedEvaluations: [() -> Bool] = []
+    public func evaluate(inIsolatedWorld world: String, params: String, ifCurrent: @escaping () -> Bool,
+                         completion: @escaping (String?, String?) -> Void) {
+        guardedEvaluations.append { [weak self] in
+            guard let self, ifCurrent() else { completion(nil, "retired evaluation"); return false }
+            self.evaluate(inIsolatedWorld: world, params: params, completion: completion)
+            return true
+        }
     }
     public func reply(to method: String, with result: String?) {
         guard let index = replies.firstIndex(where: { $0.method == method }) else { fatalError("No pending \(method)") }

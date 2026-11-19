@@ -138,6 +138,8 @@ struct SpaceEditorView: View {
         switch icon {
         case .emoji(let e): Text(e).font(.system(size: size))
         case .symbol(let name): Image(systemName: name).font(.system(size: size - 2, weight: .medium)).foregroundStyle(color)
+        case .image(let data):
+            if let image = SpaceIconImage.image(data, points: size + 2) { Image(nsImage: image) }
         case .none: EmptyView()
         }
     }

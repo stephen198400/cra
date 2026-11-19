@@ -27,8 +27,58 @@ enum BrowserManagerLifecycleTests {
                "the Option-clicked link opens beside the live page's tab, once Chromium's call has returned")
     }
 
+    /// A two-finger swipe back over a page asks for the tab its view belongs to (#370): the page's
+    /// own Alloy container, its Chrome window, or the views moved out of that window into a card.
+    // promise: #370
+    @MainActor
+    private static func pageViewTabCase(_ manager: BrowserManager, _ runtime: TabRuntime, tab: UUID) {
+        let inContainer = NSView()
+        runtime.browser.containerView.addSubview(inContainer)
+        let host = NSWindow(contentRect: .zero, styleMask: [], backing: .buffered, defer: true)
+        let page = NSView(), inPage = NSView()
+        page.addSubview(inPage)
+        runtime.browser.hostWindow = host
+        EmbeddedPages.viewsByHost[ObjectIdentifier(host)] = [page]
+        defer {
+            inContainer.removeFromSuperview()
+            runtime.browser.hostWindow = nil
+            EmbeddedPages.viewsByHost[ObjectIdentifier(host)] = nil
+        }
+        expect(manager.visibleTabID(ofPageView: inContainer) == tab && manager.visibleTabID(ofPageView: inPage) == tab,
+               "a page view in the tab's container, or in its page moved into a card, is the tab's")
+        expect(manager.visibleTabID(ofPageView: NSView()) == nil, "a view of no page on screen is no tab's")
+    }
+
+    /// Arc's ⌥⌘-click opens a link in a Little Window (#373): only when the switch is on and the page's own
+    /// last click had ⌥⌘, not a click made with other keys while ⌥⌘ are down by the time Chromium asks.
+    // promise: #373
+    @MainActor
+    private static func optionCommandLittleWindowCase(_ manager: BrowserManager, _ store: SidebarStore, _ observer: Observer,
+                                                      live: CraBrowser, closed: CraBrowser, tab: UUID) {
+        let optionCommand = UInt(NSEvent.ModifierFlags([.option, .command]).rawValue)
+        let command = UInt(NSEvent.ModifierFlags.command.rawValue)
+        let link = "https://example.test/little"
+        let before = observer.littleWindowLinks.count
+        store.settings.littleWindowOnOptionCommandClick = false
+        expect(!manager.browser(live, opensLittleWindowForURL: link, clickModifiers: optionCommand, clickAge: 0.05),
+               "with the switch off a ⌥⌘-click stays Chromium's split view click (#298)")
+        store.settings.littleWindowOnOptionCommandClick = true
+        expect(!manager.browser(live, opensLittleWindowForURL: link, clickModifiers: command, clickAge: 0.05)
+               && !manager.browser(live, opensLittleWindowForURL: link, clickModifiers: 0, clickAge: 0.05)
+               && !manager.browser(live, opensLittleWindowForURL: link, clickModifiers: optionCommand, clickAge: -1)
+               && !manager.browser(closed, opensLittleWindowForURL: link, clickModifiers: optionCommand, clickAge: 0.05),
+               "a ⌘-click, a plain click, no click in this page and a closed page's open no Little Window")
+        expect(manager.browser(live, opensLittleWindowForURL: link, clickModifiers: optionCommand, clickAge: 0.05),
+               "a ⌥⌘-click with the switch on opens one")
+        expect(observer.littleWindowLinks.dropFirst(before).map(\.url) == [link] && observer.littleWindowLinks.last?.tab == tab,
+               "from the live page's tab, once")
+        store.settings.littleWindowOnOptionCommandClick = false
+    }
+
     @MainActor
     static func main() async {
+        downloadSourceAdoptionCase()
+        await sparePagesCase()
         await tabFaviconsCase()
         faviconObservationCase()
         let store = SidebarStore()
@@ -79,6 +129,8 @@ enum BrowserManagerLifecycleTests {
         expect(observer.splitLinks.map(\.url) == ["https://example.test/entry"] && observer.splitLinks.first?.tab == id,
                "Open Link in Split View reaches the window with the live page's tab, a closed page's doesn't")
         await optionClickSplitCase(manager, observer, live: replacement.browser, closed: old.browser, tab: id)
+        pageViewTabCase(manager, replacement, tab: id)
+        optionCommandLittleWindowCase(manager, store, observer, live: replacement.browser, closed: old.browser, tab: id)
 
         let retainedID = store.createTab(url: "https://example.test/retained").id
         weak var retainedBrowser = manager.ensureRuntime(for: retainedID)?.browser
@@ -127,6 +179,7 @@ enum BrowserManagerLifecycleTests {
         await refusalBackoffCase()
         recentTabsCase()
         freezingVoteCase()
+        await keepActiveSitesCase()
         await sleepClockCase()
         await pressureSweepCase()
         await discardCase()
@@ -147,19 +200,29 @@ enum BrowserManagerLifecycleTests {
         await nowPlayingResumeWithinHoldCase()
         await nowPlayingPictureInPictureCase()
         nowPlayingSkipsPictureInPictureCase()
+        nowPlayingSkipsUncontrollableSoundCase()
+        nowPlayingFollowsMediaSessionCase()
         await leaveVideoTabPictureInPictureCase()
         await pictureInPicturePerSiteCase()
         await splitCopySleepsPinnedTabCase()
         await coveredWindowPictureInPictureCase()
+        pictureInPictureMinimizeCase()
+        pictureInPictureMinimizeSilentCase()
         await callPictureInPictureCase()
         await playerMediaSessionCase()
         pageColoursCase()
+        syncedDocumentKeepsLivePagesCase()
         extensionPageRetryCase()
         await sleepCase("malformed or missing replies cannot authorize sleeping", reply: nil) { _, _ in }
         await pageProbeCase()
         await pageEngineCase()
+        await backgroundTabToastCase()
         pageHistoryCase()
         await permissionWaitsForItsTabCase()
+        permissionPopoverStepsAsideCase()
+        await askOnPageQuoteCase()
+        await askOnPageSnapshotCase()
+        findCorrelationCase()
         print("Browser manager lifecycle: \(checks) checks passed")
     }
 
@@ -191,6 +254,257 @@ enum BrowserManagerLifecycleTests {
         track()
         cache.reset()
         expect(changed == 2, "a reset re-renders every view of a favicon")
+    }
+
+    @MainActor
+    private static func findCorrelationCase() {
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+        let observer = Observer()
+        manager.delegate = observer
+        let tab = store.createTab(url: "https://example.test/find").id
+        let other = store.createTab(url: "https://example.test/other").id
+        manager.show(tab, focus: false)
+        let original = manager.visibleRuntime!.browser
+        manager.find("absent", forward: true)
+        let old = manager.findState.request!
+        // A native callback already captured its tag before delivery was queued.
+        let oldDelivery = {
+            manager.browser(original, didFindMatches: 0, activeMatch: 0, generation: old.id, quote: false, identifier: 1, finalUpdate: true)
+        }
+        manager.prepareFind("matching")
+        oldDelivery()
+        expect(manager.findState.count == nil && !manager.canAskFind(query: "matching", enabled: true, forward: true),
+               "an old final zero delivered after a synchronous edit cannot authorize Ask")
+        let current = manager.findState.request!
+        manager.browser(original, didFindMatches: 3, activeMatch: 1, generation: current.id, quote: false, identifier: 2, finalUpdate: true)
+        expect(observer.findStates.last?.count == 3 && manager.findState.activeMatch == 1,
+               "the current browser's tagged native final updates accepted ordinary Find state")
+        manager.find("matching", forward: false)
+        expect(manager.findState.request?.id == current.id, "next/previous preserve the current native query session")
+        for change in 0..<7 {
+            manager.find("absent", forward: true)
+            let browser = manager.visibleRuntime!.browser
+            let request = manager.findState.request!
+            manager.browser(browser, didFindMatches: 0, activeMatch: 0, generation: request.id, quote: false, identifier: 3, finalUpdate: true)
+            expect(manager.canAskFind(query: "absent", enabled: true, forward: true), "current final zero is eligible before owner changes")
+            switch change {
+            case 0: browser.setLoading(true); browser.setLoading(false)
+            case 1: manager.show(other, focus: false); manager.show(tab, focus: false)
+            case 2: store.profilePaths[tab] = "/different-profile"
+            case 3: manager.unload(tab); manager.show(tab, focus: false)
+            case 4: manager.show([tab, other], focused: other, focus: false)
+            case 5: manager.stopFinding(true)
+            default: browser.navigate(to: "https://example.test/find")
+            }
+            manager.browser(browser, didFindMatches: 0, activeMatch: 0, generation: request.id, quote: false, identifier: 3, finalUpdate: true)
+            expect(!manager.canAskFind(query: "absent", enabled: true, forward: true),
+                   "late final zero cannot survive reload, focus, profile, runtime, split, close or same-URL change (\(change))")
+            store.profilePaths[tab] = nil
+            manager.show(tab, focus: false)
+        }
+        manager.find("absent", forward: true, purpose: .quote)
+        let quote = manager.findState.request!
+        manager.browser(manager.visibleRuntime!.browser, didFindMatches: 0, activeMatch: 0, generation: quote.id, quote: true, identifier: 4, finalUpdate: true)
+        expect(manager.findState.count == 0 && !manager.canAskFind(query: "absent", enabled: true, forward: true),
+               "quote navigation has results but cannot complete ordinary Find")
+        manager.browser(original, requestsFindAction: .show)
+        expect(observer.findActions.isEmpty, "retired browser's native command cannot open the current panel")
+        manager.browser(manager.visibleRuntime!.browser, requestsFindAction: .next)
+        expect(observer.findActions == [.next], "current native Chrome Find is routed to the app Find owner")
+        manager.closeAll()
+    }
+
+    @MainActor
+    private static func resolveAskDocument(_ manager: BrowserManager, mime: String = "text/html") async {
+        manager.refreshAskOnPageDocument()
+        guard manager.askOnPageDocumentRead != nil, let browser = manager.visibleRuntime?.browser else { return }
+        let reply = String(data: try! JSONSerialization.data(withJSONObject: ["result": ["value": [
+            "url": browser.currentURL, "contentType": mime]]]), encoding: .utf8)!
+        browser.replies.removeLast().completion(reply, nil)
+        // The production native callback enqueues its complete mutation before this FIFO marker.
+        await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+    }
+
+    // promise: #393
+    @MainActor
+    private static func askOnPageQuoteCase() async {
+        let store = SidebarStore(), observer = Observer()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+        manager.delegate = observer
+        let tab = store.createTab(url: "https://example.test/article").id
+        manager.show(tab, focus: false)
+        await resolveAskDocument(manager)
+        let browser = manager.visibleRuntime!.browser
+        let text = "The café opens at 09:30."
+        let hit = #"{"result":{"value":{"found":true,"startNode":0,"startOffset":0,"endNode":0,"endOffset":24}}}"#
+        let yes = #"{"result":{"value":{"found":true}}}"#, no = #"{"result":{"value":{"found":false}}}"#
+        func turn() async { await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } } }
+        var results: [Bool?] = [], usable = true
+        func start() -> AskOnPage.FindRequest {
+            manager.clearAskOnPageQuote()
+            let request = manager.prepareFind(text, matchCase: true, purpose: .quote)!
+            manager.findAskOnPageQuote(text, in: manager.askOnPageContext()!, request: request,
+                                      isCurrent: { usable }) { results.append($0) }
+            return request
+        }
+        let request = start()
+        expect(browser.guardedEvaluations.removeFirst()(), "current lookup passes its final setup authorization")
+        browser.replies.removeLast().completion(hit, nil); await turn()
+        expect(results.isEmpty && manager.findState.request == request, "lookup alone cannot report found or replace quote generation")
+        manager.browser(browser, didFindMatches: 99, activeMatch: 1, generation: request.id, quote: true, identifier: 7, finalUpdate: true)
+        expect(results.isEmpty, "generic native Find counts never complete a quote DOM operation")
+        expect(browser.guardedEvaluations.removeFirst()(), "current effect passes its final setup authorization")
+        browser.replies.removeLast().completion(yes, nil); await turn()
+        expect(results.count == 1 && results[0] == true && manager.findState.request == request,
+               "only the completed current effect reports found using the same quote generation")
+        manager.find("ordinary input", forward: false)
+        let ordinary = manager.findState.request!
+        manager.find("ordinary input", forward: true)
+        expect(ordinary.purpose == .ordinary && manager.findState.request == ordinary,
+               "ordinary input restores its own generation and repeated next/previous keeps it")
+        results.removeAll()
+        _ = start(); _ = browser.guardedEvaluations.removeFirst()()
+        browser.replies.removeLast().completion(no, nil); await turn()
+        expect(results.count == 1 && results[0] == false && browser.guardedEvaluations.isEmpty,
+               "a completed exact not-found lookup has no effect phase or native highlight")
+        results.removeAll()
+        _ = start(); _ = browser.guardedEvaluations.removeFirst()()
+        browser.replies.removeLast().completion(hit, nil); await turn()
+        usable = false
+        expect(!browser.guardedEvaluations.removeFirst()(), "revoked service authority rejects a late effect setup before dispatch")
+        await turn()
+        expect(results.count == 1 && results[0] == nil, "unavailable/disabled authority retires status rather than inventing not-found")
+        usable = true; results.removeAll()
+        _ = start(); _ = browser.guardedEvaluations.removeFirst()()
+        browser.replies.removeLast().completion(hit, nil); await turn()
+        _ = browser.guardedEvaluations.removeFirst()()
+        let committedEffect = browser.replies.removeLast().completion
+        manager.find("current ordinary", forward: true)
+        let afterCommit = manager.findState
+        committedEffect(yes, nil); await turn()
+        expect(results.count == 1 && results[0] == nil && manager.findState == afterCommit,
+               "invalidation after IPC commit still rejects status/native Find and cannot steal ordinary ownership")
+        results.removeAll()
+        _ = start(); _ = browser.guardedEvaluations.removeFirst()()
+        let late = browser.replies.removeLast().completion
+        manager.find("restored question", forward: true)
+        let restored = manager.findState
+        late(hit, nil); await turn()
+        expect(results.count == 1 && results[0] == nil && manager.findState == restored && browser.guardedEvaluations.isEmpty,
+               "ordinary Find retires pending quote effects and late lookup cannot steal restored ownership")
+        results.removeAll()
+        _ = start(); _ = browser.guardedEvaluations.removeFirst()()
+        browser.replies.removeLast().completion(hit, nil); await turn()
+        browser.setLoading(true); browser.setLoading(false)
+        expect(!browser.guardedEvaluations.removeFirst()(), "same-URL new navigation invalidates effect setup")
+        await turn()
+        expect(results.count == 1 && results[0] == nil, "a retired document never publishes quote status")
+        manager.closeAll()
+    }
+
+    @MainActor
+    private static func askOnPageSnapshotCase() async {
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+        let tab = store.createTab(url: "https://example.test/article").id
+        let other = store.createTab(url: "https://example.test/other").id
+        manager.show(tab, focus: false)
+        let text = "A complete synthetic article sentence that can be used as page context and quoted."
+        let reply = String(data: try! JSONSerialization.data(withJSONObject: ["result": ["value": [
+            "url": "https://example.test/article", "title": "Article", "text": text,
+            "contentType": "text/html", "truncated": false]]]), encoding: .utf8)!
+        let browser = manager.visibleRuntime!.browser
+        expect(manager.askOnPageContext() == nil, "Ask remains disabled before actual current document type resolves")
+        await resolveAskDocument(manager)
+        let context = manager.askOnPageContext()!
+        var received: [AskOnPagePrompt.Page?] = []
+        manager.askOnPageSnapshot(context) { received.append($0) }
+        browser.replies.removeLast().completion(reply, nil)
+        await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+        expect(received.count == 1 && received[0]?.text == text, "Ask context is returned from the captured current browser")
+
+        for change in 0..<5 {
+            await resolveAskDocument(manager)
+            let current = manager.askOnPageContext()!
+            let active = manager.visibleRuntime!.browser
+            received.removeAll()
+            manager.askOnPageSnapshot(current) { received.append($0) }
+            let complete = active.replies.removeLast().completion
+            switch change {
+            case 0: active.setLoading(true); active.setLoading(false)
+            case 1: manager.show(other, focus: false); manager.show(tab, focus: false)
+            case 2: store.profilePaths[tab] = "/different-profile"
+            case 3: manager.unload(tab); manager.show(tab, focus: false)
+            default: manager.show([tab, other], focused: other, focus: false)
+            }
+            complete(reply, nil)
+            await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+            expect(received.count == 1 && received[0] == nil,
+                   "Ask rejects an obsolete snapshot after reload, focus away/back, profile change, replacement or split focus (case \(change))")
+            store.profilePaths[tab] = nil
+            manager.show(tab, focus: false)
+        }
+        received.removeAll()
+        manager.askOnPageSnapshot(context) { received.append($0) }
+        expect(received.count == 1 && received[0] == nil, "an obsolete request is rejected before page evaluation")
+        let internalPage = store.createTab(url: "from://settings").id
+        manager.show(internalPage, focus: false)
+        expect(manager.askOnPageContext() == nil, "internal browser pages are ineligible before extraction")
+        for (url, mime, privatePage) in [
+            ("https://example.test/extensionless-pdf", "application/pdf", false),
+            ("https://example.test/extensionless-image", "image/svg+xml", false),
+            ("https://example.test/extensionless-movie", "video/mp4", false),
+            ("https://search.arc.net/article", "text/html", false),
+            ("file:///tmp/article.html", "text/html", false),
+            ("https://example.test/private", "text/html", true)] {
+            let id = store.createTab(url: url).id
+            if privatePage { store.incognitoItems.insert(id) }
+            manager.show(id, focus: false)
+            await resolveAskDocument(manager, mime: mime)
+            expect(manager.askOnPageContext() == nil && manager.findPageContext() != nil,
+                   "resolved PDF/image/movie, Arc Search, file and private eligibility never disables ordinary Find: \(url)")
+        }
+        let disguisedHTML = store.createTab(url: "https://example.test/page.pdf").id
+        manager.show(disguisedHTML, focus: false)
+        await resolveAskDocument(manager, mime: "text/html")
+        expect(manager.askOnPageContext() != nil,
+               "actual HTML MIME takes precedence over a misleading .pdf suffix")
+        expect(AskOnPageDocument.kind(url: URL(string: "https://example.test/document")!, mimeType: "application/pdf") == .pdf
+            && AskOnPageDocument.kind(url: URL(string: "https://example.test/document")!, mimeType: "image/svg+xml") == .image
+            && AskOnPageDocument.kind(url: URL(string: "https://example.test/document")!, mimeType: "video/mp4") == .movie,
+            "resolved UTType conformance rejects MIME subtypes without relying on filename suffixes")
+        manager.invalidateAskOnPageDocument()
+        manager.refreshAskOnPageDocument()
+        let oldTypeReply = manager.visibleRuntime!.browser.replies.removeLast().completion
+        manager.visibleRuntime!.browser.setLoading(true)
+        manager.visibleRuntime!.browser.setLoading(false)
+        manager.refreshAskOnPageDocument()
+        let newTypeReply = manager.visibleRuntime!.browser.replies.removeLast().completion
+        let oldType = String(data: try! JSONSerialization.data(withJSONObject: ["result": ["value": [
+            "url": "https://example.test/page.pdf", "contentType": "text/html"]]]), encoding: .utf8)!
+        oldTypeReply(oldType, nil)
+        await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+        expect(manager.askOnPageContext() == nil && manager.askOnPageDocumentRead != nil,
+               "a late same-URL old type probe cannot enable Ask or consume the current type request")
+        let newType = String(data: try! JSONSerialization.data(withJSONObject: ["result": ["value": [
+            "url": "https://example.test/page.pdf", "contentType": "application/pdf"]]]), encoding: .utf8)!
+        newTypeReply(newType, nil)
+        await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+        expect(manager.askOnPageContext() == nil && manager.askOnPageDocumentRead == nil,
+               "current extensionless/resolved PDF evidence stays ineligible after a stale HTML probe")
+        for malformed in ["{}", "not JSON", String(repeating: "x", count: 20_001),
+            #"{"result":{"value":{"url":"https://example.test/other","contentType":"text/html"}}}"#,
+            #"{"result":{"value":{"url":"https://example.test/page.pdf","contentType":""}}}"#,
+            #"{"result":{"value":{}},"exceptionDetails":{}}"#] {
+            manager.invalidateAskOnPageDocument()
+            manager.refreshAskOnPageDocument()
+            manager.visibleRuntime!.browser.replies.removeLast().completion(malformed, nil)
+            await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+            expect(manager.askOnPageContext() == nil && manager.askOnPageDocument == nil,
+                   "malformed, oversized, exception and wrong-document type metadata cannot enable Ask")
+        }
+        manager.closeAll()
     }
 
     @MainActor
@@ -274,6 +588,80 @@ enum BrowserManagerLifecycleTests {
         defer { window.close() }
         window.contentView!.addSubview(runtime.browser.containerView)
         expect(PageProbe.viewState(runtime).hasSuffix(" display=none"), "the view state names the display the page's window is on")
+        manager.closeAll()
+    }
+
+    /// Both runtime handoff paths notify the destination before its delegate takes reports.
+    @MainActor
+    private static func downloadSourceAdoptionCase() {
+        for explicitAdoption in [false, true] {
+            let store = SidebarStore()
+            let tab = store.createTab(url: "https://example.test/downloading").id
+            let source = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+            let destination = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+            source.windowID = UUID()
+            destination.windowID = UUID()
+            let sourceObserver = Observer(), destinationObserver = Observer()
+            source.delegate = sourceObserver
+            destination.delegate = destinationObserver
+            let runtime = source.ensureRuntime(for: tab)!
+            var arrivals: [(UUID, UUID)] = []
+            destination.pageAdopted = { id, previousWindow in
+                expect(runtime.browser.delegate === source, "the original download owner is known before the delegate is redirected")
+                arrivals.append((id, previousWindow))
+            }
+            var reportedTabs: [UUID?] = []
+            destinationObserver.onDownload = { _ in reportedTabs.append(destination.downloadSourceTab) }
+            var staleReports = 0
+            sourceObserver.onDownload = { _ in staleReports += 1 }
+            if explicitAdoption {
+                _ = source.release(tab)
+                _ = destination.adopt(runtime.browser, for: tab, from: "a downloading window's")
+            } else {
+                destination.takeRuntimeFromOtherWindow = { source.release($0) }
+                _ = destination.ensureRuntime(for: tab)
+            }
+            expect(arrivals.count == 1 && arrivals[0].0 == tab && arrivals[0].1 == source.windowID,
+                   "runtime reparenting delivers the exact tab and old window once for source migration")
+            runtime.browser.delegate?.browser(runtime.browser, didUpdateDownload: CraDownloadInfo())
+            runtime.browser.delegate?.browser(runtime.browser, didUpdateDownload: CraDownloadInfo())
+            expect(reportedTabs == [tab, tab] && staleReports == 0 && destination.downloadSourceTab == nil,
+                   "progress and terminal reports follow the adopted page's manager with its stable tab identity")
+            _ = destination.ensureRuntime(for: tab)
+            expect(arrivals.count == 1, "reusing an already-owned runtime must not transfer or recapture its source")
+            destination.closeAll()
+            runtime.browser.finishClose()
+            source.closeAll()
+        }
+    }
+
+    // promise: #543
+    /// Every tab a page opens behind it reaches the window, which toasts it while the sidebar is hidden
+    /// (BackgroundTabToast): a ⌘-click or middle click (Chromium's new page, popupHostForURL) and Open
+    /// Link in New Tab (requestsNewTabWithURL), not only ⌘Return in the bar. A tab in front says nothing.
+    @MainActor
+    private static func backgroundTabToastCase() async {
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+        let observer = Observer()
+        manager.delegate = observer
+        let source = store.createTab(url: "https://example.test/source").id
+        manager.show(source, focus: false)
+        let page = manager.runtime(for: source)!.browser
+
+        _ = manager.browser(page, popupHostForURL: "https://example.test/clicked", inBackground: true)
+        let clicked = store.items.values.first { $0.tab?.url == "https://example.test/clicked" }?.id
+        expect(clicked != nil && observer.backgroundTabs == [clicked!], "a ⌘-clicked link's background tab reaches the window")
+
+        manager.browser(page, requestsNewTabWithURL: "https://example.test/menu", inBackground: true)
+        let menu = store.items.values.first { $0.tab?.url == "https://example.test/menu" }?.id
+        expect(menu != nil && observer.backgroundTabs == [clicked!, menu!], "Open Link in New Tab's background tab reaches the window")
+
+        _ = manager.browser(page, popupHostForURL: "https://example.test/front", inBackground: false)
+        manager.browser(page, requestsNewTabWithURL: "https://example.test/front2", inBackground: false)
+        expect(observer.backgroundTabs.count == 2, "a tab opened in front is no background tab")
+        manager.browser(page, requestsNewTabWithURL: "from://action/nextTab", inBackground: true)
+        expect(observer.backgroundTabs.count == 2, "a from:// link opens nothing, so nothing is said")
         manager.closeAll()
     }
 
@@ -583,6 +971,48 @@ enum BrowserManagerLifecycleTests {
         manager.closeAll()
     }
 
+    // promise: #458
+    /// Settings ▸ Tabs ▸ "Always keep these sites active" (#458): a quiet page on a listed site
+    /// outlasts the clock and gets no freezing vote, while one on another site sleeps and is voted
+    /// to freeze. Under memory pressure it goes after the others. Taking the site off the list makes
+    /// it a candidate again on the next pass.
+    @MainActor
+    private static func keepActiveSitesCase() async {
+        let clock = ManualScheduler()
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView(), clock: clock)
+        manager.protectedRecentTabs = 0
+        store.settings.keepActiveHosts = ["dashboard.example.test"]
+        let keptID = store.createTab(url: "https://dashboard.example.test/live").id
+        let otherID = store.createTab(url: "https://news.example.test/").id
+        let kept = manager.ensureRuntime(for: keptID)!, other = manager.ensureRuntime(for: otherID)!
+        kept.hiddenAt = clock.now
+        other.hiddenAt = clock.now.addingTimeInterval(10)
+        clock.advance(by: 9 * 3600)
+        func probed(_ rt: TabRuntime) -> Bool { rt.browser.replies.contains { $0.method == isolatedProbe } }
+        manager.sleepIdleTabs(.timer(.fifteenMinutes))
+        expect(!probed(kept) && probed(other), "past the idle time, the kept site's page isn't asked to sleep; the other site's is")
+        manager.freezeIdleTabs(hiddenLongerThan: 60)
+        expect(!kept.freezeVoted && other.freezeVoted, "the kept site's page gets no freezing vote; the other one does")
+        other.browser.reply(to: isolatedProbe, with: idleReply)
+        await drainMainQueue()
+        other.browser.reply(to: "Runtime.evaluate", with: idleReply)
+        await drainMainQueue()
+        await finishSleep(other.browser)
+        expect(asleep(manager, otherID) && !asleep(manager, keptID), "the other site's page sleeps; the kept one stays loaded")
+        manager.sleepIdleTabs(.memoryPressure(.critical))
+        expect(probed(kept), "under memory pressure, with no other page left to ask, the kept site's page is asked last")
+        kept.browser.reply(to: isolatedProbe, with: #"{"result":{"type":"string","value":"typed"}}"#)
+        await drainMainQueue()
+        kept.sleepProbeAfter = nil
+        store.settings.keepActiveHosts = []
+        manager.freezeIdleTabs(hiddenLongerThan: 60)
+        expect(kept.freezeVoted, "taken off the list, its page is voted to freeze on the next pass")
+        manager.sleepIdleTabs(.timer(.fifteenMinutes))
+        expect(probed(kept), "and the clock asks it to sleep again")
+        manager.closeAll()
+    }
+
     // promise: #32
     /// A page that refused isn't probed again every minute, only after the back-off or once shown again.
     @MainActor
@@ -602,6 +1032,33 @@ enum BrowserManagerLifecycleTests {
         manager.sleepIdleTabs(TabSleepPolicy(hiddenFor: 60))
         expect(runtime.browser.replies.contains { $0.method == isolatedProbe }, "a refused page is probed again after the back-off")
         manager.closeAll()
+    }
+
+    /// Pages made ahead (SparePages): a tab that needs a page takes its profile's spare, made
+    /// SparePage.refillDelay after the last page was made, instead of waiting for CEF's window.
+    @MainActor
+    private static func sparePagesCase() async {
+        SparePages.shared.dropAll()
+        let clock = ManualScheduler()
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView(), clock: clock)
+        let first = store.createTab(url: "https://example.test/one").id
+        let one = manager.ensureRuntime(for: first)!
+        expect(one.browser.takenURL == nil && !one.browser.isSpare, "with no spare yet, the page is made on the spot")
+        expect(SparePages.shared.take(profilePath: nil) == nil, "the next spare isn't made on the same click")
+        clock.advance(by: SparePage.refillDelay)
+        let second = store.createTab(url: "https://example.test/two").id
+        let two = manager.ensureRuntime(for: second)!
+        expect(two.browser.takenURL == "https://example.test/two", "the next tab takes the spare made after the first and loads its address")
+        expect(two.browser.delegate === manager && manager.runtime(for: second)?.browser === two.browser,
+               "the taken spare is the tab's page, reporting to its window")
+        expect(SparePages.shared.take(profilePath: nil) == nil, "a taken spare is no longer kept")
+        clock.advance(by: SparePage.refillDelay)
+        let spare = SparePages.shared.take(profilePath: nil)
+        expect(spare?.isSpare == true, "another spare is made after it was taken")
+        spare?.close()
+        manager.closeAll()
+        SparePages.shared.dropAll()
     }
 
     // promise: #32
@@ -1149,6 +1606,99 @@ enum BrowserManagerLifecycleTests {
         manager.closeAll()
     }
 
+    // promise: #411
+    /// A notification ding (a sound under 5 s) or Web Audio alone makes no player card (#411):
+    /// Arc's player follows Chromium's media session, which Chrome's media controls only offer
+    /// once it is controllable. Media that starts in the same tab, even within the ding's 2 s
+    /// hold, gets its card.
+    @MainActor
+    private static func nowPlayingSkipsUncontrollableSoundCase() {
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+        let np = NowPlaying()
+        manager.nowPlaying = np
+        let a = store.createTab(url: "https://chat.example.test/").id, b = store.createTab(url: "https://example.test/other").id
+        let ra = manager.ensureRuntime(for: a)!
+        manager.show(b, focus: false)
+        ra.browser.hasUncontrollableSound = true
+        ra.browser.isAudible = true
+        manager.browser(ra.browser, didChangeSoundPlaying: true)
+        manager.browser(ra.browser, didChangeAudible: true)
+        expect(np.entries.isEmpty, "a notification ding makes no card")
+        manager.browser(ra.browser, didChangeSoundPlaying: false)
+        ra.browser.hasUncontrollableSound = false
+        manager.browser(ra.browser, didChangeSoundPlaying: true)
+        expect(np.entries.map(\.id) == [a] && np.entries.first?.playing == true,
+               "a video that starts within the ding's hold gets its card")
+        manager.closeAll()
+    }
+
+    // promise: #411
+    /// On Chrome's framework the sidebar player follows the page's media session, as Arc's (#411):
+    /// a track that ends leaves 2.5 s later, a pause keeps its card, a next track within the wait
+    /// keeps it, and a ding or Web Audio sound (its speaker shows) neither plays a paused card nor
+    /// makes one.
+    @MainActor
+    private static func nowPlayingFollowsMediaSessionCase() {
+        let clock = ManualScheduler()
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView(), clock: clock)
+        let np = NowPlaying()
+        manager.nowPlaying = np
+        let a = store.createTab(url: "https://music.example.test/").id, b = store.createTab(url: "https://example.test/other").id
+        let ra = manager.ensureRuntime(for: a)!
+        manager.show(b, focus: false)
+        ra.browser.reportsMediaSession = true
+        let card = { np.entries.first { $0.id == a } }
+
+        // A ding or Web Audio: the speaker, no card.
+        ra.browser.isAudible = true
+        manager.browser(ra.browser, didChangeSoundPlaying: true)
+        manager.browser(ra.browser, didChangeAudible: true)
+        manager.browser(ra.browser, didChangeMediaSessionState: .active, controllable: false)
+        expect(np.entries.isEmpty, "a ding makes no card")
+        manager.browser(ra.browser, didChangeMediaSessionState: .inactive, controllable: false)
+        manager.browser(ra.browser, didChangeSoundPlaying: false)
+        manager.browser(ra.browser, didChangeAudible: false)
+
+        // A track plays, then pauses for longer than any hold.
+        manager.browser(ra.browser, didChangeMediaSessionState: .active, controllable: true)
+        expect(card()?.playing == true, "media playing makes a playing card")
+        manager.browser(ra.browser, didChangeMediaSessionState: .suspended, controllable: true)
+        clock.advance(by: 60)
+        expect(card()?.playing == false, "a paused track keeps its card, paused")
+
+        // A ding in the paused tab: the speaker shows it, the card stays paused.
+        manager.browser(ra.browser, didChangeSoundPlaying: true)
+        manager.browser(ra.browser, didChangeAudible: true)
+        manager.browser(ra.browser, didChangeMediaSessionState: .active, controllable: false)
+        expect(card()?.playing == false, "a ding doesn't play a paused card")
+        manager.browser(ra.browser, didChangeMediaSessionState: .inactive, controllable: false)
+        manager.browser(ra.browser, didChangeSoundPlaying: false)
+        manager.browser(ra.browser, didChangeAudible: false)
+        clock.advance(by: 10)
+        expect(card()?.playing == false, "the ding's session ending leaves the paused card")
+
+        // Played again, then the track ends; the next one starts within the wait.
+        manager.browser(ra.browser, didChangeMediaSessionState: .active, controllable: true)
+        manager.browser(ra.browser, didChangeMediaSessionState: .inactive, controllable: false)
+        clock.advance(by: 1)
+        manager.browser(ra.browser, didChangeMediaSessionState: .active, controllable: true)
+        clock.advance(by: 5)
+        expect(card()?.playing == true, "a next track within the wait keeps the card; the old wait can't remove it")
+
+        // The last track ends, a ding plays within the wait: the card goes all the same.
+        manager.browser(ra.browser, didChangeMediaSessionState: .inactive, controllable: false)
+        clock.advance(by: 1)
+        manager.browser(ra.browser, didChangeMediaSessionState: .active, controllable: false)
+        expect(card() != nil, "the card waits before it goes")
+        clock.advance(by: 2)
+        expect(card() == nil, "a track that ended leaves the player 2.5 s later, a ding or not")
+        manager.browser(ra.browser, didChangeMediaSessionState: .inactive, controllable: false)
+        expect(np.entries.isEmpty, "the ding's end makes no card")
+        manager.closeAll()
+    }
+
     // promise: #33
     /// The sidebar player (#33) has no card for a tab whose video is in Picture in Picture; the
     /// card comes back when the video leaves it.
@@ -1175,7 +1725,8 @@ enum BrowserManagerLifecycleTests {
 
     /// The player's Picture in Picture button asks the off-screen page through the protocol, as a
     /// user gesture; only a page with no video of its own (a player in an iframe) gets the
-    /// context menu's request.
+    /// context menu's request. The gesture goes only to a page that has a video: a first look runs
+    /// without one, since a gesture also lets the page open pop-ups for a few seconds (#357).
     @MainActor
     private static func nowPlayingPictureInPictureCase() async {
         let store = SidebarStore()
@@ -1188,9 +1739,18 @@ enum BrowserManagerLifecycleTests {
                                           ("none", 1, "a page with no video of its own")] {
             let before = ra.browser.pictureInPictureRequests
             manager.performNowPlaying(a, .pictureInPicture)
-            expect(ra.browser.lastParams.contains(#""userGesture":true"#), "the player's request runs as a user gesture")
-            ra.browser.reply(to: "Runtime.evaluate", with: #"{"result":{"type":"string","value":"\#(answer)"}}"#)
-            await drainMainQueue()
+            expect(ra.browser.lastParams.contains(#""userGesture":false"#), "the first look at the page runs with no user gesture")
+            if answer == "none" {
+                ra.browser.reply(to: "Runtime.evaluate", with: #"{"result":{"type":"string","value":"none"}}"#)
+                await drainMainQueue()
+                expect(ra.browser.lastParams.contains(#""userGesture":false"#), "a page with no video gets no user gesture")
+            } else {
+                ra.browser.reply(to: "Runtime.evaluate", with: #"{"result":{"type":"string","value":"video"}}"#)
+                await drainMainQueue()
+                expect(ra.browser.lastParams.contains(#""userGesture":true"#), "the player's request runs as a user gesture")
+                ra.browser.reply(to: "Runtime.evaluate", with: #"{"result":{"type":"string","value":"\#(answer)"}}"#)
+                await drainMainQueue()
+            }
             expect(ra.browser.pictureInPictureRequests - before == fallback,
                    "\(label) \(fallback == 1 ? "falls back to" : "does not also get") the page request")
         }
@@ -1199,7 +1759,10 @@ enum BrowserManagerLifecycleTests {
 
     /// Leaving a video tab (Arc's automatic Picture in Picture) asks the page through the protocol as
     /// a user gesture, for an audible playing video only. The key press the page path lends the page
-    /// raced the tab going hidden, so PiP sometimes never opened (X report, 2 Nov 2026).
+    /// raced the tab going hidden, so PiP sometimes never opened (X report, 2 Nov 2026). Only a page
+    /// with such a video gets the gesture: leaving any tab handed one out, and with it the right to
+    /// open pop-ups for a few seconds (#357).
+    // promise: #357
     @MainActor
     private static func leaveVideoTabPictureInPictureCase() async {
         let store = SidebarStore()
@@ -1214,11 +1777,20 @@ enum BrowserManagerLifecycleTests {
             let before = ra.browser.automaticPictureInPictureRequests
             manager.show(b, focus: false)
             expect(!ra.browser.replies.contains { $0.method == "Cra.autoPictureInPicture" }, "a page that isn't capturing goes straight to the video request")
-            expect(ra.browser.lastParams.contains(#""userGesture":true"#), "leaving a video tab asks as a user gesture")
-            expect(ra.browser.lastParams.contains("})(true)"), "leaving a video tab takes only an audible, playing video")
+            expect(ra.browser.lastParams.contains(#""userGesture":false"#), "leaving a tab looks for a video with no user gesture")
+            expect(ra.browser.lastParams.contains("})(true, false)"), "leaving a video tab takes only an audible, playing video")
+            if answer == "ok" {
+                ra.browser.reply(to: "Runtime.evaluate", with: #"{"result":{"type":"string","value":"video"}}"#)
+                await drainMainQueue()
+                expect(ra.browser.lastParams.contains(#""userGesture":true"#), "a page with such a video is asked as a user gesture")
+                expect(ra.browser.lastParams.contains("})(true, true)"), "and asked for Picture in Picture")
+            }
             let reply = answer.map { #"{"result":{"type":"string","value":"\#($0)"}}"# }
             ra.browser.reply(to: "Runtime.evaluate", with: reply)
             await drainMainQueue()
+            if answer != "ok" {
+                expect(ra.browser.lastParams.contains(#""userGesture":false"#), "\(label) gets no user gesture")
+            }
             expect(ra.browser.automaticPictureInPictureRequests - before == fallback,
                    "\(label) \(fallback == 1 ? "falls back to" : "does not also get") the page request")
             manager.show(a, focus: false)
@@ -1347,7 +1919,7 @@ enum BrowserManagerLifecycleTests {
             manager.show(b, focus: false)
             if let reply { ra.browser.reply(to: "Cra.autoPictureInPicture", with: reply) } else { ra.browser.fail("Cra.autoPictureInPicture", with: "not found") }
             await drainMainQueue()
-            expect(evaluations() == 1 && ra.browser.lastParams.contains("})(true)"), "leaving its tab falls back to the video request")
+            expect(evaluations() == 1 && ra.browser.lastParams.contains("})(true, false)"), "leaving its tab falls back to the video request")
             ra.browser.reply(to: "Runtime.evaluate", with: #"{"result":{"type":"string","value":"none"}}"#)
             await drainMainQueue()
             manager.show(a, focus: false)
@@ -1443,7 +2015,7 @@ enum BrowserManagerLifecycleTests {
 
         ra.browser.isAudible = true
         manager.windowVisibilityChanged(covered: true)
-        expect(ra.browser.lastParams.contains(#""userGesture":true"#) && ra.browser.lastParams.contains("})(true)"),
+        expect(ra.browser.lastParams.contains(#""userGesture":false"#) && ra.browser.lastParams.contains("})(true, false)"),
                "a covered window asks its playing page for automatic Picture in Picture")
         ra.browser.reply(to: "Runtime.evaluate", with: #"{"result":{"type":"string","value":"ok"}}"#)
         await drainMainQueue()
@@ -1463,6 +2035,54 @@ enum BrowserManagerLifecycleTests {
         PictureInPictureChrome.shared.actions?.close()
         expect(ra.browser.pictureInPictureCloses == 1 && !ra.browser.isInPictureInPicture,
                "the window's close button pauses the video as it comes home (Arc)")
+        manager.closeAll()
+    }
+
+    // promise: #434
+    /// Arc's Minimize takes the video out of Picture in Picture without pausing it and without
+    /// going to its tab, and the sidebar player has the tab again (#434). Close pauses it.
+    @MainActor
+    private static func pictureInPictureMinimizeCase() {
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+        let np = NowPlaying()
+        manager.nowPlaying = np
+        let a = store.createTab(url: "https://example.test/video").id
+        let ra = manager.ensureRuntime(for: a)!
+        np.entries.append(.init(id: a, playing: true))
+        ra.browser.isInPictureInPicture = true
+        manager.browser(ra.browser, didChangePictureInPicture: true)
+        expect(np.shown.isEmpty, "a video in Picture in Picture has no card (Arc)")
+        let selected = store.selections.count
+        PictureInPictureChrome.shared.actions?.minimize()
+        expect(!ra.browser.isInPictureInPicture && ra.browser.pictureInPictureCloses == 0,
+               "Minimize leaves Picture in Picture without pausing the video")
+        expect(store.selections.count == selected, "Minimize doesn't go to the video's tab")
+        manager.browser(ra.browser, didChangePictureInPicture: false)
+        expect(np.shown.map(\.id) == [a], "the minimized video is in the sidebar player")
+        manager.closeAll()
+    }
+
+    // promise: #434
+    /// A video in Picture in Picture whose tab has no player card (on CEF the card follows sound, so
+    /// a muted one has none; the engine drops it after the media session ends): Minimize makes it,
+    /// with the Picture in Picture button, or the video would be left with no way back but its tab
+    /// (#475, Peter Nielsen).
+    @MainActor
+    private static func pictureInPictureMinimizeSilentCase() {
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView())
+        let np = NowPlaying()
+        manager.nowPlaying = np
+        let a = store.createTab(url: "https://example.test/muted").id
+        let ra = manager.ensureRuntime(for: a)!
+        ra.browser.isInPictureInPicture = true
+        manager.browser(ra.browser, didChangePictureInPicture: true)
+        PictureInPictureChrome.shared.actions?.minimize()
+        expect(!ra.browser.isInPictureInPicture, "Minimize leaves Picture in Picture")
+        manager.browser(ra.browser, didChangePictureInPicture: false)
+        expect(np.shown.map(\.id) == [a], "a minimized video without a card gets one in the sidebar player")
+        expect(np.shown.first?.hasVideo == true, "its card has the Picture in Picture button to bring it back")
         manager.closeAll()
     }
 
@@ -1489,6 +2109,34 @@ enum BrowserManagerLifecycleTests {
         expect(woken.browser.backgroundProbes == 1, "a loaded page coming on screen is asked for its background")
         manager.show(a, focus: false)
         expect(woken.browser.backgroundProbes == 1, "one already on screen is not asked again")
+        manager.closeAll()
+    }
+
+    /// A synced sidebar from the other Mac replaced the document while this Mac's page stayed
+    /// where it was: the bar showed the other Mac's address over this page (seen once, 13 Nov
+    /// 2026). The page's own address and title go back into its tab. A tab asleep has no page:
+    /// the bundle's address is what it loads when it wakes.
+    @MainActor
+    private static func syncedDocumentKeepsLivePagesCase() {
+        let store = SidebarStore()
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: NSView(), clock: ManualScheduler())
+        let id = store.createTab(url: "https://example.test/here").id
+        let rt = manager.ensureRuntime(for: id)!
+        rt.browser.currentURL = "https://example.test/here"
+        rt.browser.currentTitle = "Here"
+        manager.browser(rt.browser, didChangeURL: "https://example.test/here")
+        let asleep = store.createTab(url: "https://example.test/sleep").id
+        let sleeping = manager.ensureRuntime(for: asleep)!
+        sleeping.browser.currentURL = "https://example.test/sleep"
+        sleeping.discarded = true
+        // The other Mac's bundle has both tabs elsewhere.
+        store.items[id]?.tab?.url = "https://example.test/there"
+        store.items[id]?.tab?.savedTitle = "There"
+        store.items[asleep]?.tab?.url = "https://example.test/sleep-there"
+        NotificationCenter.default.post(name: SidebarStore.documentReplaced, object: store)
+        expect(store.item(id)?.tab?.url == "https://example.test/here", "a page on screen keeps its own address in the bar after a synced sidebar")
+        expect(store.item(id)?.tab?.savedTitle == "Here", "and its own title")
+        expect(store.item(asleep)?.tab?.url == "https://example.test/sleep-there", "a tab asleep takes the synced address: it loads that when it wakes")
         manager.closeAll()
     }
 
@@ -1620,6 +2268,45 @@ enum BrowserManagerLifecycleTests {
         otherManager.closeAll()
     }
 
+    // promise: #371
+    /// A page's permission request asks in Arc's card over the top left corner of its tab's page,
+    /// not a sheet over the window (#371: "wants to access other devices on your network" took
+    /// the whole window). The window stays usable, so a tab switch takes the card down
+    /// unanswered, and it asks again when its tab is back.
+    @MainActor
+    private static func permissionPopoverStepsAsideCase() {
+        AppDialog.presented = []
+        let store = SidebarStore()
+        let container = NSView()
+        let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: 20, height: 20),
+                              styleMask: .borderless, backing: .buffered, defer: true)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView!.addSubview(container)
+        let webArea = NSView()
+        container.addSubview(webArea)
+        let manager = BrowserManager(store: store, favicons: FaviconCache(), container: container)
+        manager.paneHost = { _ in webArea }
+        let asking = store.createTab(url: "https://router.example/").id
+        let other = store.createTab(url: "https://example.test/").id
+        manager.show(asking, focus: false)
+        var answers: [Bool] = []
+        manager.browser(page(manager, asking), requestsPermissionForOrigin: "https://router.example", kinds: 1 << 7) { answers.append($0) }
+        let first = AppDialog.presented.last
+        expect(first?.title == "https://router.example wants to access other devices on your local network"
+               && first?.anchor === webArea && first?.isUp == true,
+               "the request asks in a card on its tab's page")
+        manager.show(other, focus: false)
+        expect(first?.isUp == false && answers.isEmpty, "switching tabs takes the card down, unanswered")
+        manager.show(asking, focus: false)
+        let again = AppDialog.presented.last
+        expect(AppDialog.presented.count == 2 && again !== first && again?.isUp == true && again?.title == first?.title,
+               "its tab back in front asks again")
+        again?.answer(.alertFirstButtonReturn)
+        expect(answers == [true], "Allow answers it once")
+        manager.closeAll()
+    }
+
     @MainActor
     private static func page(_ manager: BrowserManager, _ id: UUID) -> CraBrowser { manager.runtime(for: id)!.browser }
 
@@ -1686,10 +2373,14 @@ private final class Observer: BrowserManagerDelegate {
     var activatedTabs: [UUID] = []
     var activatedByPage: [Bool] = []
     var onPageWindowsChanged: (() -> Void)?
+    var onDownload: ((CraDownloadInfo) -> Void)?
     func browserManagerDidUpdate(_ tabID: UUID) {}
     func browserManager(statusMessage: String, tabID: UUID?) {}
-    func browserManager(findMatches count: Int, activeMatch: Int) {}
-    func browserManager(download: CraDownloadInfo) {}
+    var findStates: [AskOnPage.FindState] = []
+    func browserManager(findState state: AskOnPage.FindState) { findStates.append(state) }
+    var findActions: [CraFindAction] = []
+    func browserManager(findAction action: CraFindAction) { findActions.append(action) }
+    func browserManager(download: CraDownloadInfo) { onDownload?(download) }
     func browserManager(fullscreen: Bool, tabID: UUID) {}
     func browserManagerDevToolsHost(for tabID: UUID) -> NSView? { nil }
     func browserManagerDevToolsChanged() {}
@@ -1706,6 +2397,11 @@ private final class Observer: BrowserManagerDelegate {
         activatedByPage.append(byPage)
     }
     func browserManagerOpensPeek(url: String, fromTab tabID: UUID, pageURL: String, shiftClick: Bool, newTab: Bool) -> Bool { false }
+    var littleWindowLinks: [(url: String, tab: UUID)] = []
+    func browserManagerOpensLittleWindow(url: String, fromTab tabID: UUID) -> Bool {
+        littleWindowLinks.append((url, tabID))
+        return true
+    }
     var openedLinks: [(url: String, kind: CraLinkWindow, space: UUID?, incognito: Bool)] = []
     var capturedImages: [(point: NSPoint, tab: UUID)] = []
     func browserManagerOpenLink(_ url: String, in kind: CraLinkWindow, space: UUID?, fromIncognito: Bool) {
@@ -1714,4 +2410,6 @@ private final class Observer: BrowserManagerDelegate {
     func browserManagerCaptureImage(at point: NSPoint, tabID: UUID) { capturedImages.append((point, tabID)) }
     var splitLinks: [(url: String, tab: UUID)] = []
     func browserManagerOpenLinkInSplit(_ url: String, fromTab tabID: UUID) { splitLinks.append((url, tabID)) }
+    var backgroundTabs: [UUID] = []
+    func browserManagerOpenedInBackground(_ tabID: UUID) { backgroundTabs.append(tabID) }
 }

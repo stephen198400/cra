@@ -36,12 +36,11 @@ struct SpacePalette {
     let vibrant: Bool
     /// One flat colour over Arc's solid-theme material (ShellView.solidBackdrop).
     let solid: Bool
+    /// Whether that material is Arc's light one: the space's Light or Dark, or macOS' on Auto (#455).
+    var lightMaterial = false
 
-    /// Arc 1.171 over solid white and black backdrops (31 Oct 2026, nine colours, sRGB after
-    /// undoing the display's P3): out = α·colour + (1 − α)·(66 + 0.52·backdrop) while active,
-    /// α·colour + (1 − α)·212 while inactive, with α = 0.19 + 0.55·intensity (fits 0.191,
-    /// 0.459, 0.742 at 0, 0.5, 1; within 3/255). isVibrant and the text appearance don't matter.
-    static func solidAlpha(intensity: Double) -> Double { 0.19 + 0.55 * max(0, min(1, intensity)) }
+    /// Arc's one-colour opacity (SpaceTheme.solidAlpha, where the measurements are).
+    static func solidAlpha(intensity: Double) -> Double { SpaceTheme.solidAlpha(intensity: intensity) }
 
     var gradient: LinearGradient {
         LinearGradient(colors: gradientColors, startPoint: .top, endPoint: .bottom)
@@ -98,10 +97,15 @@ extension SpaceTheme {
     /// observation tracking, a switch of macOS' appearance redraws whatever showed the old half.
     var shown: SpaceTheme { resolved(systemDark: SystemAppearance.shared.isDark) }
 
-    var palette: SpacePalette { shown.fixedPalette }
+    var palette: SpacePalette {
+        let systemDark = SystemAppearance.shared.isDark
+        var p = resolved(systemDark: systemDark).fixedPalette(lightMaterial: usesLightMaterial(systemDark: systemDark))
+        p.lightMaterial = usesLightMaterial(systemDark: systemDark)
+        return p
+    }
 
     /// The palette of a resolved theme (its appearance is light or dark, or judged by colour).
-    private var fixedPalette: SpacePalette {
+    private func fixedPalette(lightMaterial: Bool) -> SpacePalette {
         let dark = isDark
         let base = colors.isEmpty ? ["#DDDDDD"] : colors
         // Vibrant (Arc): raw colors at `intensity` opacity over the blur.
@@ -118,8 +122,10 @@ extension SpaceTheme {
         // Dark themes: Arc's palette tones (shadedDark front, midTone back) read wrong next to Cra's
         // dark sidebar (Victor, 4 Nov), so the folder keeps the earlier white-over-sidebar look, made
         // opaque. Under a translucent theme the sidebar is the top colour over the dark material
-        // (underWindowBackground with ShellView's lift), about 20 % white.
-        let ground = alphaTop < 1 ? Color(white: 0.2).blendedToward(stops[0], alphaTop) : stops[0]
+        // (underWindowBackground with ShellView's lift), about 20 % white; a solid one on Light is over
+        // Arc's light material instead, about 75 % white over a typical desktop (#455).
+        let material = solid && lightMaterial ? 0.75 : 0.2
+        let ground = alphaTop < 1 ? Color(white: material).blendedToward(stops[0], alphaTop) : stops[0]
         let darkFill = ground.blendedToward(.white, 0.14)
         return SpacePalette(
             isDark: dark,
@@ -158,8 +164,8 @@ extension SpaceTheme {
     }
 }
 
-/// macOS' light or dark appearance, which an Auto space theme follows (Arc: appearanceBased).
-/// Cra never sets NSApp.appearance, so the app's effective appearance is the system's.
+/// The app's light or dark appearance, which an Auto space theme follows (Arc: appearanceBased):
+/// macOS', unless View ▸ Appearance sets NSApp.appearance to Light or Dark, as Arc's does (#362).
 @Observable
 final class SystemAppearance: @unchecked Sendable {
     static let shared = SystemAppearance()
@@ -194,25 +200,6 @@ extension Color {
                      green: Double(a.greenComponent + (b.greenComponent - a.greenComponent) * t),
                      blue: Double(a.blueComponent + (b.blueComponent - a.blueComponent) * t), opacity: 1)
     }
-}
-
-/// A tiny tiled grain texture, like Arc's "grain" overlay modifier.
-enum NoiseTexture {
-    static let image: NSImage = {
-        let size = 96
-        let img = NSImage(size: NSSize(width: size, height: size))
-        img.lockFocus()
-        var rng = SystemRandomNumberGenerator()
-        for y in 0..<size {
-            for x in 0..<size {
-                let v = Double.random(in: 0...1, using: &rng)
-                NSColor(white: v, alpha: 1).setFill()
-                NSRect(x: x, y: y, width: 1, height: 1).fill()
-            }
-        }
-        img.unlockFocus()
-        return img
-    }()
 }
 
 struct NoiseOverlay: View {
@@ -306,21 +293,8 @@ final class SpaceBackgroundView: NSView {
 
 }
 
-/// NoiseOverlay in AppKit: the noise texture tiled in points, drawn once per size, at 9–10%,
-/// multiplied over light themes, screened over dark.
-final class ThemeNoiseView: NSView {
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    func apply(_ palette: SpacePalette) {
-        alphaValue = palette.noise * (palette.isDark ? 0.1 : 0.09)
-        wantsLayer = true
-        layer?.compositingFilter = palette.isDark ? "screenBlendMode" : "multiplyBlendMode"
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor(patternImage: NoiseTexture.image).setFill()
-        dirtyRect.fill()
-    }
+extension ThemeNoiseView {
+    func apply(_ palette: SpacePalette) { apply(noise: palette.noise, isDark: palette.isDark) }
 }
 
 /// SpaceBackground(palette:) in AppKit, for a view that shows one palette (the floating sidebar).

@@ -34,7 +34,10 @@ make_copy() {  # make_copy <From.app> <out dir> [idle seconds]
       -c "Add :LSEnvironment dict" -c "Add :LSEnvironment:CRA_DATA_DIR string $DIR/data" \
       -c "Add :LSEnvironment:CRA_UPDATE_FEED string http://127.0.0.1:$PORT/appcast.xml" "$app/Contents/Info.plist"
   [ -n "$idle" ] && $pb -c "Add :LSEnvironment:CRA_UPDATE_IDLE_SECONDS string $idle" "$app/Contents/Info.plist"
+  # CEF builds carry From Helper apps named after the executable; the Chromium engine's helpers
+  # live inside its framework and need no rename.
   for h in "$app"/Contents/Frameworks/From\ Helper*.app; do
+    [ -e "$h" ] || continue
     local name new
     name="$(basename "$h" .app)"
     new="CraTest${name#From}"

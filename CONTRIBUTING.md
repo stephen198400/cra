@@ -28,7 +28,7 @@ you can send. Code is welcome too, within the few rules below.
   opening an issue or a PR.
 - **No account, and nothing shared.** Everything stays on the user's Mac: no usage stats, no
   crash reports, no update checks.
-- **Native first.** The app is AppKit and SwiftUI; web content is Chromium through CEF.
+- **Native first.** The app is AppKit and SwiftUI; web content uses Chrome’s framework with From’s native bridge.
 
 For anything bigger than a bug fix, open an issue or a
 [discussion](https://github.com/VictorKildahl/cra/discussions) first, so we can agree on
@@ -73,7 +73,7 @@ features ship and there are real examples to point at
 
     git clone https://github.com/VictorKildahl/cra.git
     cd cra
-    scripts/build.sh          # fetches CEF on first run, builds build/Cra.app
+    scripts/build.sh          # fetches the Chromium engine and builds build/From.app
     scripts/build.sh debug    # debug build
     scripts/dev.sh            # dev loop: debug CraDev.app, rebuilds + relaunches on save
 
@@ -92,18 +92,17 @@ hooks and how to run a test instance next to your daily Cra.
    app, but none of that sees the screen: say in the PR how you tested it, and add a
    screenshot or a short clip for anything visible. A fix for a bug that a test could
    have caught comes with that test ([docs/development.md](docs/development.md#tests)).
-4. Don't touch the release pipeline, signing or the CEF pin unless that's the point of
+4. Don't touch the release pipeline, signing or the engine pin unless that's the point of
    the PR. Releases are cut by the maintainer.
 
 [docs/reviewing.md](docs/reviewing.md) lists what a review checks, so you can check it first.
 
-## Chromium and CEF
+## Chromium engine
 
-The CEF version is pinned in `scripts/fetch-cef.sh`, which downloads Cra's own CEF build
-(H.264/AAC and the patches in `scripts/cef-patches`) from this repository's releases, so
-you never need to build Chromium yourself. If your fix needs a new CEF patch, say so in
-the issue first: the maintainer rebuilds CEF for it, and every patch has to be carried
-through each Chromium update.
+`scripts/fetch-engine.sh` downloads the pinned framework used by `scripts/build.sh`.
+The Chromium layer and patches live under `engine/chromium/`. See
+[the engine notes](docs/chromium-engine.md) for the build and bridge layout.
+`CRA_ENGINE=cef scripts/build.sh` selects the legacy CEF build.
 
 ## Security
 

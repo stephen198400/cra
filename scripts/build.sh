@@ -12,8 +12,16 @@
 #   CRA_KEEP_SYMBOLS=1          leaves the release binary unstripped
 #   CRA_ARCH=x86_64 scripts/build.sh
 #                               builds for the other CPU (arm64 or x86_64) into
-#                               build/<arch>/From.app, with that CPU's CEF in
-#                               vendor/cef-<arch> and SwiftPM's files in build/swiftpm-<arch>
+#                               build/<arch>/From.app, with that CPU's engine in
+#                               vendor/engine-<arch> and SwiftPM's files in build/swiftpm-<arch>
+# Cra runs on Chrome's own framework with Cra's layer (docs/chromium-engine.md), the engine
+# scripts/fetch-engine.sh downloads into vendor/engine (vendor/engine-<arch> for the other CPU).
+#   CRA_ENGINE_OUT=~/chromium.noindex/src/out/Cra_arm64 scripts/build.sh
+#                               takes the engine from a local scripts/build-chromium.sh build instead
+#   CRA_ENGINE=cef scripts/build.sh
+#                               builds on CEF (vendor/cef, scripts/fetch-cef.sh), as before the switch
+#   CRA_ENGINE_TEST=1           a test app of its own (dk.kildahl.cra.engine, executable CraEngine,
+#                               build/engine/From.app) that never meets an installed Cra
 # Dev builds are version 0.0.0-dev and stay unregistered with LaunchServices, so
 # opening From (or a from:// link) always picks the installed release.
 set -euo pipefail
@@ -23,8 +31,8 @@ CONFIG="${1:-release}"
 VERSION="${CRA_VERSION:-0.0.0-dev}"
 BUILD_NUMBER="${CRA_BUILD:-$(date +%Y%m%d%H%M)}"
 
-# The host CPU keeps the usual paths; the other one gets its own CEF, SwiftPM folder and
-# app, so building it never replaces vendor/cef (worktrees share it) or build/From.app.
+# The host CPU keeps the usual paths; the other one gets its own engine, SwiftPM folder and
+# app, so building it never replaces vendor/engine (worktrees share it) or build/From.app.
 # scripts/release.sh finds the app with the same rule.
 ARCH="${CRA_ARCH:-$(uname -m)}"
 case "$ARCH" in
@@ -42,8 +50,28 @@ else
   SWIFT_ARGS=(-c "$CONFIG" --arch "$ARCH" --scratch-path "$ROOT/build/swiftpm-$ARCH")
   export CRA_CEF_DIR="$ROOT/$CEF_DIR"  # read by Package.swift
 fi
-
-CEF_DIR="$CEF_DIR" CEF_ARCH="$CEF_PLATFORM" scripts/fetch-cef.sh
+ENGINE="${CRA_ENGINE:-chromium}"
+EXE=From
+if [ "$ENGINE" = chromium ]; then
+  ENGINE_CPU=$([ "$ARCH" = x86_64 ] && echo x64 || echo arm64)
+  if [ -n "${CRA_ENGINE_OUT:-}" ]; then
+    FRAMEWORKS="$CRA_ENGINE_OUT/Cra.app/Contents/Frameworks"
+  else
+    ENGINE_DIR="vendor/engine$([ "$ARCH" = "$(uname -m)" ] || echo "-$ARCH")"
+    ENGINE_DIR="$ENGINE_DIR" ENGINE_CPU="$ENGINE_CPU" scripts/fetch-engine.sh
+    FRAMEWORKS="$ROOT/$ENGINE_DIR"
+  fi
+  export CRA_ENGINE=chromium CRA_ENGINE_FRAMEWORKS="$FRAMEWORKS"  # read by Package.swift
+  [ -d "$CRA_ENGINE_FRAMEWORKS/Cra Framework.framework" ] || { echo "No engine in $FRAMEWORKS" >&2; exit 1; }
+  # Its own SwiftPM folder: Package.swift differs between the engines.
+  SWIFT_ARGS=(-c "$CONFIG" --arch "$ARCH" --scratch-path "$ROOT/build/swiftpm-engine-$ARCH")
+  if [ "${CRA_ENGINE_TEST:-}" = 1 ]; then
+    FINAL_APP="$ROOT/build/engine$([ "$ARCH" = "$(uname -m)" ] || echo "-$ARCH")/From.app"
+    EXE=CraEngine
+  fi
+else
+  CEF_DIR="$CEF_DIR" CEF_ARCH="$CEF_PLATFORM" scripts/fetch-cef.sh
+fi
 scripts/fetch-sparkle.sh
 
 swift build "${SWIFT_ARGS[@]}"
@@ -55,11 +83,8 @@ STAGE="$(mktemp -d /tmp/cra-stage.XXXXXX)"
 APP="$STAGE/From.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
-# The SwiftPM product stays Cra; the bundle (and so CEF's helper names) is From.
-cp "$BIN/Cra" "$APP/Contents/MacOS/From"
-# Release builds drop the local symbols (~10 MB of the binary); the dSYM SwiftPM writes next to
-# $BIN keeps them for symbolication. CRA_KEEP_SYMBOLS=1 leaves the binary as built.
-[ "$CONFIG" = release ] && [ -z "${CRA_KEEP_SYMBOLS:-}" ] && strip -x "$APP/Contents/MacOS/From"
+cp "$BIN/Cra" "$APP/Contents/MacOS/$EXE"
+[ "$CONFIG" = release ] && [ -z "${CRA_KEEP_SYMBOLS:-}" ] && strip -x "$APP/Contents/MacOS/$EXE"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" resources/Info.plist > "$APP/Contents/Info.plist"
 # CRA_BUNDLE_ID builds under another identifier: a test build signed with one's own team and
 # a provisioning profile for it (docs/release.md, "iCloud sync"). The data folder stays Cra's,
@@ -73,6 +98,9 @@ if [ "${CRA_RELEASE:-}" != 1 ] || [ "$ARCH" != arm64 ]; then
 fi
 # Google API key for Safe Browsing (docs/release.md); CraCEF hands it to Chromium.
 [ -n "${CRA_GOOGLE_API_KEY:-}" ] && /usr/libexec/PlistBuddy -c "Add :CraGoogleAPIKey string $CRA_GOOGLE_API_KEY" "$APP/Contents/Info.plist"
+if [ "$EXE" = CraEngine ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier dk.kildahl.cra.engine" -c "Set :CFBundleExecutable $EXE" "$APP/Contents/Info.plist"
+fi
 echo -n "APPL????" > "$APP/Contents/PkgInfo"
 [ -f resources/AppIcon.icns ] && cp resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # The AppleScript dictionary (Arc's, same terms and codes: Info.plist OSAScriptingDefinition).
@@ -84,12 +112,29 @@ cp resources/Cra.sdef "$APP/Contents/Resources/Cra.sdef"
 [ -d resources/licenses ] && cp -R resources/licenses "$APP/Contents/Resources/licenses"
 [ -d resources/fonts ] && cp -R resources/fonts "$APP/Contents/Resources/fonts"
 
-FRAMEWORK_SRC="$ROOT/$CEF_DIR/Release/Chromium Embedded Framework.framework"
-cp -R "$FRAMEWORK_SRC" "$APP/Contents/Frameworks/"
-# Chromium's UI strings come in 220 .lproj folders (~50 MB); From only needs English and Chinese,
-# and CEF falls back to en-US for any other system language. CRA_ALL_LOCALES=1 keeps them all.
+if [ "$ENGINE" = chromium ]; then
+  cp -R resources/scrollbars "$APP/Contents/Resources/scrollbars"
+  FW_NAME="Cra Framework"
+  ditto "$CRA_ENGINE_FRAMEWORKS/$FW_NAME.framework" "$APP/Contents/Frameworks/$FW_NAME.framework"
+  # Chrome's helpers name Chromium's icon in an asset catalog, which macOS prefers to their app.icns (Cra's, from
+  # engine/chromium/apply.sh): without the catalog they show Cra's icon in notifications and their prompt.
+  for helper in "$APP/Contents/Frameworks/$FW_NAME.framework/Versions/"*/Helpers/*.app; do
+    if [ -f "$helper/Contents/Resources/app.icns" ]; then
+      cp resources/AppIcon.icns "$helper/Contents/Resources/app.icns"
+      /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName From" "$helper/Contents/Info.plist"
+    fi
+    rm -f "$helper/Contents/Resources/Assets.car"
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$helper/Contents/Info.plist" 2>/dev/null || true
+  done
+else
+  FW_NAME="Chromium Embedded Framework"
+  cp -R "$ROOT/$CEF_DIR/Release/$FW_NAME.framework" "$APP/Contents/Frameworks/"
+fi
+
+
+# Keep the fork's small English and Chinese resource set in the signed bundle.
 if [ -z "${CRA_ALL_LOCALES:-}" ]; then
-  find "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Resources" -maxdepth 1 -name '*.lproj' \
+  find "$APP/Contents/Frameworks/$FW_NAME.framework/Resources/" -maxdepth 1 -name '*.lproj' \
     ! -name 'en.lproj' ! -name 'en_*.lproj' ! -name 'zh_*.lproj' -exec rm -rf {} +
 fi
 # Sparkle's XPC services are only for sandboxed apps; From uses Autoupdate and Updater.app.
@@ -98,7 +143,8 @@ rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP
 
 # CEF needs one helper app per process type (see cef_variables.cmake,
 # CEF_HELPER_APP_SUFFIXES). Format: "<name suffix>|<plist suffix>".
-for entry in "|" " (Alerts)|.alerts" " (GPU)|.gpu" " (Plugin)|.plugin" " (Renderer)|.renderer"; do
+# Chrome's framework has its own helpers inside it (Versions/<version>/Helpers).
+[ "$ENGINE" = chromium ] || for entry in "|" " (Alerts)|.alerts" " (GPU)|.gpu" " (Plugin)|.plugin" " (Renderer)|.renderer"; do
   NAME_SUFFIX="${entry%%|*}"
   PLIST_SUFFIX="${entry#*|}"
   HELPER="$APP/Contents/Frameworks/From Helper${NAME_SUFFIX}.app"
@@ -125,11 +171,33 @@ cp "$BIN/libCraDockTile.dylib" "$DOCK_TILE/Contents/MacOS/CraDockTile"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" resources/DockTile-Info.plist > "$DOCK_TILE/Contents/Info.plist"
 
 # Every executable must run on the CPU this build is for (Sparkle ships universal).
-for exe in "$APP/Contents/MacOS/From" "$APP"/Contents/Frameworks/*.app/Contents/MacOS/* \
+for exe in "$APP/Contents/MacOS/$EXE" "$APP"/Contents/Frameworks/*.app/Contents/MacOS/* \
            "$DOCK_TILE/Contents/MacOS/CraDockTile" \
-           "$APP/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework" \
+           "$APP/Contents/Frameworks/$FW_NAME.framework/$FW_NAME" \
            "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"; do
+  [ -e "$exe" ] || continue
   lipo "$exe" -verify_arch "$ARCH" || { echo "$exe has no $ARCH code: $(lipo -archs "$exe")" >&2; exit 1; }
+done
+
+# Helpers link the framework at launch (Sources/CraHelper/main.cc says why: ~12 MB less in each
+# page, GPU and utility process). The path has to resolve inside the bundle or no page starts.
+if [ "$ENGINE" = cef ]; then
+HELPER_EXE="$APP/Contents/Frameworks/From Helper.app/Contents/MacOS/From Helper"
+FW_LINK="$(otool -L "$HELPER_EXE" | grep -o '@executable_path/.*Chromium Embedded Framework' || true)"
+[ -n "$FW_LINK" ] && [ -f "$(dirname "$HELPER_EXE")/${FW_LINK#@executable_path/}" ] ||
+  { echo "Cra Helper doesn't link the framework at launch (${FW_LINK:-no load command})" >&2; exit 1; }
+fi
+
+# Every app in the bundle shows Cra's icon. macOS takes a bundle's icon from its asset catalog (CFBundleIconName)
+# before its .icns, and Chrome's alerts helpers carry Chromium's: the "Cra" notification prompt and every page's
+# notification showed Chromium's icon (0.1.44, a user's screenshot).
+for plist in $(find "$APP" -path '*.app/Contents/Info.plist' | tr ' ' '\001'); do
+  plist="$(tr '\001' ' ' <<<"$plist")"
+  if /usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$plist" >/dev/null 2>&1 ||
+     [ -e "$(dirname "$plist")/Resources/Assets.car" ]; then
+    echo "An app in the bundle takes its icon from an asset catalog, not Cra's .icns: ${plist#"$APP"/}" >&2
+    exit 1
+  fi
 done
 
 # Code signing, innermost first. Ad-hoc by default; set CRA_SIGN_IDENTITY to a
@@ -147,14 +215,25 @@ sign() {  # sign <path> [entitlements]
     codesign "${args[@]}" "$target"
   fi
 }
-FW="$APP/Contents/Frameworks/Chromium Embedded Framework.framework"
-find "$FW/Libraries" -name '*.dylib' -print0 2>/dev/null | while IFS= read -r -d '' lib; do sign "$lib"; done
+FW="$APP/Contents/Frameworks/$FW_NAME.framework"
+# The slash: Chrome's framework is versioned, Libraries is a symlink to Versions/<version>/Libraries, and find
+# doesn't descend a symlinked start point (CEF's flat framework had a real folder).
+find "$FW/Libraries/" -name '*.dylib' -print0 2>/dev/null | while IFS= read -r -d '' lib; do sign "$lib"; done
+if [ "$ENGINE" = chromium ]; then
+  # Chrome's helpers and tools inside the framework, before the framework itself.
+  for h in "$FW"/Versions/Current/Helpers/*; do
+    case "$h" in
+      *.app) sign "$h" "$ROOT/resources/CraHelper.entitlements" ;;  # pages, GPU, utilities: JIT and devices
+      *) sign "$h" ;;                                               # crashpad handler, app-mode loader
+    esac
+  done
+fi
 sign "$FW"
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 sign "$SPARKLE/Versions/B/Autoupdate"
 sign "$SPARKLE/Versions/B/Updater.app"
 sign "$SPARKLE"
-for h in "$APP"/Contents/Frameworks/*.app; do sign "$h" "$ROOT/resources/CraHelper.entitlements"; done
+for h in "$APP"/Contents/Frameworks/*.app; do if [ -e "$h" ]; then sign "$h" "$ROOT/resources/CraHelper.entitlements"; fi; done
 sign "$DOCK_TILE"
 # Passkeys need entitlements only a provisioning profile can grant: the Touch ID
 # keychain group ("<app id>.webauthn", scripts/cef-patches) and, once Apple approves
@@ -211,6 +290,20 @@ fi
 sign "$APP" "$APP_ENTITLEMENTS"
 if [ "$IDENTITY" != "-" ]; then
   codesign --verify --deep --strict --verbose=2 "$APP"
+  # What notarization checks in every Mach-O: the identity's team and a secure timestamp. --deep passes a
+  # binary that still carries its build's own signature (the engine's Libraries, 0.1.44's first Release run:
+  # "not signed with a valid Developer ID certificate").
+  TEAM="$(codesign -dv "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+  unsigned=0
+  while IFS= read -r -d '' bin; do
+    file -b "$bin" | grep -q '^Mach-O' || continue
+    info="$(codesign -dv --verbose=2 "$bin" 2>&1)"
+    if ! grep -q "^TeamIdentifier=$TEAM$" <<<"$info" || ! grep -q '^Timestamp=' <<<"$info"; then
+      echo "Not signed for notarization (team $TEAM and a secure timestamp): ${bin#"$APP"/}" >&2
+      unsigned=1
+    fi
+  done < <(find "$APP" -type f -print0)
+  [ "$unsigned" = 0 ] || exit 1
 fi
 
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister

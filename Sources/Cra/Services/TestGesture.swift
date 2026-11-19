@@ -22,16 +22,50 @@ enum TestGesture {
     /// A click at a point of the window, through the app's event queue: AppKit routes it as it
     /// routes the pointer's (the window's sendEvent, first-click rules, hit testing), so a test
     /// sees what a real click there does, while the pointer and the front app stay put.
-    /// `modifiers`: keys held through the click (an Option-click on a link, #298).
-    static func click(at point: NSPoint, in window: NSWindow, clicks: Int = 1, modifiers: NSEvent.ModifierFlags = []) {
+    /// `modifiers`: keys held through the click (an Option-click on a link, #298). `right`: the
+    /// right button (Back's history menu, #416).
+    static func click(at point: NSPoint, in window: NSWindow, clicks: Int = 1, modifiers: NSEvent.ModifierFlags = [], right: Bool = false) {
+        let (down, up): (NSEvent.EventType, NSEvent.EventType) = right ? (.rightMouseDown, .rightMouseUp) : (.leftMouseDown, .leftMouseUp)
         // A double-click is two presses, the second with clickCount 2, as AppKit counts them.
         for count in 1...max(clicks, 1) {
-            for (type, pressure) in [(NSEvent.EventType.leftMouseDown, Float(1)), (.leftMouseUp, 0)] {
+            for (type, pressure) in [(down, Float(1)), (up, 0)] {
                 guard let e = NSEvent.mouseEvent(with: type, location: point, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
                                                  windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: count,
                                                  pressure: pressure) else { return }
                 NSApp.postEvent(e, atStart: false)
             }
+        }
+    }
+
+    /// A left-button press at a point of the window, moved by `delta` in `steps` drags and released
+    /// there, through the app's event queue as `click`'s are: the view under the press gets the
+    /// drags, as the pointer's would (a drag on the sidebar's empty space, #547).
+    static func drag(from point: NSPoint, by delta: NSPoint, steps: Int = 4, in window: NSWindow) {
+        let steps = max(steps, 1)
+        var events: [(NSEvent.EventType, NSPoint, Float)] = [(.leftMouseDown, point, 1)]
+        for i in 1...steps {
+            let f = CGFloat(i) / CGFloat(steps)
+            events.append((.leftMouseDragged, NSPoint(x: point.x + delta.x * f, y: point.y + delta.y * f), 1))
+        }
+        events.append((.leftMouseUp, NSPoint(x: point.x + delta.x, y: point.y + delta.y), 0))
+        for (type, at, pressure) in events {
+            guard let e = NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                                             pressure: pressure) else { return }
+            NSApp.postEvent(e, atStart: false)
+        }
+    }
+
+    /// A middle click (button 2) at a point of the window, through the app's event queue: the window's
+    /// event monitors and the view under it get it as they get the mouse's.
+    static func middleClick(at point: NSPoint, in window: NSWindow) {
+        for type in [NSEvent.EventType.otherMouseDown, .otherMouseUp] {
+            guard let cg = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                                              pressure: type == .otherMouseDown ? 1 : 0)?.cgEvent else { continue }
+            cg.setIntegerValueField(.mouseEventButtonNumber, value: 2)
+            guard let e = NSEvent(cgEvent: cg) else { continue }
+            NSApp.postEvent(e, atStart: false)
         }
     }
 
@@ -51,6 +85,28 @@ enum TestGesture {
                                            windowNumber: window.windowNumber, context: nil, characters: characters,
                                            charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode) else { return }
             NSApp.postEvent(e, atStart: false)
+        }
+    }
+
+    /// A key press handed to a page's view as CraApplication.sendEvent forwards one to the page that has
+    /// the keyboard, for a background test copy, whose windows are never key: CEF's OnPreKeyEvent, the
+    /// page's own handlers and OnKeyEvent see it as they see a typed one (who gets a shortcut, #374).
+    /// The page's view is found under `roots` (Chromium's own window when Chrome hosts the page), else
+    /// it is `window`'s first responder (an embedded page that has the keyboard).
+    static func pageKey(_ characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags, in roots: [NSView], window: NSWindow?) {
+        func isPage(_ v: NSView) -> Bool { NSStringFromClass(type(of: v)) == "RenderWidgetHostViewCocoa" }
+        func pageView(_ v: NSView) -> NSView? { isPage(v) ? v : v.subviews.lazy.compactMap(pageView).first }
+        let focused = (window?.firstResponder as? NSView).flatMap { isPage($0) ? $0 : nil }
+        guard let view = roots.lazy.compactMap(pageView).first ?? focused, let target = view.window else {
+            NSLog("Cra TestGesture: no page view")
+            return
+        }
+        target.makeFirstResponder(view)
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let e = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: target.windowNumber, context: nil, characters: characters,
+                                           charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode) else { return }
+            target.sendEvent(e)
         }
     }
 

@@ -1,7 +1,7 @@
 # Arc's "Block Cookie Banners" (Arc 1.172.1, off by default; docs/arc-parity.md): on, a consent
 # manager's banner on a page is hidden.
 budget rss=700 stalls50=10
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "blockCookieBanners": true}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false, "blockCookieBanners": true}
 from://open?url=${PAGE}?n=consent
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 wait 1
