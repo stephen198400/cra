@@ -13,6 +13,8 @@ struct TabsPane: View {
             SettingsHeader("Bookmarks")
             SettingsFeatureCard {
                 // Chrome's bookmarks bar, not in Arc (bookmarks.json; Arc's bookmarks are pinned tabs).
+                SettingsToggleRow("Auto-hide toolbar", detail: "Show the toolbar when the pointer reaches the top.", isOn: $store.settings.autoHideToolbar)
+                SettingsCardDivider()
                 SettingsToggleRow("Show bookmarks bar",
                                   detail: "A row of your bookmarks under the toolbar. \(KeyBindingRegistry.shared.action("toggleBookmarksBar")?.primary?.display ?? "⇧⌘B") switches it, \(KeyBindingRegistry.shared.action("toggleBookmark")?.primary?.display ?? "⌘D") or the star in the address bookmarks the page.",
                                   isOn: $store.settings.showBookmarksBar)

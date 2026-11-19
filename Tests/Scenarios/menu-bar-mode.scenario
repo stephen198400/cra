@@ -4,7 +4,7 @@
 # quit at the end (from://debug?quit=1, the menu bar item's Quit) still quits.
 # promise: #231
 budget rss=700 stalls50=10
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "keepInMenuBar": true}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false, "keepInMenuBar": true}
 from://open?url=${PAGE}?n=kept
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 from://action/newIncognitoWindow

@@ -4,7 +4,7 @@
 # thousandth of an audio sample), the same drawing reads back the same, and pages and their
 # workers see 8 cores. fingerprinting-switch checks the page reads back exactly with it off, and the switch live.
 budget rss=700 stalls50=10
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false, "fingerprintingProtection": true}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false, "fingerprintingProtection": true}
 from://open?url=${PAGE}/../fingerprint.html
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 wait 1

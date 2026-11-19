@@ -30,7 +30,11 @@ final class SidebarStore {
             notifyItemReaders(of: oldValue)
         }
     }
-    var settings = AppSettings() { didSet { settingsStore.save(settings) } }
+    var settings = AppSettings() {
+        didSet {
+            settingsStore.save(settings)
+        }
+    }
     private(set) var history: [String: HistoryEntry] = [:]
     private(set) var ranking = RankingData()
     /// Bumped on every structural change; cheap way for AppKit code to observe.
@@ -56,6 +60,7 @@ final class SidebarStore {
     /// Whether a tab's page is loaded; AppDelegate asks the windows' browser managers.
     @ObservationIgnored var hasPage: (UUID) -> Bool = { _ in true }
 
+    @ObservationIgnored var pageLeftIncognito: (UUID) -> Void = { _ in }
     // MARK: Persistence
 
     /// sidebar.json and history.json are rewritten whole, often (a background tab's title), so
@@ -524,11 +529,31 @@ final class SidebarStore {
         return PinnedPeek.listed(open: open, peek: peek, pinnedRows: pinnedRows(in: space)).compactMap { items[$0] }
     }
 
-    /// Favorites + pinned + today for a space, in sidebar order. This is what
-    /// ⌘1…⌘9 index into (Arc: "Go to Sidebar Item N").
+    /// Every tab of a space, favorites + pinned + today, in sidebar order, each pane of a split
+    /// on its own (⌘1…⌘9 count a split once: `numberedTabs`).
     func visibleTabs(in spaceID: UUID) -> [SidebarItem] {
         guard let space = spaces[spaceID] else { return [] }
         return tabs(under: space.favoritesContainerID) + tabs(under: space.pinnedContainerID) + tabs(under: space.todayContainerID)
+    }
+
+    /// What ⌘1…⌘9 go to, one entry per sidebar item (Arc: "Go to Sidebar Item N"): a split is
+    /// one item, opened on the pane focused last as a click on its row does, so a split favorite
+    /// takes one number. Folders open or closed list their tabs, as before.
+    func numberedTabs(in spaceID: UUID) -> [UUID] {
+        guard let space = spaces[spaceID] else { return [] }
+        func walk(_ id: UUID) -> [UUID] {
+            children(of: id).flatMap { c -> [UUID] in
+                if c.isTab { return [c.id] }
+                if c.isSplit { return [focusedPane(of: c)].compactMap { $0 } }
+                return c.isFolder ? walk(c.id) : []
+            }
+        }
+        return [space.favoritesContainerID, space.pinnedContainerID, space.todayContainerID].flatMap(walk)
+    }
+
+    /// The pane a split opens on: the one focused last, else its first.
+    private func focusedPane(of split: SidebarItem) -> UUID? {
+        split.split?.focusTabID.flatMap { split.children.contains($0) ? $0 : nil } ?? split.children.first
     }
 
     /// Which container an item ultimately lives in.
@@ -585,7 +610,17 @@ final class SidebarStore {
         guard let id = self.window(window).selectedTabPerSpace[spaceID], items[id]?.isTab == true else { return nil }
         return id
     }
-    func selectedTabID(window: UUID?) -> UUID? { selectedTabID(in: focusedSpaceID(window: window), window: window) }
+    func selectedTabID(window: UUID?) -> UUID? {
+        isMakingSpace(window: window) ? nil : selectedTabID(in: focusedSpaceID(window: window), window: window)
+    }
+
+    /// Windows showing Arc's Create a Space page. Such a window shows the new space's empty page,
+    /// not the page of the space it was opened on, so it has no selected tab and no panes until the
+    /// page is left; what each space has selected is untouched.
+    var windowsMakingSpace: Set<UUID> = []
+    func isMakingSpace(window: UUID?) -> Bool {
+        !windowsMakingSpace.isEmpty && windowsMakingSpace.contains(window ?? activeWindowID)
+    }
     func selectedTab(window: UUID?) -> SidebarItem? { selectedTabID(window: window).flatMap { items[$0] } }
     var selectedTabID: UUID? { selectedTabID(window: nil) }
     var selectedTab: SidebarItem? { selectedTab(window: nil) }
@@ -596,7 +631,16 @@ final class SidebarStore {
     func createTab(url: String, title: String = "", in spaceID: UUID? = nil, pinned: Bool = false,
                    select: Bool = true, parent: UUID? = nil, index: Int? = nil, window: UUID? = nil,
                    referrer: UUID? = nil) -> SidebarItem {
-        let sid = spaceID ?? focusedSpaceID(window: window)
+        var sid = spaceID ?? focusedSpaceID(window: window), window = window, parent = parent, index = index
+        // Chrome's Settings, Extensions, History and password pages never load in incognito: as in
+        // Chrome they open in the normal window in use last, which comes to the front (#412).
+        let leavesIncognito = isIncognito(space: sid) && !IncognitoPages.allows(url)
+        if leavesIncognito {
+            window = lastNormalWindowID
+            sid = focusedSpaceID(window: lastNormalWindowID)
+            parent = nil
+            index = nil
+        }
         let space = spaces[sid] ?? focusedSpace(window: window)
         let parentID = parent ?? (pinned ? space.pinnedContainerID : space.todayContainerID)
         var tab = SidebarItem.tab(url, title: title, parent: parentID)
@@ -604,6 +648,8 @@ final class SidebarStore {
             var t = TabData(url: url, title: title)
             t.activeTabBeforeCreationID = selectedTabID(in: sid, window: window)
             t.referrerID = referrer
+            // A background tab joins ⌃Tab's recent tabs when opened, as in Arc.
+            if !select { t.timeLastActiveAt = clock.now }
             return t
         }())
         tab.isUnread = !select
@@ -613,15 +659,27 @@ final class SidebarStore {
         p.children.insert(tab.id, at: min(max(0, at), p.children.count))
         items[parentID] = p
         if select { selectTab(tab.id, window: window) } else { touch() }
+        if leavesIncognito, let window {
+            activeWindowID = window
+            pageLeftIncognito(window)
+        }
         return tab
+    }
+
+    /// Where a tab a link in `source` opens goes when it goes below `source` (`LinkTabPlacement`, #532).
+    func linkTabSlot(below source: UUID, afterEarlierLinks: Bool) -> LinkTabPlacement.Slot? {
+        LinkTabPlacement.belowSource(source, afterEarlierLinks: afterEarlierLinks) { self.items[$0] }
     }
 
     /// What Back does on tab `id`, whose page `canGoBack` or not: a tab a link opened, with no
     /// page behind, closes to the tab it came from while that one is still in the sidebar (#273).
-    func backStep(_ id: UUID, canGoBack: Bool) -> BackToReferrer.Step {
+    /// `swipe`: a two-finger swipe back over the page asks (#370).
+    func backStep(_ id: UUID, canGoBack: Bool, swipe: Bool = false) -> BackToReferrer.Step {
         let referrer = items[id]?.tab?.referrerID.flatMap { items[$0]?.isTab == true ? $0 : nil }
-        return BackToReferrer.step(canGoBack: canGoBack, tab: id, referrer: referrer,
-                                   inSplit: splitContaining(id) != nil, pinned: isPinned(id))
+        let inSplit = splitContaining(id) != nil, pinned = isPinned(id)
+        return swipe
+            ? BackToReferrer.swipeBack(pageCanGoBack: canGoBack, tab: id, referrer: referrer, inSplit: inSplit, pinned: pinned)
+            : BackToReferrer.step(canGoBack: canGoBack, tab: id, referrer: referrer, inSplit: inSplit, pinned: pinned)
     }
 
     /// Back's `.close`: the tab goes to the archive like ⌘W and `referrer` is shown in `window`.
@@ -824,6 +882,10 @@ final class SidebarStore {
 
     func touchAfterImport() { touch() }
 
+    /// Posted with the store once `replace(document:)` has put a synced sidebar in: the browser
+    /// managers put each live page's own address back (BrowserManager.reassertLivePages).
+    static let documentReplaced = Notification.Name("CraSidebarDocumentReplaced")
+
     /// The sidebar another Mac wrote to the sync folder (SettingsSyncService), in place of this
     /// one's: spaces, items, profiles and profile favorites. Incognito and Blank Windows keep their
     /// spaces; they are this Mac's windows, never in a synced document (`SidebarDocument.forSync`).
@@ -852,6 +914,7 @@ final class SidebarStore {
         splitSharedFavorites(doc.favoritesContainerID)
         settings.sharedFavorites ? shareFavorites() : unshareFavorites()
         touch()
+        NotificationCenter.default.post(name: Self.documentReplaced, object: self)
     }
 
     /// What goes to disk: everything but incognito windows' spaces and tabs. Blank Windows'
@@ -872,12 +935,36 @@ final class SidebarStore {
     }
 
     /// The tab switcher's list (⌃Tab): a space's most recently used tabs, newest first
-    /// (Arc shows five, the current tab first).
-    func recentTabs(in sid: UUID, limit: Int) -> [UUID] {
-        visibleTabs(in: sid)
-            .filter { $0.tab?.timeLastActiveAt != nil }
-            .sorted { $0.tab!.timeLastActiveAt! > $1.tab!.timeLastActiveAt! }
-            .prefix(limit).map(\.id)
+    /// (Arc shows five, the current tab first), a split as one card (#554).
+    func recentCards(in sid: UUID, limit: Int, window: UUID? = nil) -> [RecentTabOrder.Card] {
+        // A tab opened in the background since is newer than the current one, which still comes first.
+        Array(RecentTabOrder.cards(recentEntries(in: sid), current: selectedTabID(in: sid, window: window)).prefix(limit))
+    }
+
+    /// ⌃⌥Tab (#467, not in Arc): the recent tabs of every space the window can show, its own tab
+    /// first. An incognito or Blank Window has only its own space.
+    func recentCardsInAllSpaces(limit: Int, window: UUID? = nil) -> [RecentTabOrder.Card] {
+        let w = self.window(window).id
+        let focused = focusedSpaceID(window: w)
+        let sids = isStandalone(window: w) ? [focused] : spaceOrder.filter { !isStandalone(space: $0) }
+        let current = selectedTabID(in: focused, window: w)
+        return Array(RecentTabOrder.cards(sids.flatMap(recentEntries(in:)), current: current).prefix(limit))
+    }
+
+    /// The tabs ⌃Tab's cards open, one per card.
+    func recentTabs(in sid: UUID, limit: Int, window: UUID? = nil) -> [UUID] {
+        recentCards(in: sid, limit: limit, window: window).map(\.opens)
+    }
+
+    func recentTabsInAllSpaces(limit: Int, window: UUID? = nil) -> [UUID] {
+        recentCardsInAllSpaces(limit: limit, window: window).map(\.opens)
+    }
+
+    private func recentEntries(in sid: UUID) -> [RecentTabOrder.Entry] {
+        visibleTabs(in: sid).map { t in
+            RecentTabOrder.Entry(id: t.id, lastActive: t.tab?.timeLastActiveAt,
+                                 split: t.parentID.flatMap { items[$0]?.isSplit == true ? $0 : nil })
+        }
     }
 
     // MARK: Tree moves
@@ -1001,6 +1088,10 @@ final class SidebarStore {
 
     /// The panes shown when `tabID` is selected: its split's children in pane
     /// order, or just the tab itself.
+    /// The most panes a split holds: Arc's four, or eight with Settings ▸ Links ▸ "More than four
+    /// panes in a split" on (GitHub #498, `SplitPaneLimit`).
+    var splitPaneLimit: Int { SplitPaneLimit.maximum(morePanes: settings.splitMorePanes) }
+
     func paneTabIDs(for tabID: UUID) -> [UUID] {
         if let split = splitContaining(tabID) { return split.children.filter { items[$0]?.isTab == true } }
         return [tabID]
@@ -1008,7 +1099,7 @@ final class SidebarStore {
 
     /// Panes shown in a space right now (the selected tab's split).
     func visiblePaneTabIDs(in spaceID: UUID, window: UUID? = nil) -> [UUID] {
-        guard let sel = selectedTabID(in: spaceID, window: window) else { return [] }
+        guard !isMakingSpace(window: window), let sel = selectedTabID(in: spaceID, window: window) else { return [] }
         return paneTabIDs(for: sel)
     }
 
@@ -1104,14 +1195,14 @@ final class SidebarStore {
     /// Arc's "Add Split View": an empty page becomes a new pane next to `tabID`
     /// (after it by default). Returns the new tab.
     @discardableResult
-    func addEmptyPane(nextTo tabID: UUID, after: Bool = true, url: String = "", window: UUID? = nil) -> SidebarItem? {
+    func addEmptyPane(nextTo tabID: UUID, after: Bool = true, url: String = "", title: String = "", window: UUID? = nil) -> SidebarItem? {
         guard let anchor = items[tabID], anchor.isTab else { return nil }
         let split: SidebarItem
         if let s = splitContaining(tabID) { split = s } else if let s = createSplit(with: [tabID]) { split = s } else { return nil }
         guard let anchorPane = paneID(for: tabID, in: items[split.id] ?? split),
               let idx = items[split.id]?.children.firstIndex(of: anchorPane) else { return nil }
-        var tab = SidebarItem.tab(url, title: "", parent: split.id)
-        tab.data = .tab({ var t = TabData(url: url, title: ""); t.activeTabBeforeCreationID = tabID; return t }())
+        var tab = SidebarItem.tab(url, title: title, parent: split.id)
+        tab.data = .tab({ var t = TabData(url: url, title: title); t.activeTabBeforeCreationID = tabID; return t }())
         items[tab.id] = tab
         var sp = items[split.id]!
         sp.children.insert(tab.id, at: after ? idx + 1 : idx)
@@ -1122,20 +1213,25 @@ final class SidebarStore {
 
     /// A page's "Open Link in Split View" (#257): the link opens in a new pane right after the
     /// page it was clicked in (`tabID`), in that tab's split or a new one, and is the open pane.
-    /// Nil when the split already has four panes, Arc's most (the window says "Cannot Add New Pane").
+    /// Nil when the split already has its most panes, Arc's four or Cra's eight (`splitPaneLimit`; the
+    /// window says "Cannot Add New Pane").
     @discardableResult
     func openLinkInSplit(_ url: String, from tabID: UUID, window: UUID? = nil) -> SidebarItem? {
-        guard items[tabID]?.isTab == true, paneTabIDs(for: tabID).count < 4 else { return nil }
+        guard items[tabID]?.isTab == true, paneTabIDs(for: tabID).count < splitPaneLimit else { return nil }
         return addEmptyPane(nextTo: tabID, url: url, window: window)
     }
 
     /// Add an existing tab as a pane of a split (Arc: onDropSidebarItem). A
     /// pinned or favorite tab stays where it is; a Today copy becomes the pane.
-    func addToSplit(_ splitID: UUID, tabID: UUID, at index: Int?) {
+    /// A split already holding its most panes takes nothing (#498): Arc's four, or eight with
+    /// "More than four panes in a split" on (`splitPaneLimit`), unless the tab takes the place of
+    /// one of its panes (`replacing`, a drop on a pane), which leaves right after.
+    func addToSplit(_ splitID: UUID, tabID: UUID, at index: Int?, replacing: UUID? = nil) {
         guard var split = items[splitID], split.isSplit, var tab = items[tabID], tab.isTab, tab.parentID != splitID else {
             if let i = index, let sp = items[splitID], sp.children.firstIndex(of: tabID) != nil { moveWithinSplit(splitID, tabID: tabID, to: i) }
             return
         }
+        guard split.children.count < splitPaneLimit || replacing.map(split.children.contains) == true else { return }
         let from = tab.parentID
         var paneID = tabID
         if isPinned(tabID), let data = tab.tab {
@@ -1550,6 +1646,7 @@ final class SidebarStore {
         for c in children(of: id) where c.isSplit { items[c.id] = nil }
         detach(id)
         items[id] = nil
+        forgetClosedPinnedTab(id)
         touch()
     }
 
@@ -1577,7 +1674,7 @@ final class SidebarStore {
     func shownTabs(under id: UUID) -> [UUID] {
         children(of: id).flatMap { c -> [UUID] in
             if c.isTab { return [c.id] }
-            if let s = c.split { return [s.focusTabID.flatMap { c.children.contains($0) ? $0 : nil } ?? c.children.first].compactMap { $0 } }
+            if c.isSplit { return [focusedPane(of: c)].compactMap { $0 } }
             guard c.isFolder else { return [] }
             return c.isTabGroup || _prefs.expandedFolders.contains(c.id) ? shownTabs(under: c.id) : peekedTabs(in: c.id).map(\.id)
         }
@@ -1699,6 +1796,7 @@ final class SidebarStore {
         let list = pinned ? [] : (sid.flatMap { spaces[$0] }.map { shownTabs(under: $0.todayContainerID) } ?? [])
         detach(id)
         items[id] = nil
+        forgetClosedPinnedTab(id)
         // Empty panes never had a page and incognito pages leave no trace: nothing for the Library.
         if !it.isEmptyTab, !isIncognito(space: sid) {
             archive.insert(ArchivedItem(archivedAt: clock.now, reason: reason, sourceSpaceID: sid, wasPinned: pinned, item: it,
@@ -1765,6 +1863,83 @@ final class SidebarStore {
         return restoreArchived(last.id)
     }
 
+    // MARK: Closed pinned tabs (⌘W "Close and Keep Pinned")
+
+    /// Pinned tabs (or favorites) closed while open, kept in the sidebar and unloaded.
+    /// ⇧⌘T and ⌘Z reopen them, in reverse chronological order with archived tabs and Peek.
+    private(set) var closedPinnedTabs: [ReopenClosedTab.ClosedPinnedTab] = []
+
+    func recordClosedPinnedTab(
+        _ id: UUID,
+        url: String? = nil,
+        title: String? = nil,
+        paneStates: [ReopenClosedTab.PaneState] = [],
+        at date: Date? = nil
+    ) {
+        closedPinnedTabs.removeAll { $0.id == id }
+        closedPinnedTabs.insert(
+            ReopenClosedTab.ClosedPinnedTab(id: id, url: url, title: title, paneStates: paneStates, closedAt: date ?? clock.now),
+            at: 0
+        )
+        if closedPinnedTabs.count > 50 { closedPinnedTabs.removeLast(closedPinnedTabs.count - 50) }
+    }
+
+    /// ⌘W or the minus on pinned tab `id` (Close and Keep Pinned): every pane of its split goes
+    /// back to its pinned page. When it was the open tab, the pages the panes were on go on the
+    /// stack ⇧⌘T takes from, so they come back where they were and not at home (#566). Returns
+    /// the panes, for the windows to unload.
+    @discardableResult
+    func closePinnedTab(_ id: UUID, wasOpen: Bool) -> [UUID] {
+        let panes = paneTabIDs(for: id)
+        let pages = panes.map { p in ReopenClosedTab.PaneState(id: p, url: items[p]?.tab?.url, title: items[p]?.tab?.savedTitle) }
+        for p in panes { _ = resetPinnedTab(p) }
+        if wasOpen {
+            let page = pages.first { $0.id == id } ?? pages.first
+            recordClosedPinnedTab(id, url: page?.url, title: page?.title, paneStates: pages)
+        }
+        return panes
+    }
+
+    func forgetClosedPinnedTab(_ id: UUID) {
+        closedPinnedTabs.removeAll { $0.id == id }
+    }
+
+    @discardableResult
+    func reopenLastClosed(in windowID: UUID? = nil, peek: ReopenClosedTab.ClosedPeek? = nil) -> ReopenClosedTab.Restoration? {
+        let w = self.window(windowID).id
+        let currentSelected = selectedTabID(window: w)
+        guard let decision = ReopenClosedTab.next(
+            closedPinned: closedPinnedTabs,
+            closedPeek: peek,
+            archived: archive.map { ReopenClosedTab.ArchivedTab(id: $0.id, archivedAt: $0.archivedAt) },
+            isPinnedTabAvailable: { [weak self] id in
+                guard let self else { return false }
+                return items[id] != nil && isPinned(id)
+            },
+            isTabSelected: { id in id == currentSelected }
+        ) else { return nil }
+
+        closedPinnedTabs = decision.remainingPinned
+
+        switch decision.restoration {
+        case .pinned(let id, let url, let title, let paneStates):
+            for p in paneStates {
+                if let u = p.url, !u.isEmpty, u != "about:blank" {
+                    updateTab(p.id, url: u, title: p.title)
+                }
+            }
+            if let url, !url.isEmpty, url != "about:blank" {
+                updateTab(id, url: url, title: title)
+            }
+            selectTab(id, window: w)
+        case .archived(let id):
+            restoreArchived(id)
+        case .peek:
+            break
+        }
+        return decision.restoration
+    }
+
     func removeFromArchive(_ id: UUID) {
         archive.removeAll { $0.id == id }
         touch()
@@ -1782,6 +1957,7 @@ final class SidebarStore {
         guard let space = spaces[sid] else { return [] }
         return children(of: space.todayContainerID).filter(\.isTab)
     }
+
 
     func tabGroups(in sid: UUID) -> [SidebarItem] {
         guard let space = spaces[sid] else { return [] }
@@ -1830,9 +2006,15 @@ final class SidebarStore {
         }
     }
 
-    func clearToday(_ sid: UUID? = nil) {
+    /// Arc's Clear on Today (`TodayClear`): the tab each window has on screen in this space and
+    /// the tabs in `playing` (the speaker's audible set) stay, with the split or group they're in.
+    func clearToday(_ sid: UUID? = nil, playing: Set<UUID>) {
         guard let space = spaces[sid ?? focusedSpaceID] else { return }
-        for t in tabs(under: space.todayContainerID) { archiveTab(t.id, reason: .clear) }
+        let selected = Set(prefs.windows.compactMap { $0.selectedTabPerSpace[space.id] })
+        let rows = children(of: space.todayContainerID).map { r in
+            TodayClear.Row(id: r.id, tabs: r.isTab ? [r.id] : tabs(under: r.id).map(\.id))
+        }
+        for t in TodayClear.archived(rows, selected: selected, playing: playing) { archiveTab(t, reason: .clear) }
     }
 
     /// Today tabs idle longer than the threshold are archived (Arc:
@@ -1852,7 +2034,8 @@ final class SidebarStore {
     // MARK: Spaces
 
     @discardableResult
-    func createSpace(title: String, emoji: String, symbol: String? = nil, theme: SpaceTheme? = nil, focus: Bool = true) -> Space {
+    func createSpace(title: String, emoji: String, symbol: String? = nil, iconImage: Data? = nil, theme: SpaceTheme? = nil,
+                     focus: Bool = true) -> Space {
         let id = UUID()
         let favorites = SidebarItem.container(.favorites(spaceID: id))
         let pinned = SidebarItem.container(.pinned(spaceID: id))
@@ -1862,7 +2045,7 @@ final class SidebarStore {
         items[today.id] = today
         let t = theme ?? SpaceTheme.presets[spaceOrder.count % SpaceTheme.presets.count]
         let space = Space(id: id, title: title, emoji: emoji, theme: t, favoritesContainerID: favorites.id,
-                          pinnedContainerID: pinned.id, todayContainerID: today.id, createdAt: clock.now, symbol: symbol)
+                          pinnedContainerID: pinned.id, todayContainerID: today.id, createdAt: clock.now, symbol: symbol, iconImage: iconImage)
         spaces[id] = space
         spaceOrder.append(id)
         if settings.sharedFavorites { shareFavorites() }
@@ -1927,7 +2110,9 @@ final class SidebarStore {
     /// (Arc logs it as "Space turned into folder").
     @discardableResult
     func exportSpace(_ id: UUID, intoFolderIn target: UUID) -> SidebarItem? {
-        guard id != target, let space = spaces[id], let dest = spaces[target], spaceOrder.count > 1 else { return nil }
+        // Incognito tabs never move into a saved space, nor out of their window (#413).
+        guard id != target, !isIncognito(space: id), !isIncognito(space: target), let space = spaces[id], let dest = spaces[target],
+              spaceOrder.count > 1 else { return nil }
         let folder = createFolder(named: space.title, in: dest.pinnedContainerID, index: 0)
         let moving = ((isProfileList(space.favoritesContainerID) ? [] : [space.favoritesContainerID]) + [space.pinnedContainerID, space.todayContainerID])
             .flatMap { children(of: $0) }
@@ -1980,7 +2165,12 @@ final class SidebarStore {
     /// The profile a tab's pages load in: its shared-favorites list's, else its space's.
     func profileID(item id: UUID) -> UUID? {
         if let l = profileList(ofItem: id) { return profile(l.profileID)?.id }
-        return spaceID(ofItem: id).flatMap { isIncognito(space: $0) ? nil : profile(spaces[$0]?.profileID)?.id }
+        return spaceID(ofItem: id).flatMap(profileID(space:))
+    }
+
+    /// The profile a space's pages load in (nil = Default, and for an incognito space).
+    func profileID(space id: UUID) -> UUID? {
+        isIncognito(space: id) ? nil : profile(spaces[id]?.profileID)?.id
     }
 
     /// The Chromium profile folder ("Default" or "Profile <id>") a space's pages load in;
@@ -2009,9 +2199,10 @@ final class SidebarStore {
         touch()
     }
 
-    /// Pages already open in the space load again in the new profile (BrowserManager).
+    /// Pages already open in the space load again in the new profile (BrowserManager). An
+    /// incognito space takes none: its pages load off the record whatever it names (#413).
     func setProfile(_ profileID: UUID?, forSpace id: UUID) {
-        guard var s = spaces[id], s.profileID != profileID, profileID == nil || profile(profileID) != nil else { return }
+        guard var s = spaces[id], !isIncognito(space: id), s.profileID != profileID, profileID == nil || profile(profileID) != nil else { return }
         // Arc: favorites belong to the profile. The space shows its new profile's list and takes
         // nothing along; the old list stays with the old profile, shown or not. A favorite open in
         // the space stays open, in its own profile, though its tile is gone (Arc 1.171).
@@ -2045,6 +2236,7 @@ final class SidebarStore {
         }
         profileFavorites.removeAll { $0.profileID == id }
         settings.downloadLocations[DownloadLocation.key(profileID: id)] = nil
+        settings.setNewDocumentApp(nil, profileID: id)
         ProfileCleanup.schedule(p.directoryName)
         touch()
     }

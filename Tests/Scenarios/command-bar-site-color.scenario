@@ -1,0 +1,33 @@
+# promise: #457
+# Settings ▸ Advanced ▸ Command bar ▸ "Fill the command bar with the site’s color" (#457, not in Arc): Tab on
+# "youtube" fills the bar with YouTube's red at ScopedSearchFill's rule, (75,35,35) on a dark bar and
+# (246,223,223) on a light one. Backspace out of the search gives the bar its own fill back. X (black) has no
+# hue, and Tab on "%" scopes to the space's tabs, not a site: both keep the bar's own. Off is Arc's bar,
+# which ScopedSearchFillTests covers.
+budget rss=600 stalls50=10
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false, "commandBarSiteColor": true}
+from://debug?windowSize=1280x800
+from://open?url=${PAGE}?n=site-color
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+from://commandbar?query=youtube
+wait 1
+from://debug?commandBarScope=enter
+wait 1
+expect-log command bar scope enter: YouTube, fill #(4B2323|F6DFDF)
+from://debug?commandBarScope=leave
+wait 1
+expect-log command bar scope leave: none, fill default
+from://dismiss
+wait 1
+from://commandbar?query=x
+wait 1
+from://debug?commandBarScope=enter
+wait 1
+expect-log command bar scope enter: X, fill default
+from://dismiss
+wait 1
+from://commandbar?query=%25
+wait 1
+from://debug?commandBarScope=enter
+wait 1
+expect-log command bar scope enter: Tabs, fill default

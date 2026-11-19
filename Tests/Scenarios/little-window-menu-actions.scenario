@@ -5,7 +5,7 @@
 # for the Little Window's page even when the browser window has no tab open, and Save Page As…
 # opens its sheet on the Little Window. The browser window stays as it was throughout.
 budget rss=700 stalls50=20
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "defaultLinkDestination": {"littleWindow": {}}}
+seed settings.json {"toolbarDefaultMigrated": true, "defaultLinkDestination": {"littleWindow": {}}}
 from://open?url=${PAGE}?n=main
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
 # The browser window keeps no tab, so nothing there can answer for the Little Window.

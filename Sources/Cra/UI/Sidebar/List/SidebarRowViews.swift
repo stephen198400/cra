@@ -202,6 +202,9 @@ final class SidebarGlyphButton: NSView {
     var tint: NSColor? { didSet { if tint != oldValue { refresh() } } }
     /// Keeps the hover fill while what it opened is open (the player's volume drawer).
     var highlighted = false { didSet { if highlighted != oldValue { refresh() } } }
+    /// Right-click, ⌃-click or a held press (ButtonHold): Back and Forward's history (#416).
+    var secondaryAction: ((NSView) -> Void)?
+    private let hold = ButtonHold()
 
     init(symbol: String, size: CGFloat, height: CGFloat? = nil, iconSize: CGFloat, weight: NSFont.Weight = .medium, help: String,
          optionHelp: String? = nil, colors: SidebarColors, action: @escaping () -> Void) {
@@ -261,6 +264,9 @@ final class SidebarGlyphButton: NSView {
         shownSymbol = symbol
         turnsOnPress = animated && symbol == "arrow.clockwise"
     }
+
+    /// Arc's link → checkmark → link after a click on Copy Link (GitHub #361).
+    func playCopyCheck(glyphSize: CGFloat) { glyph.playCopyCheck(glyphSize: glyphSize) }
 
     func setGlyph(_ image: NSImage?, help: String) {
         shownSymbol = nil
@@ -378,6 +384,7 @@ final class SidebarGlyphButton: NSView {
     override func mouseEntered(with event: NSEvent) { hovering = true }
     override func mouseExited(with event: NSEvent) { hovering = false }
     override func mouseDown(with event: NSEvent) {
+        if hold.down(event, enabled: enabled, secondary: secondaryAction.map { f in { [weak self] in if let self { f(self) } } }) { return }
         if turnsOnPress, enabled { glyph.pressTurn(true) }
     }
     override func mouseDragged(with event: NSEvent) {
@@ -385,7 +392,12 @@ final class SidebarGlyphButton: NSView {
     }
     override func mouseUp(with event: NSEvent) {
         if turnsOnPress { glyph.pressTurn(false) }
+        if hold.up() { return }
         if enabled, bounds.contains(convert(event.locationInWindow, from: nil)) { action() }
+    }
+    override func rightMouseDown(with event: NSEvent) {
+        guard enabled, let secondaryAction else { return super.rightMouseDown(with: event) }
+        secondaryAction(self)
     }
 }
 
@@ -523,6 +535,31 @@ struct DropDecor: Equatable {
     struct Badge: Equatable {
         let symbol: String
         let label: String
+    }
+}
+
+@MainActor
+extension NSView {
+    /// Arc moves the layer's anchor to its centre; AppKit owns a layer-backed view's anchor, so the
+    /// transform carries the centre instead.
+    func springPress(_ down: Bool, scale s: Double) {
+        guard let layer else { return }
+        var to = CATransform3DIdentity
+        if down {
+            let a = layer.anchorPoint
+            let c = CGPoint(x: bounds.width * (0.5 - a.x), y: bounds.height * (0.5 - a.y))
+            to = CATransform3DTranslate(CATransform3DScale(CATransform3DMakeTranslation(c.x, c.y, 0), s, s, 1), -c.x, -c.y, 0)
+        }
+        let spring = CASpringAnimation(keyPath: "transform")
+        spring.fromValue = NSValue(caTransform3D: layer.presentation()?.transform ?? CATransform3DIdentity)
+        spring.toValue = NSValue(caTransform3D: to)
+        spring.mass = 1
+        spring.stiffness = SidebarRowPress.stiffness
+        spring.damping = SidebarRowPress.damping
+        spring.duration = spring.settlingDuration
+        spring.fillMode = .forwards
+        spring.isRemovedOnCompletion = !down
+        layer.add(spring, forKey: "press_bounce")
     }
 }
 
@@ -672,9 +709,27 @@ class SidebarRowView: NSView {
     /// The item a combine preview draws as the drop's target.
     var itemIDForCombine: UUID { if case .item(let id) = key { return id }; return UUID() }
 
-    // Clicks act on release (SwiftUI's tap); a press that moves 3 pt starts the row's drag.
+    var pressRow: SidebarRowPress.Row { .other }
+    private var pushedIn = false
+
+    private func push(in down: Bool) {
+        guard down != pushedIn else { return }
+        pushedIn = down
+        springPress(down, scale: SidebarRowPress.scale(pressRow))
+    }
+
+    /// Whether the press already did what the click would (a tab switches on the press, as in Arc).
+    private var actedOnPress = false
+
+    /// A row that acts on the press does so here and returns true; the release then does nothing.
+    func pressDown(_ event: NSEvent, at point: NSPoint) -> Bool { false }
+
+    // Clicks act on release (SwiftUI's tap), a tab's switch on the press (pressDown); a press that
+    // moves 3 pt starts the row's drag.
     override func mouseDown(with event: NSEvent) {
         press = (event, convert(event.locationInWindow, from: nil))
+        if SidebarRowPress.pushesIn(pressRow, clickCount: event.clickCount) { push(in: true) }
+        actedOnPress = pressDown(event, at: convert(event.locationInWindow, from: nil))
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -682,12 +737,15 @@ class SidebarRowView: NSView {
         let q = convert(event.locationInWindow, from: nil)
         guard hypot(q.x - p.point.x, q.y - p.point.y) > 3 else { return }
         press = nil
+        push(in: false)
         if let id = dragItemID(at: p.point) { list?.beginDrag(id, from: self, event: p.event) }
     }
 
     override func mouseUp(with event: NSEvent) {
+        push(in: false)
         guard let p = press else { return }
         press = nil
+        if actedOnPress { actedOnPress = false; return }
         click(event, at: p.point)
     }
 
@@ -759,6 +817,8 @@ struct TabRowModel: Equatable {
     var selected: Bool
     var highlighted: Bool
     var capturing: Bool
+    /// An MCP agent works in the tab: its face sits where the close button shows on hover.
+    var agent: Bool = false
     var audible: Bool
     var muted: Bool
     var unread: Bool
@@ -795,6 +855,8 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
     /// Arc's regional hover background for a tab that can go back: the icon's square or the body.
     private let regionLayer = CALayer()
 
+    override var pressRow: SidebarRowPress.Row { .tab }
+
     override init(key: SpaceListView.RowKey, list: SpaceListView, colors: SidebarColors) {
         super.init(key: key, list: list, colors: colors)
         addSubview(favicon)
@@ -810,6 +872,7 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
 
     func apply(_ m: TabRowModel) {
         guard m != model else { return }
@@ -1038,6 +1101,7 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
     private static let soundGlyphWidth: CGFloat = 17.5
     private var showsSound = false
     private lazy var peekBadge = SidebarFaviconView()
+    private lazy var agentFace = AgentFaceView()
     private lazy var unreadDot: NSView = {
         let dot = NSView(frame: NSRect(x: 0, y: 0, width: 6, height: 6))
         dot.wantsLayer = true
@@ -1067,6 +1131,10 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
         }
         soundButton.isHidden = !sound
         if sound != showsSound { showsSound = sound; needsLayout = true }
+        if m.agent && !isHovered && !m.editing {
+            agentFace.show(fill: colors.textPrimary)
+            shown.append(agentFace)
+        }
         if let peek = m.peekIcon, !isHovered {
             peekBadge.show(peek, flip: false, colors: colors)
             shown.append(peekBadge)
@@ -1129,7 +1197,7 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
         }
         // The unread dot and a peek badge are centred where the close button shows on hover.
         let trailing = TabRowTrailing.layout(rowWidth: bounds.width, textX: x, controls: accessories.map {
-            TabRowTrailing.Control(width: $0.frame.width, slot: $0 === unreadDot || $0 === peekBadge ? Self.closeSize : nil)
+            TabRowTrailing.Control(width: $0.frame.width, slot: $0 === unreadDot || $0 === peekBadge || $0 === agentFace ? Self.closeSize : nil)
         })
         for (v, vx) in zip(accessories, trailing.controlX) {
             let s = v.frame.size
@@ -1171,6 +1239,9 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
         needsLayout = true
         DispatchQueue.main.async { [weak self, weak f] in
             guard let f, let w = self?.window else { return }
+            // The sidebar sliding out at the edge is a panel that becomes key only when a click needs
+            // it, and a click on a row doesn't: the field showed selected while keys went to the page (#424).
+            w.makeKey()
             w.makeFirstResponder(f)
         }
     }
@@ -1187,8 +1258,11 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
 
     private func commitRename() {
         guard let m = model, let list, list.ui.renamingID == m.id, let f = renameField else { return }
-        list.store.rename(m.id, to: f.stringValue)
+        let typed = f.stringValue
+        list.store.rename(m.id, to: typed)
         list.ui.renamingID = nil
+        // Whether typed keys reached the field (#424), without the name itself.
+        CraLog.note(typed == m.renameText ? "sidebar rename: name unchanged" : "sidebar rename: new name, \(typed.count) characters")
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
@@ -1202,6 +1276,19 @@ final class TabRowView: SidebarRowView, ArcTooltipTarget, NSTextFieldDelegate {
     // MARK: Events
 
     override func dragItemID(at point: NSPoint) -> UUID? { model?.editing == true ? nil : model?.id }
+
+    /// Arc switches tabs on the press (SidebarRowPress.selectsOnPress): a plain single press on the
+    /// row, not on a pinned tab's icon away from home (that one goes back or separates on release).
+    override func pressDown(_ event: NSEvent, at point: NSPoint) -> Bool {
+        guard let m = model, let list, !m.editing,
+              SidebarRowPress.selectsOnPress(pressRow, clickCount: event.clickCount,
+                                             modified: !event.modifierFlags.intersection([.command, .shift, .control, .option]).isEmpty),
+              !(canReset && iconRegion.contains(point)) else { return false }
+        list.ui.iconWentBack = nil
+        list.ui.tabBeforePress = list.store.selectedTabID(window: list.ui.windowID)
+        list.clickTab(m.id, event: event)
+        return true
+    }
 
     override func click(_ event: NSEvent, at point: NSPoint) {
         guard let m = model, let list else { return }
@@ -1375,6 +1462,9 @@ final class FolderRowView: SidebarRowView, NSTextFieldDelegate {
         needsLayout = true
         DispatchQueue.main.async { [weak self, weak f] in
             guard let f, let w = self?.window else { return }
+            // The sidebar sliding out at the edge is a panel that becomes key only when a click needs
+            // it, and a click on a row doesn't: the field showed selected while keys went to the page (#424).
+            w.makeKey()
             w.makeFirstResponder(f)
         }
     }
@@ -1464,6 +1554,8 @@ final class SplitRowView: SidebarRowView, NSTextFieldDelegate, ArcTooltipTarget 
         return b
     }()
     private var shownButtons: SidebarClose.SplitButtons?
+
+    override var pressRow: SidebarRowPress.Row { .split }
 
     override init(key: SpaceListView.RowKey, list: SpaceListView, colors: SidebarColors) {
         super.init(key: key, list: list, colors: colors)
@@ -1655,6 +1747,9 @@ final class SplitRowView: SidebarRowView, NSTextFieldDelegate, ArcTooltipTarget 
         needsLayout = true
         DispatchQueue.main.async { [weak self, weak f] in
             guard let f, let w = self?.window else { return }
+            // The sidebar sliding out at the edge is a panel that becomes key only when a click needs
+            // it, and a click on a row doesn't: the field showed selected while keys went to the page (#424).
+            w.makeKey()
             w.makeFirstResponder(f)
         }
     }
@@ -1856,6 +1951,8 @@ final class NewTabRowView: SidebarRowView {
     private var paste: ClipboardPaste?
     private var pasteCheck: Task<Void, Never>?
 
+    override var pressRow: SidebarRowPress.Row { .newTab }
+
     override init(key: SpaceListView.RowKey, list: SpaceListView, colors: SidebarColors) {
         super.init(key: key, list: list, colors: colors)
         // Arc's plus, fitted pixel by pixel at 1x and 2x.
@@ -2048,7 +2145,7 @@ final class DividerRowView: SidebarRowView {
         if show, clear == nil, let list {
             let b = ClearButton(colors: colors) { [weak list] in
                 guard let list else { return }
-                list.store.clearToday(list.spaceID)
+                list.store.clearToday(list.spaceID, playing: list.ui.audibleTabIDs)
             }
             b.alphaValue = 0
             addSubview(b)

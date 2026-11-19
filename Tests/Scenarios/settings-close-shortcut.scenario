@@ -1,0 +1,23 @@
+# ⌘W with Settings in front closes Settings, as Arc's Settings window does, not the tab in the
+# browser window behind it. Until now Close Tab went to the browser window whatever window was
+# in front, so ⌘W in Settings closed the tab you were on and left Settings open.
+budget rss=600 stalls50=10
+seed settings.json {"toolbarDefaultMigrated": true}
+from://open?url=${PAGE}?n=kept
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+wait 1
+from://debug?settingsPane=general
+wait 1
+from://debug?windowState=open
+expect-log window state open: settings visible=1 front=1
+from://action/closeTab
+wait 1
+from://debug?windowState=closed
+expect-log window state closed: settings visible=0
+from://debug?browserWindows=after
+expect-log browser windows after: kind=normal .*tabs=\[\S*n=kept\] open=\S*n=kept
+# With Settings gone, ⌘W is the browser window's again: the tab closes.
+from://action/closeTab
+wait 1
+from://debug?browserWindows=tab-closed
+expect-log browser windows tab-closed: kind=normal .*tabs=\[\] open=-

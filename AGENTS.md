@@ -11,12 +11,13 @@ rules. Work lands on `main` directly: no PRs, no review round.
 |---|---|---|
 | Core | `Packages/CraCore` | Foundation, CoreGraphics, Observation |
 | App | `Sources/Cra` | CraCore, AppKit, SwiftUI, CraCEF |
-| Bridge | `Sources/CraCEF` | CEF (Objective-C++, seen by Swift through `include/`) |
-| Helper | `Sources/CraHelper` | CEF (the Chromium subprocess) |
+| Bridge | `engine/chromium/cra` | Chrome and content, exposed through `Sources/CraCEF/include/CraCEF.h` |
+| Bridge on CEF | `Sources/CraCEF/CraCEF.mm` | CEF, for `CRA_ENGINE=cef` builds |
+| Helper on CEF | `Sources/CraHelper` | CEF (the Chromium subprocess) |
 
 CraCore never imports AppKit, Cocoa, SwiftUI, UIKit or CraCEF. `scripts/lint.py`
 (`core-platform-import`) fails the build when it does. CraCore is a package of its own, so
-`swift test --package-path Packages/CraCore` runs without `vendor/cef`. Every app file sees it
+`swift test --package-path Packages/CraCore` runs without `vendor/engine` or `vendor/cef`. Every app file sees it
 through `Sources/Cra/App/CraCoreExports.swift`.
 
 1. **Decisions go in CraCore.** Code that decides something without a window or a page (a

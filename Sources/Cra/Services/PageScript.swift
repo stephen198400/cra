@@ -57,6 +57,32 @@ enum PageScript {
     })();
     """
 
+    /// Keep the same style in documents where Chromium disallows content extensions.
+    static let scrollbar: String = {
+        guard let url = Bundle.main.url(forResource: "scrollbar", withExtension: "css", subdirectory: "scrollbars"),
+              let css = try? String(contentsOf: url, encoding: .utf8),
+              let data = try? JSONEncoder().encode(css), let literal = String(data: data, encoding: .utf8)
+        else { return "" }
+        return """
+        (() => {
+          if (!['http:', 'https:', 'file:'].includes(location.protocol)) return;
+          const css = \(literal);
+          const sheet = new CSSStyleSheet();
+          sheet.replaceSync(css);
+          document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+          const install = () => {
+            if (document.getElementById('from-scrollbars')) return;
+            const style = document.createElement('style');
+            style.id = 'from-scrollbars';
+            style.textContent = css;
+            (document.head || document.documentElement).appendChild(style);
+          };
+          if (document.readyState === 'loading') addEventListener('DOMContentLoaded', install, { once: true });
+          else install();
+        })();
+        """
+    }()
+
     /// Cra's isolated world.
     static let isolatedWorld = """
     (() => {

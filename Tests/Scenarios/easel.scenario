@@ -11,6 +11,12 @@ from://debug?browserWindows=relaunched
 expect-log browser windows relaunched: kind=normal listed=1 tabs=1 open=1
 from://action/viewEasels
 wait 1
+# Arc's tile under the pointer (Arc 1.173.1, recorded 17 Nov 2026): it grows by 6 % about its
+# centre and its backing brightens, in a tenth of a second, and goes back when the pointer leaves.
+from://debug?easelTileHover=1
+expect-log easel tile: hover=on scale=1\.060 fill=0\.08 title=Untitled Easel
+from://debug?easelTileHover=0
+expect-log easel tile: hover=off scale=1\.000 fill=0\.04 title=Untitled Easel
 # The capture menu's New Easel: an easel with the capture on it opens in a new tab (after the
 # relaunch only cra.log is read, which counts tabs rather than naming them).
 from://open?url=${PAGE}?n=captured
@@ -24,3 +30,67 @@ from://open?url=${PAGE}?n=sent
 wait 2
 from://debug?captureToEasel=send
 expect-log capture sent to an easel, which now holds 2 items
+# The easel was open in a tab: the capture shows on its canvas and is in its file. (It was written
+# to the file behind the canvas, which then saved what it had shown before over it.)
+wait 1
+from://debug?easels=open
+expect-log easel open: shown=2 saved=2 title=Untitled Easel
+# Captures keep the page they came from (Arc's WebCard) and can show it live: a page of its own,
+# laid out at the captured size, drawn onto the card about once a second.
+from://debug?easelLive=5
+expect-log easel capture: host=127\.0\.0\.1 viewport=[0-9]+x[0-9]+ area=[0-9]+x[0-9]+@0,0 canGoLive=true
+wait 6
+expect-log easel live: frames=[1-9][0-9]* image=[0-9]+x[0-9]+
+# A pasted web address is a link card with the page's title (Arc's LinkData).
+from://debug?easelLink=${PAGE}?n=linked
+wait 4
+expect-log easel link: host=127\.0\.0\.1 title=
+# Arc 1.172.2's shapes, colour picker and object menu, on a new easel.
+from://action/newEasel
+wait 2
+from://debug?easelDraw=1
+from://debug?easelPick=0
+expect-log easel pick: picker=shown color=lightGreen menu=Bring to Front\|Send to Back\|Delete\|—\|Cut\|Copy\|Paste\|—\|Duplicate$
+# Arc 1.173.1's tool keys and the toolbar under the pointer: R picks the rectangle and its
+# letter shows in the button's corner; the pointer over another tool shows that one's too; Escape
+# goes back to the pointer, whose button has no letter; Duplicate shows none either.
+from://debug?easelTool=r
+expect-log easel toolbar: picked=rectangle hover=none letters=r$
+from://debug?easelTool=-&hover=freehand
+expect-log easel toolbar: picked=rectangle hover=freehand letters=r,p$
+from://debug?easelTool=esc&hover=duplicate
+expect-log easel toolbar: picked=pointer hover=duplicate letters=$
+from://debug?easelTool=o&hover=none
+expect-log easel toolbar: picked=ellipse hover=none letters=o$
+from://debug?easelTool=v
+expect-log easel toolbar: picked=pointer hover=none letters=$
+# Arc 1.173.1's capture menu: a Send To… field that has the keyboard, the capture's actions,
+# Retake, then New Easel and every easel by name. Typing narrows the rows, and a row is where the
+# capture goes: New Easel makes one with it, an easel's row puts it on that easel.
+from://open?url=${PAGE}?n=menu
+wait 2
+from://debug?captureMenu=-
+expect-log capture menu: typed= keyboard=field rows=Copy\|Save\.\.\.\|Send via iMessage\.\.\.\|—\|Retake\|—\|New Easel\|Untitled Easel\|Untitled Easel\|Untitled Easel$
+from://debug?captureMenu=new&run=New Easel
+expect-log capture menu: typed=new keyboard=field rows=New Easel$
+wait 2
+from://debug?easels=open
+expect-log easel open: shown=1 saved=1 title=Untitled Easel
+from://open?url=${PAGE}?n=menu2
+wait 2
+from://debug?captureMenu=untitled&run=Untitled Easel
+expect-log capture menu: typed=untitled keyboard=field rows=Untitled Easel\|Untitled Easel\|Untitled Easel\|Untitled Easel$
+wait 2
+from://open?url=${PAGE}?n=menu3
+wait 2
+from://debug?captureMenu=untitled&run=Untitled Easel
+expect-log capture sent to an easel, which now holds 3 items
+# Library ▸ Easels follows an easel made while it shows (it used to wait for a tab to close).
+from://action/viewEasels
+wait 1
+from://debug?easels=tiles
+expect-log easel tiles: 4$
+from://action/newEasel
+wait 2
+from://debug?easels=tiles
+expect-log easel tiles: 5$

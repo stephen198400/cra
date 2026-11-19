@@ -20,7 +20,11 @@ struct SidebarListDrop: Equatable {
         var maxX: CGFloat
     }
 
+    /// The dragged row, or `link` for a link from a page or another app (#419).
     var draggedID: UUID
+    /// The stand-in for a dragged link, which has no row yet; no item has this id.
+    static let link = UUID()
+    var isLink: Bool { draggedID == Self.link }
     /// nil while the drop would leave the item where it is.
     var target: Target?
     /// Insertion line in the list's coordinate space.
@@ -84,6 +88,52 @@ final class DragAutoscroller {
         guard r.origin != clip.bounds.origin else { return }
         clip.scroll(to: r.origin)
         sv.reflectScrolledClipView(clip)
+    }
+}
+
+/// While a row is dragged, holding it at the sidebar's left or right edge pages to the space on
+/// that side, once every SidebarEdgeDrag.delay it stays there (Arc's TablistEdgeDragController,
+/// #499). It goes by the pointer, wherever it is: over the list, the page beside it or past the
+/// window's edge.
+@MainActor
+final class SidebarEdgePager {
+    weak var anchor: NSView?
+    /// Called with the direction to page in.
+    var onPage: (SidebarEdgeDrag.Direction) -> Void = { _ in }
+    /// `from://debug?edgeDrag`: a pointer in window coordinates in place of the real one.
+    var testPoint: CGPoint?
+    private var timer: Timer?
+    private var state = SidebarEdgeDrag()
+
+    func start() {
+        guard timer == nil else { return }
+        state = SidebarEdgeDrag()
+        let t = Timer(timeInterval: 1 / 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        // A drag keeps the run loop in event-tracking mode.
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        testPoint = nil
+    }
+
+    /// The frame the spaces page in, in window coordinates.
+    var pagerFrame: CGRect? {
+        guard let anchor, let pager = sequence(first: anchor, next: \.superview).first(where: { $0 is SpacePagerView }),
+              pager.window != nil, !pager.isHiddenOrHasHiddenAncestor else { return nil }
+        return pager.convert(pager.bounds, to: nil)
+    }
+
+    private func tick() {
+        guard testPoint != nil || NSEvent.pressedMouseButtons != 0 else { stop(); return }
+        let point = testPoint ?? anchor?.window?.mouseLocationOutsideOfEventStream
+        let edge = point.flatMap { p in pagerFrame.flatMap { SidebarEdgeDrag.direction(at: p, sidebar: $0) } }
+        if let d = state.update(edge, at: CACurrentMediaTime()) { onPage(d) }
     }
 }
 

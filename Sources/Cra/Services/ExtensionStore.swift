@@ -17,8 +17,8 @@ final class ExtensionStore {
         let url: URL
         /// Chromium's extension ID (from the manifest key, else the folder path).
         var extensionID: String = ""
-        /// The action's manifest icon (16 px preferred): its default_icon, else the extension's
-        /// icons, as Chrome's toolbar picks it.
+        /// The action's manifest icon at 16 pt, with the files for 1x and 2x screens: its
+        /// default_icon, else the extension's icons, as Chrome's toolbar picks it.
         var icon: NSImage?
         /// action / browser_action / page_action default_popup, relative to the folder.
         var popupPath: String?
@@ -225,6 +225,42 @@ final class ExtensionStore {
         }
     }
 
+    @ObservationIgnored private var copyRemovals = ExtensionCopyRemovals()
+
+    /// A copy in Extensions/ removed in chrome://extensions stops loading in that profile, or the
+    /// next launch would load it again (Chromium only deletes its record of a --load-extension
+    /// install). The folder goes once no profile loads it.
+    private func dropRemovedCopies(profiles: [String], live: [String: [String: Any]]) {
+        let fm = FileManager.default
+        let names = ((try? fm.contentsOfDirectory(atPath: Self.directory.path)) ?? []).sorted()
+        var scopes = Self.loadProfiles()
+        var changed = false
+        for folder in names where !folder.hasPrefix(".") {
+            let dir = Self.directory.appendingPathComponent(folder, isDirectory: true)
+            guard let manifest = Self.manifest(in: dir) else { continue }
+            let id = Self.chromiumID(key: manifest["key"] as? String, folder: dir)
+            for profile in profiles where scopes.loads(folder: folder, inProfile: profile) {
+                guard let settings = live[profile],
+                      copyRemovals.wasRemoved(folder: folder, copyPath: dir.path, extensionID: id, profile: profile, settings: settings)
+                else { continue }
+                var next = scopes
+                if next.stopsLoading(folder: folder, inProfile: profile, allProfiles: Set(profiles)) {
+                    do { try fm.removeItem(at: dir) } catch {
+                        CraLog.note("extension \(folder): could not remove its folder (\(error.localizedDescription))")
+                        continue
+                    }
+                }
+                scopes = next
+                changed = true
+                CraLog.note("extension \(folder) was removed from \(profile); it stops loading there")
+            }
+        }
+        if changed {
+            do { try Self.saveProfiles(scopes) }
+            catch { CraLog.note("extension removal: could not save profile scopes (\(error.localizedDescription))") }
+        }
+    }
+
     /// Extension IDs asked of the store in a profile this session ("<profile>/<id>"), each once.
     @ObservationIgnored private var webStoreAsked: Set<String> = []
 
@@ -286,6 +322,7 @@ final class ExtensionStore {
             ($0, live[$0] ?? ExtensionImporter.settings(inProfile: root.appendingPathComponent($0, isDirectory: true)))
         })
         dropRemovedStoreInstalls(profiles: profiles, live: live)
+        dropRemovedCopies(profiles: profiles, live: live)
         let names = (try? fm.contentsOfDirectory(atPath: ExtensionStore.directory.path)) ?? []
         let disabled = settings.mapValues(ExtensionImporter.disabledIDs(settings:))
         let scopes = Self.loadProfiles()
@@ -425,8 +462,8 @@ final class ExtensionStore {
         let description = ExtensionImporter.localizedDescription(manifest: m, folder: dir)
         return Entry(id: id, name: title.isEmpty ? id : title, version: str("version"), description: description, url: dir,
                      extensionID: extensionID ?? chromiumID(key: m["key"] as? String, folder: dir),
-                     icon: actionIcons.flatMap { ExtensionImporter.icon(manifest: ["icons": $0], folder: dir, minPixels: 16) }
-                        ?? ExtensionImporter.icon(manifest: m, folder: dir, minPixels: 16),
+                     icon: actionIcons.flatMap { ExtensionImporter.icon(manifest: ["icons": $0], folder: dir) }
+                        ?? ExtensionImporter.icon(manifest: m, folder: dir),
                      popupPath: (action?["default_popup"] as? String).flatMap { $0.isEmpty ? nil : $0 }, optionsPath: options)
     }
 

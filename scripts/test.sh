@@ -36,6 +36,15 @@ if [ "${1:-}" != core ]; then
   suite "Perf recorder" scripts/test-perf.sh
   suite "MCP transport" scripts/test-mcp-transport.sh
   suite "CEF download" python3 Tests/test_cef_download.py
+  suite "Docked window accessibility" scripts/test-docked-window-accessibility.sh
+  suite "Window content grabber" scripts/test-window-content-grabber.sh
+  suite "Back and Forward history menu" scripts/test-back-forward-menu.sh
+  suite "WebKit stores" scripts/test-webkit-stores.sh
+  suite "Emoji label" scripts/test-emoji-label.sh
+  suite "Theme noise" scripts/test-theme-noise.sh
+  suite "Chromium window corners" scripts/test-chromium-window-corners.sh
+  suite "Picture in Picture corners" scripts/test-pip-corners.sh
+  suite "CEF update check" python3 Tests/test_cef_update_check.py
   suite "Lint" scripts/lint.py
 fi
 

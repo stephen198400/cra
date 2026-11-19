@@ -20,6 +20,8 @@ struct PrivacyPane: View {
                                   detail: "Requests to known ad and tracker domains are cancelled, unless the domain belongs to the site you’re on.",
                                   isOn: $store.settings.blockAdsAndTrackers)
                 SettingsCardDivider()
+                BlockListRows(addresses: $store.settings.customBlocklists, enabled: store.settings.blockAdsAndTrackers)
+                SettingsCardDivider()
                 // Arc: Settings ▸ General "Block Cookie Banners", off by default.
                 SettingsToggleRow("Block cookie banners",
                                   detail: "Cookie banners from the common consent tools are hidden. Pages load again with the change.",
@@ -131,5 +133,125 @@ private struct SecureDNSRows: View {
         } else {
             error = "From couldn’t change secure DNS."
         }
+    }
+}
+
+/// Block lists added on top of Cra's own (#507, in neither Arc nor Dia): a regional list or a
+/// bigger one, by address or from a file, blocked under "Block ads and trackers" (BlockLists).
+/// Each added list is a line with its name, what it blocks and a remove button.
+private struct BlockListRows: View {
+    @Binding var addresses: [String]
+    let enabled: Bool
+    private let lists = BlockLists.shared
+    @State private var adding = false
+    @State private var text = ""
+    @State private var error: String?
+
+    var body: some View {
+        SettingsPlainRow("Block lists",
+                         detail: "Add a list to block more, like ads in your country. Cra uses its domain rules (hosts files, domain lists and Adblock Plus “||domain^” rules) and fetches it again when Cra opens, once a day at most.",
+                         trailing: {
+                             Button("Add List…") { error = nil; text = ""; adding = true }
+                                 .disabled(!enabled || adding)
+                         }) {
+            if !addresses.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(addresses, id: \.self) { BlockListLine(address: $0, lists: lists, remove: remove) }
+                }
+                .padding(.top, 4)
+                .opacity(enabled ? 1 : 0.5)
+            }
+        }
+        if adding {
+            SettingsCardDivider()
+            SettingsCardRow {
+                TextField("List address", text: $text, prompt: Text("https://example.com/list.txt"))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    .onSubmit(addTyped)
+            } trailing: {
+                Button("Choose File…", action: chooseFile)
+                Button("Cancel") { adding = false; error = nil }
+                Button("Add", action: addTyped)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        if let error {
+            SettingsFootnote(error).foregroundStyle(.red).padding(.bottom, 8)
+        }
+    }
+
+    private func addTyped() {
+        apply(CustomBlocklist.adding(text, to: addresses, httpsOnly: false))
+    }
+
+    private func chooseFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a block list: a hosts file, a list of domains or an Adblock Plus list."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        apply(CustomBlocklist.adding(url, to: addresses))
+    }
+
+    private func apply(_ addition: CustomBlocklist.Addition) {
+        switch addition {
+        case .invalid:
+            error = "Enter the list’s web address, like https://example.com/list.txt."
+            return
+        case .added(let next):
+            addresses = next
+        case .alreadyAdded:
+            break
+        }
+        error = nil
+        adding = false
+    }
+
+    private func remove(_ address: String) {
+        addresses.removeAll { $0 == address }
+    }
+}
+
+/// One added list: its name, then what it blocks and when it was fetched, or why it couldn't be.
+private struct BlockListLine: View {
+    let address: String
+    let lists: BlockLists
+    let remove: (String) -> Void
+
+    var body: some View {
+        let list = lists.cached[address]
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(list?.name ?? fallbackName).font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
+                    .lineLimit(1).truncationMode(.middle)
+                    .help(address)
+                if let failure = lists.failures[address] {
+                    Text(failure).foregroundStyle(.red)
+                } else if let list {
+                    Text(CustomBlocklist.summary(domains: list.domains.count, skippedRules: list.skippedRules)
+                         + " · Updated " + list.fetched.formatted(.relative(presentation: .named)))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Fetching…").foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            if lists.fetching.contains(address) {
+                ProgressView().controlSize(.mini)
+            } else if lists.failures[address] != nil {
+                Button("Try Again") { lists.fetch(address) }.buttonStyle(.link)
+            }
+            Button { remove(address) } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless)
+                .help("Remove this list")
+                .accessibilityLabel("Remove \(list?.name ?? fallbackName)")
+        }
+    }
+
+    private var fallbackName: String {
+        guard let url = URL(string: address) else { return address }
+        return url.isFileURL ? url.lastPathComponent : (url.host ?? address)
     }
 }

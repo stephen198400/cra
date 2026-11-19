@@ -3,13 +3,25 @@
 # response (#330). The fixture pages are http on 127.0.0.1; ${STALL} takes the connection and never
 # answers.
 budget rss=700 stalls50=20
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "defaultLinkDestination": {"littleWindow": {}}}
+seed settings.json {"toolbarDefaultMigrated": true, "defaultLinkDestination": {"littleWindow": {}}}
 pace 0.5
 
 from://debug?externalURL=${PAGE}?e=link1
 wait 2
 from://debug?littleShown=loaded
-expect-log little shown loaded: windows=1 .* padlock=1 address=127\.0\.0\.1$
+expect-log little shown loaded: windows=1 .* padlock=1 address=127\.0\.0\.1 behind=0$
+
+# A clicked new-tab link and a featureless window.open stay in this Little Window.
+from://debug?target=little&cdp=Runtime.evaluate&params={"expression":"(a=>{a.href='${PAGE}?first';a.target='_blank';document.body.append(a);a.click()})(document.createElement('a'))","userGesture":true}
+expect-log GET /page\.html\?first
+from://debug?target=little&cdp=Runtime.evaluate&params={"expression":"'little first '+location.search"}
+expect-log little first \?first
+from://debug?target=little&cdp=Runtime.evaluate&params={"expression":"void window.open('${PAGE}?second')","userGesture":true}
+expect-log GET /page\.html\?second
+from://debug?target=little&cdp=Runtime.evaluate&params={"expression":"'little second '+location.search"}
+expect-log little second \?second
+from://debug?littleShown=same
+expect-log little shown same: windows=1
 
 from://debug?externalURL=${STALL}
 wait 2

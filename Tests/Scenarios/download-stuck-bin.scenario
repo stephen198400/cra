@@ -1,0 +1,24 @@
+# A held download stalls after 30 seconds and holds the quit guard until cancelled.
+# promise: #491
+home
+budget rss=600 stalls50=5
+env CRA_TEST_HOLD_DOWNLOAD_DESTINATION=1
+from://open?url=${PAGE}
+wait 2
+from://open?url=${TRICKLE}/trickle.bin
+wait 3
+from://debug?downloadState=held
+expect-log Download [0-9]+ started: no file name yet
+expect-log download state held: running=true 
+from://debug?downloadGuards=held
+expect-log download guards held: quit=downloads in progress$
+wait 37
+from://debug?downloadState=stuck
+expect-log Download [0-9]+ stuck for 30 s: no file name yet
+expect-log download state stuck: running=true 
+from://debug?downloadDestination=cancel
+wait 2
+from://debug?downloadState=cancelled
+expect-log download state cancelled: running=false progress=none rows=\["Cancelled"\]
+from://debug?downloadGuards=cancelled
+expect-log download guards cancelled: quit=none$

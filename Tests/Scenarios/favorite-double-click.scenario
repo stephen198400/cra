@@ -3,7 +3,7 @@
 # Back to Pinned Page does (#264). A single click only opens it. The clicks go through the event
 # queue to the tile, as the pointer's would; the page reads where it is.
 budget rss=700 stalls50=10
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false}
 from://debug?windowSize=1280x800
 from://open?url=${PAGE}?n=home
 expect-log loaded 127\.0\.0\.1 \(HTTP 200\)

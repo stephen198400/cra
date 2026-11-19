@@ -34,6 +34,9 @@ public struct ToolbarComposition: Equatable, Sendable {
         case network
         case inspect
         case pinnedExtension(String)
+        /// Pop-ups Chromium blocked on the page (BlockedPopups): Chrome's address-bar icon,
+        /// before the translate button.
+        case blockedPopups
         /// Arc's translate button (`character.bubble`, "Translation Options"), while Chromium
         /// can translate the page or it is translated (GitHub #310).
         case translate
@@ -48,12 +51,14 @@ public struct ToolbarComposition: Equatable, Sendable {
 
     /// `hovered`: the pointer is over this bar, which reveals an unfocused pane's controls.
     /// `translatable`: the page offers translation (PageTranslation.offersTranslation).
-    public init(kind: Kind, inSplit: Bool, sidebarVisible: Bool, focusedPane: Bool, hovered: Bool = false, canGoBack: Bool,
-                canGoForward: Bool, isLoading: Bool, pinnedExtensions: [String], translatable: Bool = false) {
+    /// `blockedPopups`: Chromium holds back pop-ups the page opened (BlockedPopups.waiting).
+    public init(kind: Kind, inSplit: Bool, sidebarVisible: Bool, sidebarSide: SidebarSide = .left, focusedPane: Bool,
+                hovered: Bool = false, canGoBack: Bool, canGoForward: Bool, isLoading: Bool, pinnedExtensions: [String],
+                translatable: Bool = false, blockedPopups: Bool = false) {
         // Arc's essential controls only: a split pane that neither has the focus nor the pointer.
         let essentialOnly = inSplit && !focusedPane && !hovered
         // Dia: always first, whether the sidebar is shown or not. Never in a split pane or an empty one.
-        if !inSplit, kind != .emptyPane { left.append(.toggleSidebar) }
+        if sidebarSide == .left, !inSplit, kind != .emptyPane { left.append(.toggleSidebar) }
         switch kind {
         case .noTab:
             left += [.back(enabled: false), .forward(enabled: false), .reload(loading: false, enabled: false)]
@@ -67,12 +72,14 @@ public struct ToolbarComposition: Equatable, Sendable {
         // Arc's right end: pinned extensions, the Extensions button, then Split View (not in a
         // split); also on the no-tab bar. The developer bar has the Extensions button first.
         if !essentialOnly, kind != .emptyPane {
+            if blockedPopups, kind == .normal || kind == .developer { right.append(.blockedPopups) }
             // Arc 1.172: the translate button sits right before the sliders, 36 pt apart (#310).
             if translatable, kind == .normal || kind == .developer { right.append(.translate) }
             let pins = pinnedExtensions.map(Item.pinnedExtension)
             right += kind == .developer ? [.extensions] + pins : pins + [.extensions]
             if !inSplit { right.append(.addSplit) }
         }
+        if sidebarSide == .right, !sidebarVisible, !inSplit, kind != .emptyPane { right.append(.toggleSidebar) }
         if inSplit {
             // On a hovered pane too: its bar then doesn't move when a click on it takes the focus.
             if !essentialOnly, kind != .emptyPane { right.append(.splitOptions) }

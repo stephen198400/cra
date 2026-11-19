@@ -7,7 +7,7 @@
 budget rss=900 stalls50=40
 pace 0.5
 home
-seed settings.json {"hasSeenImportPrompt": true, "toolbarDefaultMigrated": true, "showToolbar": false}
+seed settings.json {"toolbarDefaultMigrated": true, "showToolbar": false}
 
 from://debug?windowSize=1200x800
 from://open?url=${PAGE}?n=source

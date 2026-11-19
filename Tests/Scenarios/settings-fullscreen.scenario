@@ -1,0 +1,30 @@
+# promise: #431
+# Settings opened from a full-screen window opens over it, on its Space, as Arc's and Safari's do: macOS doesn't
+# swipe back to a Desktop to show it. It is opened and closed on the Desktop first, so a Settings window macOS
+# has already placed on a Space comes along too. It takes over a Space, so it runs only with CRA_SCENARIO_SCREEN=1.
+requires screen
+budget rss=600 stalls50=10
+seed settings.json {"toolbarDefaultMigrated": true}
+from://open?url=${PAGE}?n=full
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+wait 1
+from://action/settings
+wait 1
+from://debug?windowState=desktop
+expect-log window state desktop: settings visible=1 front=1
+from://action/closeTab
+wait 1
+from://debug?fullscreen=1
+wait 3
+from://action/settings
+wait 2
+from://debug?windowState=fullscreen
+expect-log window state fullscreen: main0 fullscreen=1 visible=1 onSpace=1
+expect-log window state fullscreen: settings visible=1 front=1 .* onSpace=1 auxiliary=1 movesToActiveSpace=1
+from://action/closeTab
+wait 1
+from://debug?windowState=closed
+expect-log window state closed: main0 fullscreen=1 visible=1 onSpace=1
+expect-log window state closed: settings visible=0
+from://debug?fullscreen=0
+wait 3

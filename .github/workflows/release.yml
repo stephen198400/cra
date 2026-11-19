@@ -52,16 +52,11 @@ jobs:
       - name: Normalise version
         run: echo "CRA_VERSION=${CRA_VERSION#v}" >> "$GITHUB_ENV"
 
-      - name: Read pinned CEF version
-        id: cef
-        run: echo "version=$(sed -n 's/^CEF_VERSION="${CEF_VERSION:-\(.*\)}"$/\1/p' scripts/fetch-cef.sh)" >> "$GITHUB_OUTPUT"
-
-      # build.sh keeps the runner's own CPU in vendor/cef and the other one in vendor/cef-<arch>.
-      - name: Cache CEF
+      - name: Cache the engine
         uses: actions/cache@v6
         with:
-          path: ${{ matrix.arch == 'arm64' && 'vendor/cef' || format('vendor/cef-{0}', matrix.arch) }}
-          key: cef-${{ matrix.arch }}-${{ steps.cef.outputs.version }}-${{ hashFiles('scripts/fetch-cef.sh') }}
+          path: ${{ matrix.arch == 'arm64' && 'vendor/engine' || format('vendor/engine-{0}', matrix.arch) }}
+          key: engine-${{ matrix.arch }}-${{ hashFiles('scripts/fetch-engine.sh') }}
 
       - name: Import signing certificate
         id: cert
