@@ -399,7 +399,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                                      forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
     }
 
-    func applicationDidBecomeActive(_ notification: Notification) { installURLEventHandler() }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        installURLEventHandler()
+        AskOnPageModelAvailability.shared.refresh()
+    }
 
     /// Arc's frontmostApplicationHistory: which app was in front before Cra (#430).
     private func observeFrontmostApp() {
@@ -1082,9 +1085,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             // toolbar=out|in|sample|state: the floating toolbar (Settings ▸ Tabs), and where it is.
             if let command = dict["toolbar"] { CraLog.note(main.shell.debugToolbar(command)); return }
             if dict["findQuery"] != nil || dict["findStep"] != nil {
-                main.debugFind(query: dict["findQuery"], step: dict["findStep"])
+                main.debugFind(query: dict["findQuery"], step: dict["findStep"], quote: dict["findPurpose"] == "quote")
                 return
             }
+            // Ask on Page (#393): askOnPage=<label> logs the card's state; ask=<question> opens ⌘F's
+            // card and asks; askQuery=<text> types it and presses Return; askFindQuote=<n> presses the
+            // last answer's nth Find on Page.
+            if let label = dict["askOnPage"] { CraLog.note(main.askOnPage.readout(label)); return }
+            // askTone=<label>: the card's appearance and the question's contrast on it (#408).
+            if let label = dict["askTone"] { CraLog.note(main.askOnPage.toneReadout(label)); return }
+            if let q = dict["ask"] { main.showFindBar(); main.askOnPage.ask(q); return }
+            if let q = dict["askQuery"] {
+                main.showFindBar()
+                main.overlay.findQuery = q
+                main.askOnPage.submit(shift: false)
+                return
+            }
+            if let n = dict["askFindQuote"].flatMap(Int.init) { main.askOnPage.debugFindQuote(n); return }
             if let label = dict["findBar"] { CraLog.note(main.debugFindBar(label)); return }
             // chromiumDialogs=1: the Chromium dialogs showing and where (#349); chromiumDialogs=<button>: that
             // read, then the button with that title pressed (#484).

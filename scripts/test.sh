@@ -34,6 +34,10 @@ if [ "${1:-}" != core ]; then
   suite "Folder glyph" scripts/test-folder-glyph.sh
   suite "Key bindings" scripts/test-key-bindings.sh
   suite "Perf recorder" scripts/test-perf.sh
+  suite "Ask on Page DOM" scripts/test-ask-on-page-content.sh
+  suite "Ask on Page quote scripts" scripts/test-ask-on-page-quotes.sh
+  suite "Ask on Page service" scripts/test-ask-on-page-service.sh
+  suite "Ask on Page lifecycle" scripts/test-ask-on-page-lifecycle.sh
   suite "MCP transport" scripts/test-mcp-transport.sh
   suite "CEF download" python3 Tests/test_cef_download.py
   suite "Docked window accessibility" scripts/test-docked-window-accessibility.sh

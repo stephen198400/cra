@@ -1,0 +1,29 @@
+# promise: #417
+# A long answer streams into Ask on Page without stalling the window: the card redraws at most ten
+# times a second while the model writes, and its panel stops resizing once the conversation
+# scrolls. A real summary from the on-device model streamed 40-60 main-thread stalls over 50 ms.
+pace 0.5
+env CRA_ASK_FAKE_MODEL=1
+seed settings.json {"toolbarDefaultMigrated": true, "askOnPage": true}
+budget stalls50=10 stalls16=20
+
+from://open?url=${ORIGIN}/ask.html
+expect-log loaded 127\.0\.0\.1 \(HTTP 200\)
+wait 1
+from://debug?cdp=Runtime.evaluate&params={"expression":"(()=>{const a=document.querySelector('article');for(let i=0;i<40;i++){const p=document.createElement('p');p.textContent='Point number '+i+' of the tour explains one more feature of the release in a full sentence for the summary.';a.append(p)}return 'long'})()"}
+expect-log Cra cdp Runtime.evaluate .*"value":"long"
+from://action/find
+from://debug?ask=Summarize the key points of this page in bullet points.
+wait 20
+from://debug?askOnPage=summary
+expect-log ask summary: enabled=true canAsk=true messages=1 finished=true quotes=0
+from://debug?ask=And what is StandBy?
+wait 3
+from://debug?askOnPage=after
+expect-log ask after: enabled=true canAsk=true messages=2 finished=true quotes=1 .*height=[0-9]+$
+
+# A quote the page doesn't have is marked as soon as the answer is done.
+from://debug?ask=Make up a quote about it.
+wait 3
+from://debug?askOnPage=madeup
+expect-log ask madeup: enabled=true canAsk=true messages=3 finished=true quotes=1 .* notOnPage=1$

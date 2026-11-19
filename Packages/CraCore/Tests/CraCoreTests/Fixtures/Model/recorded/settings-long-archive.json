@@ -1,4 +1,5 @@
 {
+  "askOnPage" : false,
   "autoArchive" : "thirtyDays",
   "autoArchiveDays" : 90,
   "autoArchiveEnabled" : true,

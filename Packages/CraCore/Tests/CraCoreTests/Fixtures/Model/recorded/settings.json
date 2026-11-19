@@ -1,4 +1,5 @@
 {
+  "askOnPage" : false,
   "autoArchive" : "sevenDays",
   "autoArchiveEnabled" : false,
   "autoPictureInPicture" : false,

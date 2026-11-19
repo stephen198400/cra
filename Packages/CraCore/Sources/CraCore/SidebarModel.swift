@@ -590,6 +590,7 @@ public struct AppSettings: Codable, Equatable {
     public var splitMorePanes: Bool = false
     /// Cra's own, not in Arc (GitHub #498), off by default: a link middle-clicked in a split's pane opens
     /// as a new pane beside it instead of a tab behind the page (`LinkSplitClick.middleClickAddsPane`).
+    public var askOnPage: Bool = false
     public var splitMiddleClickAddsPane: Bool = false
     /// Settings ▸ Links ▸ "Open background tabs below the current tab" (GitHub #532), off by default: a tab a
     /// link opens behind the page (⌘-click, middle click) goes right below the tab it came from in Today,
@@ -923,6 +924,7 @@ extension AppSettings {
         littleWindowOnOptionCommandClick = try c.decodeIfPresent(Bool.self, forKey: .littleWindowOnOptionCommandClick) ?? false
         openLinksInForeground = try c.decodeIfPresent(Bool.self, forKey: .openLinksInForeground) ?? false
         splitMorePanes = try c.decodeIfPresent(Bool.self, forKey: .splitMorePanes) ?? false
+        askOnPage = try c.decodeIfPresent(Bool.self, forKey: .askOnPage) ?? false
         splitMiddleClickAddsPane = try c.decodeIfPresent(Bool.self, forKey: .splitMiddleClickAddsPane) ?? false
         backgroundTabsBelowCurrent = try c.decodeIfPresent(Bool.self, forKey: .backgroundTabsBelowCurrent) ?? false
         folderPreviews = try c.decodeIfPresent(Bool.self, forKey: .folderPreviews) ?? true

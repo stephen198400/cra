@@ -72,7 +72,10 @@ enum TestRoot { case today }
     func item(_ id: UUID) -> TestItem? { items[id] }
     var incognitoItems: Set<UUID> = []
     func isIncognito(item: UUID) -> Bool { incognitoItems.contains(item) }
-    func profilePath(item: UUID) -> String? { nil }
+    private let focusedAskSpace = UUID()
+    func focusedSpaceID(window: UUID?) -> UUID { focusedAskSpace }
+    var profilePaths: [UUID: String] = [:]
+    func profilePath(item: UUID) -> String? { profilePaths[item] }
     func profileDirectoryName(item: UUID) -> String { "Default" }
     func spaceID(ofItem: UUID) -> UUID? { nil }
     func splitContaining(_ id: UUID) -> TestItem? {

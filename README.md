@@ -72,7 +72,7 @@ Embedded Framework, so sites and Chrome extensions work as they do in Chrome.
 | Boosts | ✅ |
 | Peek | ✅ |
 | Notes | Left out: Arc itself no longer makes new Notes |
-| Arc Max | Left out |
+| Ask on Page | On-device Apple Intelligence. Enable it in Settings ▸ Advanced ▸ Search, then press ⌘F on a page. |
 
 The [roadmap](https://crabrowser.app/roadmap) lists what's next.
 
@@ -143,9 +143,9 @@ everyone.
 
 ## Build from source
 
-    scripts/build.sh          # fetches CEF on first run, builds build/Cra.app
+    scripts/build.sh          # fetches the Chromium engine and builds build/From.app
     scripts/run.sh            # build if needed, then open
-    scripts/dev.sh            # dev loop: debug CraDev.app, rebuilds + relaunches on save
+    scripts/dev.sh            # legacy CEF dev loop: debug CraDev.app, rebuilds + relaunches on save
 
 Needs Xcode 16+ and CMake (`brew install cmake`). [CONTRIBUTING.md](CONTRIBUTING.md)
 covers sending a change, and [docs/development.md](docs/development.md) covers the code
