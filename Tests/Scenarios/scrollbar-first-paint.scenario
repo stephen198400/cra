@@ -1,0 +1,8 @@
+# The slim scrollbar is the page's from its first layout: a page that first laid out under
+# Chromium's wide bar narrowed when the style arrived at load end, and its content jumped
+# sideways (every first load, most visibly in a Little Window).
+from://open?url=${ORIGIN}/scrollbar.html
+expect-log loaded 127.0.0.1
+wait 1
+from://debug?cdp=Runtime.evaluate&params={"expression":"'gutter:'+firstGutter+'/'+(innerWidth-document.documentElement.clientWidth)"}
+expect-log Cra cdp Runtime.evaluate .*"value":"gutter:8/8"

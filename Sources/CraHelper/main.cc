@@ -63,6 +63,24 @@ class RenderHandler : public CefRenderProcessHandler {
     return true;
   }
 
+  // This fork's slim scrollbar (CraCEF.mm's OnLoadEnd adds the same rules as a <style> later),
+  // from the document's start: added at load end only, a page first laid out under Chromium's
+  // wide bar narrowed then and jumped sideways. An adopted sheet needs no <head> yet.
+  void OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                        CefRefPtr<CefV8Context> context) override {
+    if (frame && frame->GetURL().ToString().rfind("devtools:", 0) == 0) return;
+    CefRefPtr<CefV8Value> result;
+    CefRefPtr<CefV8Exception> error;
+    context->Eval(
+        "(function(){try{var s=new CSSStyleSheet();s.replaceSync("
+        "'::-webkit-scrollbar{width:8px;height:8px;background:transparent}"
+        "::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-corner{background:transparent}"
+        "::-webkit-scrollbar-thumb{background:rgba(128,128,128,.45);border-radius:4px;border:2px solid transparent;background-clip:padding-box}"
+        "::-webkit-scrollbar-thumb:hover{background:rgba(128,128,128,.7);border:1px solid transparent;background-clip:padding-box}');"
+        "document.adoptedStyleSheets=document.adoptedStyleSheets.concat(s);}catch(e){}})()",
+        CefString(), 0, result, error);
+  }
+
   void OnContextReleased(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                          CefRefPtr<CefV8Context> context) override {
     for (auto i = installed_.begin(); i != installed_.end();) {

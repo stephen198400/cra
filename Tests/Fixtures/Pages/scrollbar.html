@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Scrollbar</title>
+<!-- A page taller than the window. The gutter its first layout gives the scrollbar is kept for
+     scrollbar-first-paint.scenario: Cra's slim scrollbar has to be there before it, or the
+     page reflows (and jumps) when the bar narrows later. -->
+<body style="margin:0">
+<div style="height:4000px;background:linear-gradient(#eee,#ccc)"></div>
+<script>window.firstGutter = innerWidth - document.documentElement.clientWidth;</script>
