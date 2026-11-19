@@ -2122,7 +2122,8 @@ private final class Observer: BrowserManagerDelegate {
     var onDownload: ((CraDownloadInfo) -> Void)?
     func browserManagerDidUpdate(_ tabID: UUID) {}
     func browserManager(statusMessage: String, tabID: UUID?) {}
-    func browserManager(findMatches count: Int, activeMatch: Int) {}
+    func browserManager(findMatches count: Int, activeMatch: Int, generation: UUID, identifier: Int, final: Bool) {}
+    func browserManager(findAction action: CraFindAction) {}
     func browserManager(download: CraDownloadInfo) { onDownload?(download) }
     func browserManager(fullscreen: Bool, tabID: UUID) {}
     func browserManagerDevToolsHost(for tabID: UUID) -> NSView? { nil }

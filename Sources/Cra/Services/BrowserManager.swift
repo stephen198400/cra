@@ -85,7 +85,8 @@ protocol BrowserManagerDelegate: AnyObject {
     /// The status bubble's text (a hovered link's URL, "" when the pointer leaves it) and the tab whose page shows it.
     func browserManager(statusMessage: String, tabID: UUID?)
     /// Find in page results for the visible tab; -1 = no new value.
-    func browserManager(findMatches count: Int, activeMatch: Int)
+    func browserManager(findMatches count: Int, activeMatch: Int, generation: UUID, identifier: Int, final: Bool)
+    func browserManager(findAction action: CraFindAction)
     func browserManager(download: CraDownloadInfo)
     func browserManager(fullscreen: Bool, tabID: UUID)
     func browserManagerDevToolsHost(for tabID: UUID) -> NSView?
@@ -1195,13 +1196,25 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
         delegate?.browserManagerDidUpdate(id)
     }
 
-    /// The page's sound starting or stopping as it happens, before the 2 s hold `didChangeAudible`
-    /// waits out. Sound starting marks the tab's card playing: paused from the card and played
-    /// again on the page within the hold, the tab never went quiet, so `didChangeAudible` doesn't
-    /// come. Cards come and go only with the held state.
+    func browser(_ browser: CraBrowser, didChangeInfoBars infoBars: [[String: Any]]) {
+        guard let id = tabID(of: browser), let rt = runtimes[id] else { return }
+        let bars = infoBars.compactMap { PageInfoBar($0) }
+        guard bars != rt.infoBars else { return }
+        rt.infoBars = bars
+        log(id, bars.isEmpty ? "info bars gone" : "info bars: \(bars.map { $0.message }.joined(separator: " | "))")
+        delegate?.browserManagerPageWindowsChanged(focus: false)
+    }
+
     func browser(_ browser: CraBrowser, didChangeSoundPlaying playing: Bool) {
-        guard playing, let id = tabID(of: browser), nowPlaying?.entries.contains(where: { $0.id == id && !$0.playing }) == true else { return }
-        nowPlaying?.update(id) { $0.playing = true }
+        guard playing, !browser.reportsMediaSession, let id = tabID(of: browser), let np = nowPlaying else { return }
+        if let entry = np.entries.first(where: { $0.id == id }) {
+            guard !entry.playing else { return }
+            np.update(id) { $0.playing = true }
+        } else {
+            guard browser.isAudible, !browser.hasUncontrollableSound else { return }
+            np.entries.append(.init(id: id, playing: true))
+            refreshMediaControls(id)
+        }
         delegate?.browserManagerDidUpdate(id)
     }
 
@@ -1591,7 +1604,13 @@ final class BrowserManager: NSObject, @preconcurrency CraBrowserDelegate {
 
     func browser(_ browser: CraBrowser, didFindMatches count: Int, activeMatch: Int, generation: UUID, quote: Bool, identifier: Int, finalUpdate: Bool) {
         guard let id = tabID(of: browser), id == visibleTabID else { return }
-        delegate?.browserManager(findMatches: count, activeMatch: activeMatch)
+        delegate?.browserManager(findMatches: count, activeMatch: activeMatch, generation: generation, identifier: identifier, final: finalUpdate)
+    }
+
+    func browser(_ browser: CraBrowser, requestsFindAction action: CraFindAction) {
+        guard let id = tabID(of: browser), id == visibleTabID else { return }
+        // OnChromeCommand is intercepted before Chromium's own FindBarController can search.
+        delegate?.browserManager(findAction: action)
     }
 
     func browser(_ browser: CraBrowser, didChangeFullscreen fullscreen: Bool) {

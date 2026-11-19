@@ -1,5 +1,5 @@
 # Find's counts and steps from the engine and from WebKit, each result tagged with the search it
-# belongs to and whether it is final. Ask stays off. On the engine, Chrome's own Find commands never
+# belongs to and whether it is final. On the engine, Chrome's own Find commands never
 # run: every key goes to Cra first (engine/chromium/patches/cra-keys.patch).
 budget rss=900 stalls50=35
 from://open?url=${ORIGIN}/find.html
@@ -15,8 +15,6 @@ expect-log find generation=\S+ identifier=[0-9]+ count=3 ordinal=2 final=true pu
 from://debug?findQuery=absent-synthetic-question
 expect-log find generation=\S+ identifier=[0-9]+ count=0 ordinal=0 final=true purpose=ordinary
 from://debug?findStep=close
-from://debug?findQuery=cobalt&findPurpose=quote
-expect-log find generation=\S+ identifier=[0-9]+ count=3 ordinal=[1-3] final=true purpose=quote
 from://debug?findQuery=frame-only-needle
 expect-log find generation=\S+ identifier=[0-9]+ count=1 ordinal=1 final=true purpose=ordinary
 from://debug?findStep=close

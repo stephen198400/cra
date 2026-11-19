@@ -27,6 +27,7 @@ public enum CraCEFRuntime {
     public static func supportsSparePages() -> Bool { hosting }
 }
 
+@objc public enum CraFindAction: Int { case show, next, previous }
 @objc public enum CraLinkWindow: Int { case new, incognito, little }
 
 /// `open`: the app subclasses it (WebKitBrowser, faked in AppServices.swift).

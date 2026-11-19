@@ -1081,6 +1081,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             }
             // toolbar=out|in|sample|state: the floating toolbar (Settings ▸ Tabs), and where it is.
             if let command = dict["toolbar"] { CraLog.note(main.shell.debugToolbar(command)); return }
+            if dict["findQuery"] != nil || dict["findStep"] != nil {
+                main.debugFind(query: dict["findQuery"], step: dict["findStep"])
+                return
+            }
             if let label = dict["findBar"] { CraLog.note(main.debugFindBar(label)); return }
             // chromiumDialogs=1: the Chromium dialogs showing and where (#349); chromiumDialogs=<button>: that
             // read, then the button with that title pressed (#484).
@@ -2250,7 +2254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 return
             }
             // answerDialog=<button>: presses that button of the open dialog sheet and logs its title and
-            // what the button copied (#356: the share warning before a link is copied).
+            // what the button copied.
             if let button = dict["answerDialog"] {
                 guard let dialog = AppDialog.presented, let index = dialog.actions.buttons.firstIndex(where: { $0.title == button }) else {
                     CraLog.note("dialog answer \(button): no dialog"); return

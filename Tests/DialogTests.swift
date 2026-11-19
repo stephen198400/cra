@@ -84,7 +84,6 @@ enum DialogTests {
         profile.select(0)
         expect(suppressed, "the suppression choice is available in the completion")
 
-
         let confirmation = AppDialog(title: "Quit Cra?", actions: [DialogAction("Quit"), .cancel])
         RunLoop.current.perform(inModes: [.modalPanel]) {
             MainActor.assumeIsolated {
@@ -185,7 +184,7 @@ enum DialogTests {
                                icon: .application, buttonSpacing: 49.5, buttonOutset: 10.5)),
             ("long-message", AppDialog(title: "Move these spaces to their Arc profiles?", message: Array(repeating: "Work → Work Profile", count: 80).joined(separator: "\n"),
                                        actions: [DialogAction("Move and Restart"), .cancel])),
-            ("last-space", AppDialog(title: "You need at least one space.")),
+            ("last-space", AppDialog(title: "You need at least one space."))
         ]
         let folder = URL(fileURLWithPath: directory, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

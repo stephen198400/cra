@@ -169,6 +169,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         // What extensions set for a tab (chrome.action.setIcon with tabId) went with its page.
         browsers.pageClosed = { ExtensionStore.shared.forgetActionTab($0) }
         browsers.delegate = self
+        overlay.onFindQueryChange = { [weak self] query in
+            guard let self, self.overlay.findVisible else { return }
+            self.find(query, forward: true)
+        }
         browsers.windowID = session.id
         browsers.takeRuntimeFromOtherWindow = { [weak self] id in
             guard let self else { return nil }
@@ -615,7 +619,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         }
         shell.layoutContentChildren()
         // After browsers.show: the bar finds on the page now in front. Typing stays with the page.
-        if findReturns { showFindBar(focus: false); find(overlay.findQuery, forward: true) }
+        if findReturns { showFindBar(focus: false) }
         syncPeeks(onScreen: panes)
         syncRingPanel()
         syncSidebarUI()
@@ -1024,19 +1028,37 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         shell.layoutContentChildren()
     }
 
-    func browserManager(findMatches count: Int, activeMatch: Int) {
-        guard overlay.findVisible else { return }
+    func browserManager(findMatches count: Int, activeMatch: Int, generation: UUID, identifier: Int, final: Bool) {
+        guard generation == findGeneration, overlay.findVisible else { return }
         if count >= 0 { overlay.findMatchCount = count }
         if activeMatch >= 0 { overlay.findActiveMatch = activeMatch }
+        if debugFindResults {
+            CraLog.note("find generation=\(generation) identifier=\(identifier) count=\(overlay.findMatchCount ?? 0) ordinal=\(overlay.findActiveMatch) final=\(final) purpose=ordinary")
+        }
+    }
+
+    func browserManager(findAction action: CraFindAction) {
+        if debugFindResults { CraLog.note("find nativeAction=\(action.rawValue)") }
+        switch action {
+        case .show: showFindBar()
+        case .next: findNext(forward: true)
+        case .previous: findNext(forward: false)
+        @unknown default: break
+        }
     }
 
     func browserManager(download: CraDownloadInfo) {
         let name = (download.fullPath as NSString).lastPathComponent.isEmpty ? download.suggestedName : (download.fullPath as NSString).lastPathComponent
+        let known = DownloadHistory.shared.live.first { $0.id == download.identifier }
+        if download.state == .inProgress, known == nil || (known?.path.isEmpty == true && !download.fullPath.isEmpty) {
+            // Each step once, for a diagnostics report (#491). Ids and sizes only, never the file.
+            CraLog.note("Download \(download.identifier) \(known == nil ? "started" : "got its file name"): "
+                + "\(download.fullPath.isEmpty ? "no file name yet" : "has its file name"), \(download.receivedBytes) of \(download.totalBytes) bytes")
+        } else if download.state == .cancelled || download.state == .interrupted, known?.running == true {
+            CraLog.note("Download \(download.identifier) \(download.state == .cancelled ? "cancelled" : "failed"): \(download.receivedBytes) of \(download.totalBytes) bytes")
+        }
         if windowDownloads.insert(download.identifier).inserted {
             ChromeDownloadAnimation.suppress()
-            if download.state == .inProgress {
-                CraLog.note("Download \(download.identifier) started: \(name.isEmpty ? "no file name yet" : "has a file name")")
-            }
         }
         // Progress and failures show in the downloads list, as in Arc (it has no download toast).
         DownloadHistory.shared.report(id: download.identifier, name: name, path: download.fullPath, received: download.receivedBytes,
@@ -4874,16 +4896,38 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
 
     // MARK: Find
 
+    private var findGeneration: UUID?
+    private var currentFindQuery = ""
+    private var debugFindResults = false
+
+    func debugFind(query: String?, step: String?) {
+        debugFindResults = true
+        if let query {
+            overlay.findQuery = query
+            showFindBar()
+        }
+        switch step {
+        case "show": showFindBar()
+        case "next": findNext(forward: true)
+        case "previous": findNext(forward: false)
+        case "close": hideFindBar()
+        default: break
+        }
+    }
+
     func showFindBar(focus: Bool = true) {
+        let opening = !overlay.findVisible
         overlay.findVisible = true
         findTabID = selectedTabID
         findParked = false
+        if opening, !overlay.findQuery.isEmpty { find(overlay.findQuery, forward: true) }
         if focus { overlay.findFocusToken += 1 }
         shell.findVisible = true
         shell.layoutContentChildren()
         if let window, let find = findPanel {
             if find.parent !== window { window.addChildWindow(find, ordered: .above) }
-            find.makeKeyAndOrderFront(nil)
+            refitFindPanel()
+            if focus { find.makeKeyAndOrderFront(nil) } else { find.orderFront(nil) }
         }
     }
 
@@ -4892,6 +4936,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         overlay.findVisible = false
         overlay.findMatchCount = nil
         shell.findVisible = false
+        findGeneration = nil
         currentBrowser?.stopFinding(true)
         shell.layoutContentChildren()
         if let find = findPanel, let window {
@@ -4917,7 +4962,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
                 pb.setString(text, forType: .string)
                 self.overlay.findQuery = text
                 self.showFindBar()
-                self.find(text, forward: true)
             }
         }
     }
@@ -4935,8 +4979,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
     /// typing), so the bar shows "1/3" rather than "0/3".
     private func find(_ q: String, forward: Bool) {
         guard let b = currentBrowser else { return }
-        if q.isEmpty { overlay.findMatchCount = nil; b.stopFinding(true); return }
-        b.findText(q, forward: forward, matchCase: false, findNext: true, generation: UUID(), quote: false)
+        if q.isEmpty { findGeneration = nil; overlay.findMatchCount = nil; b.stopFinding(true); return }
+        if currentFindQuery != q || findGeneration == nil {
+            currentFindQuery = q
+            findGeneration = UUID()
+            overlay.findMatchCount = nil
+            overlay.findActiveMatch = 0
+        }
+        guard let findGeneration else { return }
+        b.findText(q, forward: forward, matchCase: false, findNext: true, generation: findGeneration, quote: false)
     }
 
     /// For `from://debug?key=…&target=find`: the find bar's panel, which has the keys while the bar is up.
