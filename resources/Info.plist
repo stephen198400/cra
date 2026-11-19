@@ -46,6 +46,19 @@
 	<true/>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
+	<!-- Software updates: Sparkle with Arc's settings (8-hour checks, background downloads),
+	     from this fork's own feed on Cloudflare R2 (scripts/release.sh publishes it), signed
+	     with this fork's own EdDSA key. scripts/build.sh drops SUFeedURL outside release builds. -->
+	<key>SUFeedURL</key>
+	<string>https://pub-c4852373288c4ef5ad5315906e752ddb.r2.dev/mac/arm64/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>jsPp/xt2tBuzIdT/WpEJwiRqiZA18Jl1Xh9FjJSDo8Y=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>28800</integer>
 	<key>NSCameraUsageDescription</key>
 	<string>Web sites you visit can ask to use the camera.</string>
 	<key>NSMicrophoneUsageDescription</key>

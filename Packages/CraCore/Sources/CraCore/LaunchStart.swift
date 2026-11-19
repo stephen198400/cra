@@ -6,21 +6,25 @@ import Foundation
 public enum LaunchStart {
     /// Why this process started.
     public enum Launch: Equatable, Sendable {
-        /// The user opened Cra: the Dock, Finder, Spotlight, a login item.
+        /// The user opened Cra: the Dock, Finder, Spotlight, a login item, Restart to Update.
         case opened
         /// To open a link or file from another app: its tab is what the window shows.
         case forLink
         /// First launch: onboarding comes first.
         case firstRun
+        /// Cra restarted itself into an update while the user was away: the session goes on.
+        case automaticUpdate
     }
 
     public static func startsOnNewTab(enabled: Bool, launch: Launch) -> Bool {
         enabled && launch == .opened
     }
 
-    /// The order matters: a first run that came with a link still runs onboarding.
-    public static func launch(firstRun: Bool, withLinks: Bool) -> Launch {
+    /// The order matters: a first run that came with a link still runs onboarding, and an update
+    /// restart can't have brought a link with it.
+    public static func launch(firstRun: Bool, automaticUpdate: Bool, withLinks: Bool) -> Launch {
         if firstRun { return .firstRun }
+        if automaticUpdate { return .automaticUpdate }
         if withLinks { return .forLink }
         return .opened
     }

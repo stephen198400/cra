@@ -20,6 +20,10 @@ let cefLinkerFlags: [String] = [
     "-L\(cefRoot)/build/libcef_dll_wrapper",
 ]
 
+// Sparkle, the updater framework Arc ships, lives in vendor/sparkle (scripts/fetch-sparkle.sh);
+// scripts/build.sh copies Sparkle.framework into From.app/Contents/Frameworks.
+let sparkleRoot = "\(Context.packageDirectory)/vendor/sparkle"
+
 let package = Package(
     name: "Cra",
     platforms: [.macOS(.v14)],
@@ -70,8 +74,9 @@ let package = Package(
             name: "Cra",
             dependencies: ["CraCEF", .product(name: "CraCore", package: "CraCore")],
             path: "Sources/Cra",
-            swiftSettings: [.unsafeFlags(["-Onone"], .when(configuration: .debug))],
-            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
+            swiftSettings: [.unsafeFlags(["-F", sparkleRoot]), .unsafeFlags(["-Onone"], .when(configuration: .debug))],
+            linkerSettings: [.unsafeFlags(["-F", sparkleRoot, "-framework", "Sparkle",
+                                           "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
     ],
     swiftLanguageVersions: [.v5],

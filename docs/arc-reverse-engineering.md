@@ -1826,7 +1826,7 @@ the arm64 slice. [O] = observed, [I] = inferred.
   auto-update restart. Settings: "Automatically update my Arc" (`automaticallyUpdateArc`) with "Learn more about
   auto-updating". [U] the flag values (remote).
 - Cra: `Services/SoftwareUpdater.swift` (Sparkle 2.10 from vendor/sparkle, same Info.plist keys, feed
-  github.com/VictorKildahl/cra/releases/latest/download/appcast.xml written by scripts/appcast.sh), the updater window
+  this fork's own Cloudflare R2 feed, written by scripts/appcast.sh; docs/release.md, Updates), the updater window
   (`UI/Updates/UpdaterWindow.swift`, pixel-matched to the capture above), sidebar banners (`UI/Updates/UpdateBanner.swift`,
   Arc's copy, Cra's card style since Arc's was not captured), Cra menu ▸ Check for Updates… after the import item,
   Settings ▸ Advanced ▸ "Automatically update Cra". The automatic restart waits for 10 min in the background with

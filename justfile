@@ -10,10 +10,11 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @{{just_executable()}} --justfile {{quote(justfile())}} --list --unsorted
 
-# Downloads the pinned CEF into vendor/ (build does this too)
+# Downloads the pinned CEF and Sparkle into vendor/ (build does this too)
 [group('build')]
 fetch:
     scripts/fetch-cef.sh
+    scripts/fetch-sparkle.sh
 
 # Builds build/From.app; `debug` for a debug build
 [group('build')]
@@ -65,15 +66,25 @@ fuzz:
 mutate *args:
     scripts/mutate.py "$@"
 
+# Sparkle end to end on a local feed, next to your From: [manual|idle|again|stop]
+[group('test')]
+test-update *args:
+    scripts/test-update.sh "$@"
+
 # Packages build/From.app (or the app given) into build/dist: DMG, zip, checksums
 [group('release')]
 package *args:
     scripts/package.sh "$@"
 
-# Build, sign, notarize and package as <version>; tags run this in CI
+# Writes the appcast next to an update zip: <From-x.y.z-build.zip> [From.app] [release-notes.html]
 [group('release')]
-release version:
-    CRA_VERSION="$1" scripts/release.sh
+appcast *args:
+    scripts/appcast.sh "$@"
+
+# Build, sign, notarize, package and appcast as <version> (scripts/release.sh --help for --publish)
+[group('release')]
+release version *args:
+    scripts/release.sh --version "$1" "${@:2}"
 
 # Is a newer stable CEF out? Prints only; the daily workflow opens the issue
 [group('cef')]

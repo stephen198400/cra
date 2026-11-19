@@ -283,6 +283,8 @@ final class KeyBindingRegistry {
             // Arc's Translate bubble item "Language Settings": Chromium's page, in the space's profile (#209).
             KeyAction(id: "languageSettings", name: "Language Settings", section: .app, shortcuts: [],
                       triggers: ["language", "languages", "preferred language", "accept language"], symbol: "globe"),
+            KeyAction(id: "checkForUpdates", name: "Check for Updates…", section: .app, shortcuts: [],
+                      triggers: ["update", "upgrade", "new version"], symbol: "arrow.down.circle"),
             // Arc: Help ▸ Essential Keyboard Shortcuts.
             KeyAction(id: "essentialShortcuts", name: "Essential Keyboard Shortcuts", section: .help, shortcuts: [],
                       triggers: ["shortcuts", "keyboard shortcuts", "hotkeys"], symbol: "keyboard"),

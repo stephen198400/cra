@@ -1,8 +1,8 @@
 import AppKit
 
 /// The whole left column in AppKit, laid out like Arc: traffic lights + sidebar toggle with the
-/// nav buttons at the right of the top row, the space pager (favorites, header, tab list) and the
-/// dock. The Library takes the column over while it is open.
+/// nav buttons at the right of the top row, the space pager (favorites, header, tab list), the
+/// update banner and the dock. The Library takes the column over while it is open.
 @MainActor
 final class SidebarView: NSView {
     private let store: SidebarStore
@@ -33,6 +33,7 @@ final class SidebarView: NSView {
     func debugURLFieldType(_ text: String, commit: Bool) -> Bool { topBar.debugURLFieldType(text, commit: commit) }
     private let pager: SpacePagerView
     private let player: NowPlayingTrayView
+    private let bannerHost = UpdateBannerView()
     private let dock: SpaceDockView
     private var libraryHost: LibraryView?
     /// The palette drawn now; the theme-shown scenario hook reads it (#155).
@@ -54,7 +55,7 @@ final class SidebarView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         pager.wantsLayer = true
-        for v in [topBar, pager, player, dock] as [NSView] { tabs.addSubview(v) }
+        for v in [topBar, pager, player, bannerHost, dock] as [NSView] { tabs.addSubview(v) }
         addSubview(tabs)
         player.onCountChange = { [weak self] in self?.needsLayout = true }
         ui.observeLibraryReveal { [weak self] in self?.applyLibraryReveal() }
@@ -66,9 +67,11 @@ final class SidebarView: NSView {
     override var isFlipped: Bool { true }
 
     private func observe() {
+        var bannerHeight: CGFloat = 0
         let (space, library) = withObservationTracking {
             let space = store.focusedSpace(window: ui.windowID)
             _ = SystemAppearance.shared.isDark
+            bannerHeight = UpdateBannerView.preferredHeight
             return (space, ui.libraryPage)
         } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
@@ -82,13 +85,18 @@ final class SidebarView: NSView {
         }
         if paletteChanged || palette.isDark != space.theme.palette.isDark {
             palette = space.theme.palette
+            bannerHost.colors = SidebarColors(palette)
             let shown = space.theme.shown
+            bannerHost.themeColor = shown.accent ?? shown.colors.first
             player.setTheme(shown.accent ?? shown.colors.first, dark: palette.isDark)
             libraryHost?.palette = palette
         }
+        self.bannerHeight = bannerHeight
         showLibrary(library)
         needsLayout = true
     }
+
+    private var bannerHeight: CGFloat = 0
 
     /// The Library takes over the column: in from a little to the left, out to the left past its
     /// rail while the tab list fades back in.
@@ -207,7 +215,8 @@ final class SidebarView: NSView {
         // Arc's list viewport ends 50 pt above the window bottom; the dock sits centred in that band.
         let dockH: CGFloat = 36
         dock.frame = NSRect(x: 10, y: b.height - 6 - dockH, width: b.width - 20, height: dockH)
-        let listEnd = b.height - 6 - dockH - 8
+        let listEnd = b.height - 6 - dockH - 8 - bannerHeight
+        bannerHost.frame = NSRect(x: 0, y: listEnd, width: b.width, height: bannerHeight)
         // The player rests where the list ends and takes that room from it; opened, it grows over the list.
         player.frame = NSRect(x: 0, y: th, width: b.width, height: max(0, listEnd - th))
         let listBottom = listEnd - NowPlayingMetrics.restHeight(cards: player.shownCount)

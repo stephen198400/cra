@@ -121,17 +121,22 @@ plus one `SHA256SUMS.txt` for all four archives. The names carry no version so
 ## Locally
 
 ```sh
-CRA_VERSION=0.1.0 \
-CRA_SIGN_IDENTITY="Developer ID Application: Victor Kildahl (ABCDE12345)" \
-NOTARY_KEYCHAIN_PROFILE=cra \
-scripts/release.sh
+scripts/release.sh --version 2.0.0                      # build, notarize, package, appcast
+scripts/release.sh --version 2.0.0 --skip-notarization  # while notarization is unavailable
+scripts/release.sh --version 2.0.0 --publish            # also upload the update to R2
 ```
 
-`scripts/release.sh` does this once per CPU (`CRA_ARCHS`, default `arm64 x86_64`): it runs
-`build.sh` (sign, innermost first, with the CEF entitlements), notarizes and staples the
-app, runs `package.sh` (zip, DMG with an Applications link, checksums), then notarizes and
-staples the DMG and checks it with `spctl`. Both CPUs share one
-build number. Without `CRA_SIGN_IDENTITY` it produces an ad-hoc build and skips notarization.
+`scripts/release.sh` (`--help` lists the options) signs with this fork's Developer ID
+(`CRA_SIGN_IDENTITY`, default `Developer ID Application: Lei Zheng (M4HEF73UMB)`) and does this
+once per CPU (`CRA_ARCHS`, default `arm64`): it runs `build.sh` with `CRA_RELEASE=1` (sign,
+innermost first, with the CEF entitlements), checks the signature and team, notarizes and
+staples the app, runs `package.sh` (zip, DMG with an Applications link, checksums), then
+notarizes and staples the DMG and checks it with `spctl`. Notarization uses the notarytool
+keychain profile `CRA_NOTARY_PROFILE` (default `NoType-Notarization`, the same team's profile
+NoType uses, made with `xcrun notarytool store-credentials <name>`); the script stops early when it is
+missing unless `--skip-notarization` is given. Sparkle installs an un-notarized update, but
+a first install from the DMG then needs right-click ▸ Open. For Apple silicon it then writes
+the update (see Updates). All CPUs share one build number, the UTC time (`yyyymmddHHMM`).
 
 `CRA_ARCH=x86_64 scripts/build.sh` builds the other CPU on its own: the host CPU keeps
 `vendor/cef` and `build/Cra.app`, the other one gets `vendor/cef-<arch>` (that CPU's CEF,
@@ -159,8 +164,10 @@ Order matters because each signature seals what is inside it:
 
 1. every `.dylib` in `Chromium Embedded Framework.framework/Libraries`
 2. the framework itself
-3. the five helper apps, each with `resources/CraHelper.entitlements`
-4. `Cra.app` with `resources/Cra.entitlements`
+3. Sparkle's `Autoupdate` and `Updater.app`, then `Sparkle.framework` (its XPC services are
+   removed: they are only for sandboxed apps)
+4. the five helper apps, each with `resources/CraHelper.entitlements`
+5. `From.app` with `resources/Cra.entitlements`
 
 The entitlements are the hardened-runtime exceptions Chromium needs (JIT, unsigned
 executable memory, library validation off, dyld environment variables), plus camera,
@@ -263,8 +270,44 @@ a patch to its update and full-hash protocol.
 
 ## Updates
 
-This fork has no updater: Sparkle, the appcast and the update feed were removed. Installed
-copies never check for or download a new version; rebuild from source to update.
+From updates itself the way Arc does, with [Sparkle 2](https://sparkle-project.org)
+(`scripts/fetch-sparkle.sh` puts a pinned, checksummed release in `vendor/sparkle`), from
+this fork's own feed. Upstream Cra's feed, key and download links are gone, so a copy of
+From can never update into upstream Cra. Every 8 hours it reads `SUFeedURL`
+(`https://pub-c4852373288c4ef5ad5315906e752ddb.r2.dev/mac/arm64/appcast.xml`, the public
+Cloudflare R2 bucket `from-updates`), downloads a newer zip in the background, installs it
+when From quits, or restarts into it by itself once the user is away. From menu ▸ Check for
+Updates… and Settings ▸ Advanced ▸ "Automatic updates" are the controls. Details and Arc's
+original are in `docs/arc-reverse-engineering.md` ("Software updates").
+
+- **Signing key.** Updates are accepted only when the zip carries an EdDSA signature
+  matching `SUPublicEDKey` in `resources/Info.plist`. The private key is in the login
+  keychain of the Mac that made it (`vendor/sparkle/bin/generate_keys --account From`,
+  made 13 Nov 2026); `release.sh` checks it matches before building. Back it up
+  (`generate_keys --account From -x <file>`, kept outside the repo): without it, installed
+  copies can never be updated again.
+- **Appcast.** `release.sh` copies the Apple silicon zip to
+  `build/dist/update/From-<version>-<build>.zip` and runs `scripts/appcast.sh`, which signs
+  it and writes `build/dist/update/appcast.xml` with the archive's URL next to the feed;
+  `release.sh` then checks the version, URL and signature (`sign_update --verify`).
+  `--notes <file.html>` adds release notes to the update window.
+- **Publishing.** `--publish` uploads with rclone to `r2:from-updates/mac/arm64/`: the
+  archive first, the appcast last (no-cache), so no client sees an item whose archive is
+  missing; then it checks both are publicly reachable and keeps the newest two archives.
+  The R2 keys are read at run time from `CRA_R2_ENV_FILE` (default
+  `~/Develop/celia/apps/server/.env.production`) and never written to the repo.
+- **Intel.** The feed is Apple silicon only: `build.sh` gives an x86_64 build no
+  `SUFeedURL`, so it never checks for (or installs) an arm64 update.
+- **Version numbers.** Sparkle compares `CFBundleVersion`, the build number `release.sh`
+  takes from the UTC clock, so every release is newer than the last.
+- **Dev builds** (`0.0.0-dev`) have no feed (`build.sh` drops `SUFeedURL` unless
+  `CRA_RELEASE=1`), so they never replace themselves with a release. To try the updater end
+  to end, `scripts/test-update.sh` builds an old and a new copy, serves the new one from a
+  local appcast and opens the old one as CraTest next to your From
+  (`CRA_UPDATE_FEED=http://127.0.0.1:8889/appcast.xml`, `CRA_UPDATE_IDLE_SECONDS=0` for the
+  automatic restart).
+- A copy installed before the updater came back (a dev build, or 0.0.0-dev) updates once by
+  hand: install `build/dist/From.dmg` from the first release.
 
 ## The Chromium engine (CEF)
 

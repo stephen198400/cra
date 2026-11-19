@@ -3633,6 +3633,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, BrowserM
         toast.show(text, keyCap: keyCap, action: action, page: page, in: window, theme: focusedSpace.theme)
     }
 
+    /// The update banner's news while this window's sidebar (which carries the banner) is hidden:
+    /// Cra's toast with the banner's action, staying until its ✕ so it isn't missed.
+    func showUpdateToast(_ notice: UpdateNotice) {
+        guard let window else { return }
+        let page = shell.webContainer.convert(shell.webContainer.bounds, to: nil)
+        toast.show(notice.title, action: ShinyToast.Action(title: notice.button) { SoftwareUpdater.shared.act(on: notice) },
+                   page: page, in: window, theme: focusedSpace.theme, onClose: {})
+    }
+
     // MARK: Bookmarks
 
     /// ⌘D and the address's star (Chrome): the tab's page goes on the Bookmarks Bar, or

@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         startContentBlocking()
         observeGlobalShortcut()
         observeMenuBarMode()
+        SoftwareUpdater.shared.start(app: self)
         buildMenus()
         store.hasPage = { [unowned self] in self.runtime(for: $0).map { !$0.discarded } ?? false }
         // A tip takes the tones of the space its browser window is in (the sidebar may be a
@@ -85,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // A link that starts Cra arrives before this (application(_:open:)), into pendingURLs.
         // NSApplicationLaunchIsDefaultLaunchKey isn't used: it is false for any start without
         // LaunchServices, a plain one too.
-        let launch = LaunchStart.launch(firstRun: false, withLinks: !pendingURLs.isEmpty)
+        let launch = LaunchStart.launch(firstRun: false, automaticUpdate: SoftwareUpdater.shared.launchedByAutoUpdate,
+                                        withLinks: !pendingURLs.isEmpty)
         let startOnNewTab = LaunchStart.startsOnNewTab(enabled: store.settings.startOnNewTab, launch: launch)
         CraLog.note("launch: \(launch)\(startOnNewTab ? ", on a new tab" : "")")
         if startOnNewTab { store.selectTab(nil, window: store.activeWindowID) }
@@ -102,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         mainWindows = store.prefs.windows.map { MainWindowController(app: self, session: $0) }
         followKeyWindow()
         observeFlippingRows()
+        observeUpdateNotice()
         // No onboarding: the first launch opens the browser window like any other.
         // The window in use last comes up in front.
         for w in mainWindows.reversed() { w.showWindow(nil) }
@@ -116,10 +119,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         composition.sync.start()
         observeSystemWake()
         logSidebarProblems()
+        // A restart into an update while the user was away leaves the front app alone.
         if HitchMonitor.background {
             // Measured behind whatever is in front; still on screen, so pages keep drawing.
             for w in mainWindows { w.window?.orderBack(nil) }
-        } else {
+        } else if !SoftwareUpdater.shared.launchedByAutoUpdate {
             NSApp.activate(ignoringOtherApps: true)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.installURLEventHandler() }
@@ -359,6 +363,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         observeChanges(of: { [store] in store.settings.blockAdsAndTrackers }, apply: CraCEFRuntime.setContentBlockingEnabled)
     }
 
+    /// The last update notice toasted this launch (UpdateNotice.toast), and how many were.
+    private var toldUpdate: UpdateNotice?
+    private var updateToasts = 0
+
+    /// An update that turns up, or a sidebar hidden while one waits, toasts in the front window
+    /// when that window's sidebar is hidden: the banner can't be seen there.
+    private func observeUpdateNotice() {
+        observeChanges(of: { [unowned self] in
+            UpdateNotice.toast(SoftwareUpdater.shared.notice, told: toldUpdate, sidebarVisible: main?.sidebarVisible ?? true)
+        }) { [weak self] notice in
+            guard let self, let notice, let w = main, w.window?.isVisible == true else { return }
+            toldUpdate = notice
+            updateToasts += 1
+            w.showUpdateToast(notice)
+            CraLog.note("update toast \(updateToasts): \(notice.title) [\(notice.button)] \(notice.version)")
+        }
+    }
 
     private func installURLEventHandler() {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleGetURLEvent(_:reply:)),
@@ -422,8 +443,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillShutdown() { MCPServer.shared.stop(); store.saveAll(); BookmarkStore.shared.flush() }
 
+    /// Sparkle quits Cra to install an update and starts it again: no quit confirmation.
+    func prepareForUpdateRelaunch() {
+        isRelaunching = true
+        for w in mainWindows { w.saveFrameNow() }
+        store.saveAll()
+    }
+
+    /// Why an automatic update restart should wait (Arc: downloads in progress,
+    /// window_dialog_sheet_visible, active tabs). Little Windows go to the Library on quit,
+    /// so an open one waits too.
+    func autoUpdateBlocker() -> String? {
+        if DownloadHistory.shared.hasRunningDownloads { return "a download is in progress" }
+        if NSApp.modalWindow != nil || NSApp.windows.contains(where: { $0.isVisible && $0.attachedSheet != nil }) { return "a dialog is open" }
+        if !littleWindows.isEmpty { return "a Little Window is open" }
+        if PictureInPictureChrome.shared.isPlaying { return "Picture in Picture is playing" }
+        return nil
+    }
+
     /// Arc 1.172's question when quitting would cancel downloads (its words, "Close Arc" made
-    /// Cra's).
+    /// Cra's). Also asked before Install and Relaunch restarts into an update (#272).
     func confirmQuitCancellingDownloads() -> Bool {
         CraLog.note("quit asks: downloads in progress")
         let alert = AppDialog(title: "Downloads in progress",
@@ -1319,6 +1358,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             if let v = dict["appActive"] { main.sidebarUI.appActive = v == "1"; return }
             // Settings ▸ Privacy ▸ Fingerprinting protection on or off, as its switch sets it.
             if let v = dict["fingerprinting"] { store.settings.fingerprintingProtection = v == "on"; return }
+            if let v = dict["banner"] { SoftwareUpdater.shared.debugUpdated(v == "none" ? nil : v); return }
+            if let v = dict["bannerReady"] { SoftwareUpdater.shared.debugReady(v == "none" ? nil : v); return }
             if dict["switcher"] != nil { main.debugTabSwitcher(); return }
             // The Site Control Center's Safari's Engine switch for the focused page, without the pointer.
             if let v = dict["safariEngine"] { main.debugChooseSafariEngine(v == "on"); return }
@@ -1646,6 +1687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             let browser = keyLittleWindow.map { $0.browser } ?? main.currentBrowser
             item.title = browser?.isInPictureInPicture == true ? "Exit Picture in Picture" : "Picture in Picture"
         case "promoteLittleWindow", "littleWindowOpenInMenu": return keyLittleWindow?.hasPage ?? false
+        case "checkForUpdates": return SoftwareUpdater.shared.validateMenuItem(item)
         case "closeSplitPane", "separateFromSplit", "flipSplitOrientation":
             return store.selectedTabID.flatMap { store.splitContaining($0) } != nil
         case "addSplitView": return store.selectedTabID != nil
@@ -1974,6 +2016,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case "settings": showSettingsWindow()
         case "importData": BookmarkImportPanel.run()
         case "setDefaultBrowser": Task { await SystemIntegration.shared.makeDefaultBrowser() }
+        case "checkForUpdates": SoftwareUpdater.shared.checkForUpdates(nil)
         case "languageSettings":
             // Chromium's page edits the profile of the space it opens in.
             let normal = useNormalWindow()
@@ -2116,6 +2159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         appMenu.addItem(item("clearBrowsingData"))
         appMenu.addItem(.separator())
         appMenu.addItem(item("importData"))
+        appMenu.addItem(item("checkForUpdates"))
         appMenu.addItem(.separator())
         appMenu.addItem(std("Hide From", #selector(NSApplication.hide(_:)), "h"))
         appMenu.addItem(std("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]))

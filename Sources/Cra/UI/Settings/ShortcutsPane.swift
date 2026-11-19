@@ -313,6 +313,7 @@ enum ShortcutDescriptions {
         "settings": "Open Settings.",
         "setDefaultBrowser": "Make From the default browser.",
         "importData": "Bring another browser’s bookmarks onto the bookmarks bar.",
+        "checkForUpdates": "Look for a newer version of From.",
         "clearBrowsingData": "Delete history, cookies and cached files with Chrome’s dialog.",
         "languageSettings": "Choose the languages websites show their pages in, for this space’s profile.",
     ]

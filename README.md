@@ -119,13 +119,13 @@ Google Docs works. The [full list](https://crabrowser.app/shortcuts) is on the s
 ## Privacy and security
 
 Cra has no account, and it shares nothing about how you use it: no usage stats, no crash
-reports, no update checks. Spaces, tabs and the archive are plain JSON in
+reports; the only request it makes on its own is the update check, which sends nothing about you. Spaces, tabs and the archive are plain JSON in
 `~/Library/Application Support/Cra`. A built-in blocker stops
 requests to more than 22,000 ad and tracker domains.
 
 Pages run in Chromium's sandbox with site isolation, passwords and cookies are encrypted
-with a key in your Keychain, and new Chromium releases are checked daily; this fork has no
-updater, so you rebuild from source to pick them up. [crabrowser.app/security](https://crabrowser.app/security) says what is
+with a key in your Keychain, and new Chromium releases are checked daily; this fork updates
+itself (Sparkle, from its own signed feed) to pick them up. [crabrowser.app/security](https://crabrowser.app/security) says what is
 and isn't covered. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Support Cra
