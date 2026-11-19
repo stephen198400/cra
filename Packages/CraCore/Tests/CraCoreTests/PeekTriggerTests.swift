@@ -60,4 +60,16 @@ struct PeekTriggerTests {
         #expect(!PeekTrigger.leavesPeek("from://settings", shiftClick: false, newTab: true))
         #expect(!PeekTrigger.leavesPeek("javascript:alert(1)", shiftClick: false, newTab: true))
     }
+
+    /// A Little Window loads a link that asks for a new tab in itself, rather than opening a
+    /// second Little Window over it, and another from that one.
+    @Test func aNewTabLinkInALittleWindowLoadsInIt() {
+        #expect(PeekTrigger.loadsInLittleWindow(Self.other, newTab: true))
+        #expect(PeekTrigger.loadsInLittleWindow("file:///tmp/a.html", newTab: true))
+        // A plain link already loads in it; a popup that needs its opener stays a popup.
+        #expect(!PeekTrigger.loadsInLittleWindow(Self.other, newTab: false))
+        #expect(!PeekTrigger.loadsInLittleWindow("about:blank", newTab: true))
+        #expect(!PeekTrigger.loadsInLittleWindow("from://settings", newTab: true))
+        #expect(!PeekTrigger.loadsInLittleWindow("javascript:alert(1)", newTab: true))
+    }
 }

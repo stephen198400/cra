@@ -1499,11 +1499,16 @@ final class LittleWindowController: NSWindowController, NSWindowDelegate, @preco
 
     /// A Shift-clicked link opens in this window: Arc's Little Arc has no Peek of its own, so its
     /// Shift-click is a plain click (1.171, 3 Nov 2026).
-    /// In a Peek, a target=_blank link leaves it for a tab (PeekTrigger.leavesPeek, #202).
+    /// In a Peek, a target=_blank link leaves it for a tab (PeekTrigger.leavesPeek, #202); in a
+    /// Little Window it loads in the window (PeekTrigger.loadsInLittleWindow).
     func browser(_ browser: CraBrowser, opensPeekForURL url: String, shiftClick: Bool, newTab: Bool) -> Bool {
         if url.lowercased().hasPrefix("from:") { return false }
         if isPeek, PeekTrigger.leavesPeek(url, shiftClick: shiftClick, newTab: newTab) {
             openTabFromPeek(url, inBackground: false)
+            return true
+        }
+        if !isPeek, PeekTrigger.loadsInLittleWindow(url, newTab: newTab) {
+            browser.loadURL(url)
             return true
         }
         guard shiftClick else { return false }

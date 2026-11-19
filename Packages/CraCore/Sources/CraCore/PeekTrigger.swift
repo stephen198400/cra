@@ -29,4 +29,12 @@ public enum PeekTrigger {
         guard newTab, !shiftClick, let scheme = URL(string: url)?.scheme?.lowercased() else { return false }
         return ["http", "https", "file"].contains(scheme)
     }
+
+    /// A link clicked in a Little Window that asks for a new tab (target=_blank, window.open
+    /// without features) loads in that window. Opening another Little Window for it stacked one
+    /// window on the next for every such link. A popup that needs its opener (window.open with
+    /// features, an about:blank a script fills in) stays a popup.
+    public static func loadsInLittleWindow(_ url: String, newTab: Bool) -> Bool {
+        leavesPeek(url, shiftClick: false, newTab: newTab)
+    }
 }
