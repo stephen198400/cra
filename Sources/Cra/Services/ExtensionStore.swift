@@ -51,6 +51,11 @@ final class ExtensionStore {
     /// CraCEF loads the same folder (it also honours CRA_DATA_DIR).
     nonisolated static var directory: URL { AppPaths.supportDir.appendingPathComponent("Extensions", isDirectory: true) }
 
+    /// The bundled CSS runs at document start, before pages can measure their scrollbar.
+    nonisolated static var scrollbarExtension: URL? {
+        Bundle.main.url(forResource: "scrollbars", withExtension: nil)
+    }
+
     /// The folders --load-extension loads at start-up, in name order, and the switch that says
     /// which profiles load each (CraCEFRuntime.setExtensionPaths).
     nonisolated static func loadList(profileIsFree: Bool = true) -> (paths: [String], profiles: String?) {
@@ -349,6 +354,8 @@ final class ExtensionStore {
         for profile in profiles {
             // Turned-off ones stay listed (as off) so their pins come back with them.
             for e in ExtensionImporter.extensions(settings: settings[profile] ?? [:], inProfile: root.appendingPathComponent(profile, isDirectory: true)) {
+                // Browser chrome packaged as CSS is not one of the user's extensions.
+                if e.folder.standardizedFileURL == Self.scrollbarExtension?.standardizedFileURL { continue }
                 // The store's install of a copy that still loads from its folder in other profiles.
                 if loaded.contains(e.id) {
                     guard let i = list.firstIndex(where: { $0.extensionID == e.id }), list[i].profiles?.contains(profile) == false else { continue }

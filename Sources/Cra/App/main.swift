@@ -50,7 +50,7 @@ MainActor.assumeIsolated {
     let extensions = ExtensionStore.loadList(profileIsFree: profileIsFree)
     // Static content CSS reaches the first layout, including synchronous layout in page scripts.
     let scrollbarExtension = EngineFramework.isChromiumEngine
-        ? Bundle.main.url(forResource: "scrollbars", withExtension: nil) : nil
+        ? ExtensionStore.scrollbarExtension : nil
     let paths = extensions.paths + (scrollbarExtension.map { [$0.path] } ?? [])
     CraCEFRuntime.setExtensionPaths(paths, profiles: extensions.profiles)
     if let p = extensions.profiles { CraLog.note("extension profiles: \(p)") }
@@ -87,6 +87,14 @@ MainActor.assumeIsolated {
     var ready = false
     CraCEFRuntime.whenReady {
         ready = true
+        // Command-line extensions start disabled in private windows. Opt in only the app's
+        // CSS-only resource through the framework's private pipe, before opening its windows.
+        if let scrollbarExtension,
+           let data = try? JSONSerialization.data(withJSONObject: ["path": scrollbarExtension.path, "enableInIncognito": true]) {
+            CraCEFRuntime.sendBrowserDevToolsMethod("Extensions.loadUnpacked", params: String(decoding: data, as: UTF8.self)) { _, error in
+                if let error { CraLog.note("private scrollbar stylesheet: \(error)") }
+            }
+        }
         ChromiumBluetoothCache.install()
         ChromiumDockTile.install()
         ChromiumHistorySwipe.install()
