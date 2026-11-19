@@ -52,8 +52,7 @@
 #   port <n>                   serve ${PAGE} on a fixed port (snapshots show the address)
 # The fixture server answers an address with ?delay=<s> (or &delay=<s>) that many seconds late, and /auth with an
 # HTTP sign-in (401 Basic) until the browser sends a user name and password.
-# ${FIXTURES}, ${ORIGIN} (that server's http://127.0.0.1:<port>, which also answers a POST with 204,
-# logs it to server.log and keeps its body in posts/), ${PAGE} (Tests/Fixtures/Pages/page.html from a local server, so it has a host
+# ${FIXTURES}, ${ORIGIN} (the fixture server’s http://127.0.0.1:<port>), ${PAGE} (page.html there, with a host
 # for developer mode and tab sleep), ${WEBKIT} (that server as http://localhost:<port>, a host the
 # run treats as a DRM service, so its pages open in WebKit), ${MUSIC} (that server as
 # http://nts.live:<port>, a recognized music host, for a scenario whose `arg` maps the name to
@@ -162,7 +161,7 @@ FIXED_PORT=$(sed -n 's/^port \([0-9]*\).*/\1/p' "$FILE" | head -1)
 # Not `python3 -m http.server`: it looks up 127.0.0.1's name before it says its port, and on a CI
 # runner that lookup outlasted the wait for every scenario after the first (nightly, 3–6 Nov).
 python3 -I -u -c '
-import functools, http.server, os, socketserver, sys
+import functools, http.server, socketserver, sys
 class Server(http.server.ThreadingHTTPServer):
     def server_bind(self):
         socketserver.TCPServer.server_bind(self)
@@ -195,20 +194,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             time.sleep(float(m.group(1)))
             self.path = self.path.split("?", 1)[0]
         super().do_GET()
-    # Settings ▸ Privacy sharing posts here under CRA_SHARING_ENDPOINT=${ORIGIN}.
-    def do_POST(self):
-        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        kind = self.headers.get("Content-Type")
-        # The install check-in is three short fields: logged whole, so a scenario can expect its id.
-        print(f"POST {self.path} {len(body)} bytes {kind}", flush=True)
-        os.makedirs(sys.argv[3], exist_ok=True)
-        name = self.path.strip("/").replace("/", "-")
-        open(os.path.join(sys.argv[3], f"{name}-{len(os.listdir(sys.argv[3])) + 1}.json"), "wb").write(body)
-        self.send_response(204)
-        self.end_headers()
 s = Server(("127.0.0.1", int(sys.argv[2])), functools.partial(Handler, directory=sys.argv[1]))
 print(f"Serving HTTP on 127.0.0.1 port {s.server_address[1]}", flush=True)
-s.serve_forever()' "$FIXTURES/Pages" "${FIXED_PORT:-0}" "$OUT/posts" >"$OUT/server.log" 2>&1 &
+s.serve_forever()' "$FIXTURES/Pages" "${FIXED_PORT:-0}" >"$OUT/server.log" 2>&1 &
 SERVER=$!
 disown "$SERVER"  # killed at the end without a "Terminated" line
 for _ in $(seq 1 300); do PORT=$(sed -n 's/.*port \([0-9]*\).*/\1/p' "$OUT/server.log" | head -1); [ -n "$PORT" ] && break; sleep 0.1; done

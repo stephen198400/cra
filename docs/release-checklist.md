@@ -12,14 +12,8 @@ built release app with a test profile. Note anything that fails in the release's
 
 ### Themes and window chrome
 
-- **#372:** Settings opens at 684 × 650 pt on the first tab (your first name, "Cra" without one) every time, whatever tab it was closed on, and ⌘W closes it. Go through the
-  ten tabs in dark and in light: the window is the system's window colour (not Arc's navy, Victor 12 Nov 2026), the chosen tab's pill
-  (white 10 % with a hairline in dark, white with a shadow in light), 36 × 16 pt switches, the cards, Max's banner (Cra's mark and "Max"),
-  Links' picture, Shortcuts' key caps and search ("command e"), Icon's radio list, Profiles' list beside its cards. Switching tabs is
-  instant: nothing fades or resizes. The first tab: the default-browser banner (only while Cra isn't the default), the member card (your macOS
-  name, its colour and nickname, EARLY '26, a months stamp after a month), Share / Save / Copy under it (the saved PNG is the card at 2x),
-  and Share Cra: the sheet's COPY LINK puts the tagged crabrowser.app link on the clipboard and Share… offers Messages and Mail. (The scenario checks the
-  size, the tab order and the first tab; this is how it looks.)
+- **#372:** Open Settings in light and dark appearance. Switch between panes, check the
+  selected tab, switches, shortcut keys and profile list, then close the window with ⌘W.
 - **Displays:** On a Mac with two displays of different scale (a 2x and a 1x), drag the window from one display to the other and
   back, several times, by the strip above the toolbar, by the toolbar's URL and by the sidebar's top next to the traffic lights:
   the window stays under the pointer the whole way, with no jump at the crossing and no flicker. AppKit's screen-layout adjustment
@@ -43,7 +37,7 @@ built release app with a test profile. Note anything that fails in the release's
 - **#464:** with Settings ▸ Tabs ▸ Sidebar on the right, the sidebar and its traffic lights sit on the
   right, ⌘S slides it out to the right and back, and dragging its left edge resizes it (snap and
   drag-to-hide too). Hidden, the right edge brings it out on Arc's spring with its shadow and the
-  window's rounded corners clipping it; folder, pinned-tab and favorite previews open to its left.
+  window's rounded corners clipping it; folder and pinned-tab previews open to its left.
   (The scenario checks where things are; this is how the motion looks.)
 - **#10:** neighbouring tab highlights keep a 5 pt gap.
 - **#11:** the Library glyph is centred in its hover square.
@@ -57,7 +51,6 @@ built release app with a test profile. Note anything that fails in the release's
   can post a trackpad gesture's phases.)
 - **#189:** colour swatches grow on hover and shrink when pressed; "Back to Pinned URL" slides
   in over 0.16 s.
-- **#88:** importing from Arc copies its Show Full URL setting.
 - **PR #269:** in Settings, the selected source-list row is inset 10 pt from both sidebar edges
   (glyph 20 pt and label 49 pt from the edge, as in Dia 1.55.1), and scrolling Performance or Advanced
   never draws under the back/forward pill or the pane title.
@@ -93,7 +86,7 @@ built release app with a test profile. Note anything that fails in the release's
   inside the row, near-white on dark. Put it next to Arc's on the same spaces; Arc's ink was measured
   only on a dark space (#EFEFEC over #383830), so check the light one.
 
-- **#393, Ask on Page:** with Apple Intelligence on and Settings ▸ Max ▸ Ask on Page on, press ⌘F on a
+- **#393, Ask on Page:** with Apple Intelligence on and Settings ▸ Advanced ▸ Search ▸ Ask on Page on, press ⌘F on a
   long article: the card reads "Find or ask…"; typing a word finds it (count, ↑ ↓, highlights in the
   page). Type a question: Return asks once the count says 0 (Ask asks at once). The question in the space's
   colour, "This page was long, so I read the first N%.", an answer with its key words in bold and a quote on
@@ -118,37 +111,8 @@ built release app with a test profile. Note anything that fails in the release's
   key points of this entire article in detailed bullet points": the window and the page keep scrolling smoothly
   while it writes, and the answer never vanishes and starts over.
 
-- **#407, Instant Links:** with Apple Intelligence on and Settings ▸ Max ▸ Instant Links on, type
-  "top 3 pizza places in naples" in ⌘T and press Shift-Return: the bar closes, "Searching the web for you…"
-  shows at the top of Today with the flower turning once a second and the selected row's fill, and about 3 s later
-  three tabs of real Google results replace it, the first selected. Try "greek and italian restaurants in a
-  split" (a split of two at the top of Today), "folder of ramen recipes" (a folder of 5 at the end of Pinned,
-  named after the phrase) and an Italian phrase ("le 4 migliori piste da sci in friuli": 4 tabs). Return on the
-  same text still searches normally, and with the setting off Shift-Return does too. Run it in a fresh profile
-  for the first run (the model's first answer is slower), in an incognito space (the engine's own results page
-  opens) and with Reduce Motion on (the flower stands still). Put the row and the flower next to Arc's on the
-  same phrase. Find a phrase the model refuses (a guardrail's false positive: "youtube mkbhd" did once) or one
-  in a language it doesn't support, and check it opens the phrase as a plain search, not the error row.
-  Google blocks hidden pages now and then: with its page unreadable (a captcha or `/sorry`) a search opens
-  Google's results page as one tab, whatever the count, and four searches at once in one profile ("greek, italian,
-  thai and indian restaurants in a split") can trip Google's `/sorry`, so try that once and note what opened.
 
-- **PR #324, 5-Second Previews:** with Apple Intelligence on and Settings ▸ Max ▸ 5-Second Previews
-  on, rest 1 s on a story title on Hacker News, a Google result and a link in a post on X: a loading
-  card hangs under the link, then the answer streams in (picture, bold line, 2–4 rows), next to Arc's
-  on the same link (arc-reverse-engineering.md has its measurements). A story's "comments" link, a
-  Google side-panel link and a plain hover on any other site show nothing; Shift held as the pointer
-  reaches a link shows the answer, or the small card for a link within the site. Leaving the link
-  closes it at once unless the pointer is on the card. Share ▸ Copy as Text and Copy as Image paste as
-  Arc's do. Check a beige and a dark space, 1x and 2x.
 
-- **Music notes:** on a release build, play a favorite on YouTube Music, SoundCloud or Spotify
-  (the 1x/2x side-by-side with Arc used nts.live and a local tone, 11–12 Nov). Notes rise from the
-  icon's top edge, stop 8 pt above the top row and in lower rows drift over the tile above. Pause:
-  they go at once, and a quick resume brings them back. Mute and Reduce Motion: they keep floating,
-  as Arc's do. A regular YouTube video shows none. By hand: split favorites in both orientations,
-  dragging a playing favorite, space swipes and a space with no favorites, for clipping
-  regressions. If notes look denser or wider than Arc's, take a minute-long recording of each.
 
 - **#196:** hover a Today tab and move onto its ✕ several times. The ✕ never vanishes before
   the click.
@@ -364,8 +328,6 @@ built release app with a test profile. Note anything that fails in the release's
 - **#111:** reset Cra's camera access (`tccutil reset Camera <bundle id>`), open Meet, click "Use
   microphone and camera" and Allow. One Cra prompt shows, then macOS's own dialog, and nothing
   crashes.
-- **#36:** on a new data folder, finish onboarding with an Arc import that brings extensions and
-  passwords, so Cra relaunches. The quitting process leaves no crash report.
 - **#5:** with Cra running, `ps -axo args | grep 'Cra Helper'`: the renderer, GPU, network,
   storage and audio helpers carry `--seatbelt-client`; only video capture runs without it.
 - **#66:** signed in, a Disney+ title and a Prime Video title both play, in Safari's engine.
@@ -400,10 +362,6 @@ built release app with a test profile. Note anything that fails in the release's
   allstate.com show their pages. They stayed white while a blocked request was cancelled instead of
   failed: Adobe Target hides the page until its request ends. (The scenario checks the failure and
   that the blocked host is never asked; this needs the real sites.)
-- **Install count:** within an hour of the release going live, Phantom's "Cra installs" site
-  (phantom.kildahl.dk) shows check-ins from the new version under Version, and from Intel too under
-  Chip once Intel Macs have updated. None means released copies aren't checking in (docs/sharing.md,
-  "Install count"); the `install-checkin` scenario only proves a test copy does.
 
 ### Sync
 

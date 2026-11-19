@@ -58,7 +58,7 @@ public enum AskOnPage {
         }
     }
 
-    /// The test model's answer (CRA_TIDY_FAKE_MODEL=1), returning native fields from the fitted source.
+    /// The test model's answer (CRA_ASK_FAKE_MODEL=1), returning native fields from the fitted source.
     /// It never certifies model quality. Asked for a summary, it lists the page's sentences, as long as
     /// the real model's summaries run; asked to make something up, it quotes a sentence the page
     /// doesn't have; asked to repeat the page, its first answer (`echoed` 0) is the request copied
